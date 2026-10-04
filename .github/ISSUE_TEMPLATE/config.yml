@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Sensitive security issue
+    url: https://github.com/smaq777/basirah/security
+    about: Use private reporting if available, otherwise contact the owner privately. Do not disclose secrets in an issue.

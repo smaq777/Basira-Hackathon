@@ -1,0 +1,70 @@
+# Local development setup
+
+## Prerequisites
+
+- Node.js 24 LTS and npm 11. The root `.nvmrc` and `package.json` declare this version range.
+- Git and repository read access while the project remains private.
+- No database or model key is needed for foundation tests.
+
+```bash
+npm ci
+npm run check
+npm run dev:api
+```
+
+In a second terminal, run `npm run dev:web`. Open `http://localhost:5173`; the API listens on `http://localhost:3000`. Vite proxies `/api` during development. Set `PORT` explicitly if necessary; update the development proxy if changing the API port.
+
+For a production-style local build:
+
+```bash
+npm run build
+npm start
+```
+
+Open `http://localhost:3000`. The Node server serves built React assets and the API from one origin. `/health` reports process liveness. `/ready` intentionally returns 503; `/api/v1/reviews` intentionally returns 501. These are honest foundation behaviors, not broken completed features.
+
+## Environment variables
+
+`.env.example` documents intended variable names. Secret fields are blank. The current process reads environment variables provided by the shell/platform; it does not implicitly load `.env`. Use the [credential onboarding guide](CREDENTIALS.md) only for integrations marked implemented. For an explicit local file after building, Node supports:
+
+```bash
+node --env-file=.env dist/apps/api/src/server.js
+```
+
+Keep `.env` untracked. Database and Clerk server secrets stay outside the browser. The Clerk
+publishable key is the only authentication value permitted in `VITE_CLERK_PUBLISHABLE_KEY`; it is
+designed to be public. Never place `CLERK_SECRET_KEY`, a database URL or a model/provider secret in
+any `VITE_*` variable because those values are embedded in the browser build.
+
+Without Clerk configuration, direct reviewer routes display an unavailable state and the protected
+API returns `503`; they do not fall back to the dummy workspace. With Clerk configured, the browser
+must obtain a valid session. The default `CLERK_REVIEWER_ACCESS_MODE=allowlist` then requires the
+API to find the user in `CLERK_REVIEWER_USER_IDS`. A hackathon staging deployment may explicitly
+use `authenticated` to admit any signed-in participant; anonymous requests remain blocked, and
+production must retain the allowlist policy until roles and permissions are implemented. Use exact
+origins in `CLERK_AUTHORIZED_PARTIES` and keep public guest
+review independent from reviewer authentication. Use the browser origin (`http://localhost:5173`
+for Vite), not the proxied API port. Production origins must be HTTPS; malformed origins abort
+startup instead of weakening token binding or the response CSP.
+
+## Commands
+
+| Command                        | Purpose                                            |
+| ------------------------------ | -------------------------------------------------- |
+| `npm run typecheck`            | TypeScript consistency                             |
+| `npm test`                     | Deterministic contracts and HTTP foundation tests  |
+| `npm run docs:check`           | Local Markdown link and required-document checks   |
+| `npm run policy:check`         | Bounded repository safety and documentation checks |
+| `npm run format:check`         | Formatting consistency                             |
+| `npm run build`                | Compile API and build web shell                    |
+| `npm run check`                | All of the above                                   |
+| `npm audit --audit-level=high` | Dependency vulnerability check at the time run     |
+
+Use `npm ci` in CI for locked dependencies. If a dependency changes, regenerate the lockfile with npm, review the diff and rerun checks. An audit with zero findings is not proof that the application is vulnerability-free.
+
+## Troubleshooting
+
+- An unsupported Node version can fail tooling even if installation appears successful; activate Node 24 first.
+- Provider errors cannot be fixed by adding arbitrary credentials to the browser. Keep integrations server-side.
+- Missing database/model keys should not prevent foundation tests; production feature readiness remains separate.
+- Read [deployment](DEPLOYMENT.md) before connecting live services. No shared/production migration should run as part of ordinary local tests.

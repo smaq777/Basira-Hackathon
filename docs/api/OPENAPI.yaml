@@ -1,0 +1,312 @@
+openapi: 3.1.0
+info:
+  title: Basirah MVP Backend API
+  version: 0.1.0
+  description: >-
+    Implemented infrastructure and guest-document endpoints. Evidence review remains
+    deliberately unavailable until its source, model and evaluation dependencies are accepted.
+servers:
+  - url: http://localhost:3000
+    description: Local development only
+paths:
+  /health:
+    get:
+      summary: Process liveness, not scholarly or product readiness
+      responses:
+        '200':
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, stage]
+                properties:
+                  status: { const: ok }
+                  stage: { const: mvp_backend }
+  /ready:
+    get:
+      summary: Runtime and database migration readiness
+      responses:
+        '200':
+          description: Runtime database is reachable at the required migration
+        '503':
+          description: Database is absent, unreachable or missing the required migration
+  /api/v1/capabilities:
+    get:
+      summary: Honest implemented capabilities
+      responses:
+        '200':
+          description: Actual runtime capabilities
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  [
+                    stage,
+                    database,
+                    guestDocuments,
+                    verification,
+                    liveProviders,
+                    accounts,
+                    reviewerAuthentication,
+                    reviewerAuthorization,
+                    preflightDemo,
+                  ]
+                properties:
+                  stage: { const: mvp_backend }
+                  database: { type: boolean }
+                  guestDocuments: { type: boolean }
+                  verification: { const: false }
+                  liveProviders: { type: array, maxItems: 0 }
+                  accounts: { type: boolean }
+                  reviewerAuthentication: { type: boolean }
+                  reviewerAuthorization: { type: boolean }
+                  preflightDemo: { const: true }
+  /api/v1/reviewer/session:
+    get:
+      summary: Verify the signed-in user against the server-side reviewer allowlist
+      security:
+        - clerkSession: []
+      responses:
+        '200':
+          description: Clerk session is valid and the user is an approved reviewer
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [authenticated, reviewer]
+                properties:
+                  authenticated: { const: true }
+                  reviewer: { const: true }
+        '401':
+          description: Missing or invalid Clerk session token
+        '403':
+          description: Signed-in user is not on the reviewer allowlist
+        '503':
+          description: Reviewer authentication is not configured or temporarily unavailable
+  /api/v1/preflight:
+    post:
+      summary: Return transient provisional span classifications from the local demonstration corpus
+      description: >-
+        This endpoint does not persist a document and does not return a verification or scholarly
+        judgment. It exists for local evaluation of the pre-submit highlighting interaction while
+        the approved production corpus and model-assisted support assessment remain incomplete.
+        The annotations array describes semantic spans (including Quran, hadith matn,
+        isnad/attribution and a user-claimed source). The findings array independently describes
+        provisional match, uncertainty and warning states. A claimed source is not automatically a
+        verified source, and a hadith annotation is not an authenticity grade.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text: { type: string, minLength: 20, maxLength: 3000 }
+      responses:
+        '200':
+          description: >-
+            Provisional UTF-16 semantic annotations and independent findings from a labelled
+            software fixture
+        '400':
+          description: Invalid or out-of-bounds input
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/sessions:
+    post:
+      summary: Create an expiring guest session
+      responses:
+        '201':
+          description: Session identifier returned; ownership secret stays in an HttpOnly cookie
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Database unavailable
+  /api/v1/session:
+    delete:
+      summary: Delete the current guest session and dependent content
+      responses:
+        '204':
+          description: Deletion is idempotent and the ownership cookie is cleared
+  /api/v1/documents:
+    post:
+      summary: Create an owned document and immutable first revision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 12000 }
+      responses:
+        '201':
+          description: Document and revision identifiers
+        '401':
+          description: Guest session is missing, invalid or expired
+        '429':
+          description: Burst limit or per-session document cap reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitError'
+  /api/v1/documents/{documentId}/revisions:
+    post:
+      summary: Create an immutable child revision
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 12000 }
+      responses:
+        '201':
+          description: New immutable revision identifier and version
+        '401':
+          description: Guest session is missing, invalid or expired
+        '404':
+          description: Owned document not found
+        '429':
+          description: Burst limit or per-document revision cap reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitError'
+  /api/v1/reviews:
+    post:
+      summary: Create or replay an owned review run for an immutable revision
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revisionId]
+              properties:
+                revisionId: { type: string, format: uuid }
+      responses:
+        '202':
+          description: New review run queued; this does not mean verification completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  [reviewId, revisionId, status, attempt, corpusVersion, createdAt, deadlineAt]
+                properties:
+                  reviewId: { type: string, format: uuid }
+                  revisionId: { type: string, format: uuid }
+                  status: { const: queued }
+                  attempt: { type: integer, minimum: 1 }
+                  corpusVersion: { type: string }
+                  createdAt: { type: string, format: date-time }
+                  deadlineAt: { type: string, format: date-time }
+                  completedAt: { type: [string, 'null'], format: date-time }
+        '200':
+          description: Existing run returned for the same revision and idempotency key
+        '401':
+          description: Guest session is missing, invalid or expired
+        '404':
+          description: Owned revision not found
+        '429':
+          description: Burst limit or per-revision review-run cap reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitError'
+  /api/v1/revisions/{revisionId}/extractions:
+    post:
+      summary: Automatically extract bounded claim candidates from an owned immutable revision
+      parameters:
+        - in: path
+          name: revisionId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Candidate spans and conservative type hints; not a verification result
+        '401':
+          description: Guest session is missing, invalid or expired
+        '404':
+          description: Owned revision not found
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/reviews/{reviewId}:
+    parameters:
+      - in: path
+        name: reviewId
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Read an owned review run and reconcile an expired active run to interrupted
+      responses:
+        '200':
+          description: Current review lifecycle state
+        '401':
+          description: Guest session is missing, invalid or expired
+        '404':
+          description: Owned review not found
+    delete:
+      summary: Cancel an owned active review run idempotently
+      responses:
+        '200':
+          description: Cancelled or already-terminal review lifecycle state
+        '401':
+          description: Guest session is missing, invalid or expired
+        '404':
+          description: Owned review not found
+components:
+  securitySchemes:
+    clerkSession:
+      type: http
+      scheme: bearer
+      bearerFormat: Clerk session JWT
+  responses:
+    RateLimited:
+      description: The in-process burst limit was reached
+      headers:
+        Retry-After:
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [code]
+            properties:
+              code: { const: RATE_LIMITED }
+  schemas:
+    LimitError:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [code]
+          properties:
+            code: { const: RATE_LIMITED }
+        - type: object
+          additionalProperties: false
+          required: [code, resource]
+          properties:
+            code: { const: RESOURCE_LIMIT_REACHED }
+            resource: { enum: [documents, revisions, reviews] }

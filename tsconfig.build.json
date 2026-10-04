@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "outDir": "dist", "rootDir": ".", "declaration": true },
+  "include": ["apps/api/src/**/*.ts", "packages/contracts/src/**/*.ts"],
+  "exclude": ["tests", "node_modules", "dist"]
+}

@@ -1,0 +1,26 @@
+name: Bug report
+description: Reproducible defect without sensitive user content
+title: '[BUG] '
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction, expected and observed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Version, environment and sanitized evidence
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria and regression test
+    validations:
+      required: true
+  - type: textarea
+    id: risk
+    attributes:
+      label: Impact, risk and rollback
+    validations:
+      required: true
