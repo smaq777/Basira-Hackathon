@@ -71,6 +71,30 @@ describe('Basirah web flow', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('aborts the in-flight analysis request when the user leaves the analysis route', async () => {
+    const request: { signal: AbortSignal | null } = { signal: null };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) => {
+      request.signal = init?.signal ?? null;
+      return new Promise<Response>((_resolve, reject) => {
+        request.signal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('The operation was aborted.', 'AbortError')),
+          { once: true },
+        );
+      });
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /جرّب مثالًا/ }));
+    await user.click(screen.getByRole('button', { name: 'ابدأ المراجعة' }));
+    await waitFor(() => expect(request.signal).not.toBeNull());
+    await user.click(screen.getByRole('button', { name: 'إلغاء والعودة للنص' }));
+
+    expect(request.signal?.aborted).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('preserves the submitted draft when returning from analysis', async () => {
     const user = userEvent.setup();
     render(<App />);
