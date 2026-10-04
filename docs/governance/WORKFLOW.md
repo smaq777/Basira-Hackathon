@@ -2,7 +2,7 @@
 
 GitHub Issues are the operational source of truth. The project board visualizes those issues; documentation explains contracts and decisions. Do not create a separate spreadsheet tracker.
 
-Open the [Basirah Delivery Board](https://github.com/users/smaq777/projects/13). Views are intended for delivery Kanban, backlog planning, testing/review, blocked dependencies and the milestone roadmap. Repository issue-search views are not a substitute for the draggable Projects board.
+Open the [Basira Hackathon Delivery Board](https://github.com/users/smaq777/projects/14). Views are intended for delivery Kanban, backlog planning, testing/review, blocked dependencies and the milestone roadmap. Repository issue-search views are not a substitute for the draggable Projects board.
 
 ## Status policy
 
