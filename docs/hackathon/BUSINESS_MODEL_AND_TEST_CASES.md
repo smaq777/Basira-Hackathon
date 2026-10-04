@@ -2,7 +2,7 @@
 
 **Status:** proposed product and evaluation plan for owner, content-reviewer and committee review. This document does not establish scholarly approval, measured accuracy, confirmed partnerships or a released product.
 
-**Tracking:** [GitHub Issue #35](https://github.com/smaq777/basirah/issues/35). The authoritative product name **Basirah | بصيرة** is confirmed in [Issue #37](https://github.com/smaq777/basirah/issues/37); the former rename proposal in [Issue #34](https://github.com/smaq777/basirah/issues/34) is cancelled.
+**Tracking:** [GitHub Issue #35](https://github.com/smaq777/Basira-Hackathon/issues/30). The authoritative product name **Basirah | بصيرة** is confirmed in [Issue #37](https://github.com/smaq777/Basira-Hackathon/issues/31); the former rename proposal in [Issue #34](https://github.com/smaq777/Basira-Hackathon/issues/29) is cancelled.
 
 ## Product decision
 
@@ -150,7 +150,7 @@ The following are partner categories to pursue; none is a claimed current partne
 
 ## Test-case contract
 
-The following cases are **illustrative product fixtures**. They are not a completed scientific benchmark and must not be reported as expert-approved gold labels. Quran references below are locators for fixture preparation; production Arabic source text must come from the approved, versioned source registry in Issues [#3](https://github.com/smaq777/basirah/issues/3) and [#4](https://github.com/smaq777/basirah/issues/4).
+The following cases are **illustrative product fixtures**. They are not a completed scientific benchmark and must not be reported as expert-approved gold labels. Quran references below are locators for fixture preparation; production Arabic source text must come from the approved, versioned source registry in Issues [#3](https://github.com/smaq777/Basira-Hackathon/issues/4) and [#4](https://github.com/smaq777/Basira-Hackathon/issues/5).
 
 Every executed case must record:
 

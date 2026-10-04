@@ -51,7 +51,7 @@ The service identifier is already present in both GitHub environments. `RAILWAY_
 
 ### Vercel frontend and bot
 
-The preferred bot connection is Vercel's [GitHub integration](https://vercel.com/docs/git/vercel-for-github). It is connected to `smaq777/basirah`, `main` is the production source, and Basirah pull requests receive Vercel checks. The GitHub App is limited to this repository. A Vercel bot on another repository is not proof that Basirah is connected.
+The preferred bot connection is Vercel's [GitHub integration](https://vercel.com/docs/git/vercel-for-github). Authorize it specifically for `smaq777/Basira-Hackathon`, configure `main` as the production source, and verify that pull requests receive Vercel checks. A Vercel bot on another repository is not proof that this repository is connected.
 
 For the checked-in GitHub Actions deployment path:
 
