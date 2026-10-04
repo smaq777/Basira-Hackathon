@@ -747,6 +747,7 @@ function AnalysisScreen({
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     const interval = window.setInterval(
       () => setPhase((value) => Math.min(value + 1, phases.length - 1)),
       550,
@@ -754,7 +755,7 @@ function AnalysisScreen({
     setError('');
     setPhase(0);
     const minimumDelay = new Promise((resolve) => window.setTimeout(resolve, 900));
-    void Promise.all([persistDraftForAnalysis(text), minimumDelay])
+    void Promise.all([persistDraftForAnalysis(text, controller.signal), minimumDelay])
       .then(([receipt]) => {
         if (active) onComplete(receipt);
       })
@@ -765,6 +766,7 @@ function AnalysisScreen({
       });
     return () => {
       active = false;
+      controller.abort();
       window.clearInterval(interval);
     };
   }, [attempt, onComplete, phases.length, text]);
