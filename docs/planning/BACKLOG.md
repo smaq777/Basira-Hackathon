@@ -1,6 +1,6 @@
 # Delivery backlog and dependencies
 
-Operational board: [Basirah Delivery Board](https://github.com/users/smaq777/projects/13). Repository: [GitHub Issues](https://github.com/smaq777/Basira-Hackathon/issues). The board is private while development is private. Its access policy must be reviewed before committee handoff.
+Operational board: [Basira Hackathon Delivery Board](https://github.com/users/smaq777/projects/14). Repository: [GitHub Issues](https://github.com/smaq777/Basira-Hackathon/issues). The board is private while development is private. Its access policy must be reviewed before committee handoff.
 
 The [issue definitions](issues.json) document scope, acceptance, tests, risk and dependencies in English. Live issue/board status is authoritative; this table is a planning map, not a completion claim.
 

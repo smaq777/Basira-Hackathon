@@ -8,7 +8,7 @@ A quotation can be accurate while the conclusion drawn from it exceeds the sourc
 
 ## Start here
 
-Browse the [documentation hub](docs/README.md) and [English–Arabic terminology guide](docs/product/GLOSSARY.md). Development progress is tracked on the [delivery board](https://github.com/users/smaq777/projects/13).
+Browse the [documentation hub](docs/README.md) and [English–Arabic terminology guide](docs/product/GLOSSARY.md). Development progress is tracked on the [delivery board](https://github.com/users/smaq777/projects/14).
 
 | Audience           | Read                                                                                                                                                                                                                                                        |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
