@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App, { ExpandableText, reloadSignedOutHome, ReviewerShell } from './App.js';
@@ -61,7 +61,7 @@ describe('Basirah web flow', () => {
     ).toBe(draft);
   });
 
-  it('shows provisional content type and inline warning before submission', async () => {
+  it('keeps the color legend without rendering detailed preliminary finding cards', async () => {
     const user = userEvent.setup();
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
       const request = JSON.parse(String(init?.body)) as { text: string };
@@ -113,12 +113,13 @@ describe('Basirah web flow', () => {
 
     await user.click(screen.getByRole('button', { name: /جرّب مثالًا/ }));
 
-    expect(await screen.findByText('آية قرآنية')).not.toBeNull();
-    expect(screen.getByText('قد يكون الاقتباس ناقصًا.')).not.toBeNull();
-    expect(
-      screen.getByText('اللون يصف نوع الجزء، والخط السفلي يوضح حالة الفحص.', { exact: false }),
-    ).not.toBeNull();
-    expect(screen.getAllByText('يحتاج مراجعة').length).toBeGreaterThan(0);
+    await waitFor(() =>
+      expect(document.querySelector('.semantic-highlight--quran')).not.toBeNull(),
+    );
+    expect((await screen.findAllByText('آية قرآنية')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('قد يكون الاقتباس ناقصًا.')).toBeNull();
+    expect(screen.queryByLabelText('نتائج الرصد الأولي')).toBeNull();
+    expect(screen.queryByText(/رصد أولي محلي/)).toBeNull();
     expect(screen.getByRole('button', { name: 'ابدأ المراجعة' })).not.toBeNull();
     expect(screen.queryByText('تحليل تلقائي في الخلفية')).toBeNull();
   });
@@ -133,14 +134,28 @@ describe('Basirah web flow', () => {
     expect(screen.queryByRole('navigation', { name: 'مساحة المراجع' })).toBeNull();
   });
 
-  it('keeps the protected reviewer entry reachable from mobile navigation', async () => {
-    const user = userEvent.setup();
+  it('uses one public navigation with links to sections that still exist', () => {
     render(<App />);
 
-    await user.click(screen.getByRole('button', { name: 'فتح القائمة' }));
-    await user.click(screen.getByRole('button', { name: 'دخول مساحة المراجع من قائمة الهاتف' }));
+    const navigation = screen.getByRole('navigation', { name: 'التنقل الرئيسي' });
+    expect(navigation.querySelectorAll('button')).toHaveLength(4);
+    expect(within(navigation).getByRole('button', { name: 'مراجعة النص' })).not.toBeNull();
+    expect(within(navigation).getByRole('button', { name: 'كيف تعمل' })).not.toBeNull();
+    expect(within(navigation).getByRole('button', { name: 'الأسئلة الشائعة' })).not.toBeNull();
+    expect(within(navigation).getByRole('button', { name: 'عن التحدي' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'المصادر والحدود' })).toBeNull();
+  });
 
-    expect(screen.getByRole('alert').textContent).toContain('دخول المراجع غير متاح حاليًا');
+  it('explains sources, human review, tickets, and knowledge-base growth in the FAQ', () => {
+    render(<App />);
+
+    expect(document.querySelectorAll('.faq-list details')).toHaveLength(7);
+    expect(screen.getByText('ما المصادر التي تعتمد عليها بصيرة؟')).not.toBeNull();
+    expect(screen.getByText('كيف تعمل المراجعة البشرية؟')).not.toBeNull();
+    expect(screen.getByText('هل يمكنني استلام نتيجة التذكرة بعد المراجعة؟')).not.toBeNull();
+    expect(screen.getByText('كيف تساعد مشاركتي في تطوير بصيرة؟')).not.toBeNull();
+    expect(screen.queryByText('ماذا يقرأ المشغّل الصوتي؟')).toBeNull();
+    expect(screen.queryByText('شرح صوتي للنتيجة')).toBeNull();
   });
 
   it('renders the authorized reviewer workspace with a simple labelled sidebar', () => {
