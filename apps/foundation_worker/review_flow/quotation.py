@@ -6,6 +6,7 @@ import unicodedata as ud
 
 REMOVED_MARKS = frozenset(map(chr, range(0x064B, 0x0653))) | frozenset(map(chr, range(0x06D6, 0x06DC)))
 NEGATION = frozenset({'لا', 'لم', 'لن', 'ليس', 'ليست', 'ما', 'ولا', 'فلا', 'ولم', 'فلم', 'ولن', 'فلن'})
+VERSION = 'quotation-fidelity-2.0'
 NORMALIZATION = {
     'removed_mark_codepoints': [f'U+{ord(c):04X}' for c in sorted(REMOVED_MARKS)],
     'tatweel': 'ignored in typography comparison only',
@@ -15,6 +16,84 @@ NORMALIZATION = {
     'canonical_equivalence': 'NFC separately reported; typography tokens also use NFC',
     'preserved_marks': 'combining hamza/madda, dagger alef, other unlisted marks',
 }
+
+
+def _script_pattern(token, *, verify_auxiliary=False):
+    """Limited Uthmani presentation rules, never the lossy search normalizer.
+
+    Hamza, precomposed madda and lexical letters remain significant. Maqsurah
+    substitution is allowed only when checking the independently pinned edition;
+    user text may then use that exact auxiliary spelling, not arbitrary folding.
+    """
+    result, previous = [], ''
+    elongated_negation = ''.join(c for c in token if c not in REMOVED_MARKS and c != '\u0640') == 'لا\u0653'
+    for char in token:
+        if char in REMOVED_MARKS or char == '\u0640':
+            continue
+        if char == '\u0670':
+            result.append('ا?')
+        elif char == '\u0671':
+            result.append('ا')
+        elif char == '\u0653' and (elongated_negation or previous in '\u06e5\u06e6'):
+            pass  # Quranic elongation sign, not the lexical letter آ.
+        elif char in '\u06e2\u06e3\u06e6\u06e7\u06e8':
+            pass  # Explicitly listed Quranic recitation signs.
+        elif char == 'ى' and verify_auxiliary:
+            result.append('[ىي]')
+        elif char in 'أإؤئء' and verify_auxiliary:
+            result.append('[أإؤئء]')  # Hamza is retained; only its seat may differ.
+        else:
+            result.append(re.escape(char))
+        if not ud.combining(char):
+            previous = char
+    return ''.join(result)
+
+
+def _verified_auxiliary(source_tokens, auxiliary):
+    if auxiliary is None:
+        return None
+    required = ('text', 'sha256', 'source_id', 'source_version', 'field')
+    if not isinstance(auxiliary, dict) or any(not isinstance(auxiliary.get(k), str) or not auxiliary[k] for k in required):
+        return None
+    if _sha(auxiliary['text']) != auxiliary['sha256']:
+        raise ValueError('Auxiliary comparator hash mismatch')
+    if auxiliary['field'] != 'publisher imlai original':
+        return None
+    tokens = _tokens(auxiliary['text'])
+    if len(tokens) != len(source_tokens) or not tokens:
+        return None
+    if not all(re.fullmatch(_script_pattern(s['original'], verify_auxiliary=True), a['token'])
+               for s, a in zip(source_tokens, tokens)):
+        return None
+    return tokens
+
+
+def _public_comparison(result, source_tokens, quote_tokens, auxiliary_used=False, source_text=''):
+    unresolved = result['status'] in {'source_unmatched', 'quote_empty', 'source_empty'} or 'repeated_excerpt_ambiguous' in result['flags']
+    if unresolved:
+        return dict(fidelity='unresolved', extent='unknown', differences=[], basis='none')
+    faithful = result['normalized_contiguous_match'] or result['nfc_contiguous_match'] or result['raw_contiguous_match']
+    if result['status'] == 'partial_token_excerpt_requires_review':
+        faithful = False
+    fidelity = ('exact' if result['raw_contiguous_match'] else 'orthographic') if faithful else 'different'
+    full = result['raw_full_match'] or result['nfc_full_match'] or result['normalized_full_match']
+    extent = 'full' if full else 'gapped' if result['omissions']['internal'] else 'excerpt' if faithful else 'unknown'
+    if not faithful and extent == 'unknown' and any(op['operation'] == 'equal' for op in result['token_diff']):
+        extent = 'excerpt' if result['omissions']['leading'] or result['omissions']['trailing'] else 'full'
+    differences = []
+    for op in result['token_diff']:
+        kind = {'replace': 'replace', 'delete': 'omit', 'insert': 'insert'}.get(op['operation'])
+        if kind is None or (kind == 'omit' and op.get('omission_location') != 'internal'):
+            continue
+        q, s = op['quote_tokens'], op['source_tokens']
+        differences.append(dict(kind=kind,
+            quotedText=result['quote_original'][q[0]['start']:q[-1]['end']] if q else '',
+            sourceText=source_text[s[0]['start']:s[-1]['end']] if s else ''))
+    # A within-word substring must never inherit raw-contiguous fidelity.
+    if result['status'] == 'partial_token_excerpt_requires_review' and not differences:
+        differences = [dict(kind='replace', quotedText=result['quote_original'], sourceText=' '.join(t['original'] for t in source_tokens))]
+    return dict(fidelity=fidelity, extent=extent, differences=differences[:80],
+                basis='canonical' if fidelity == 'exact' else 'auxiliary_imlai' if auxiliary_used else 'typography' if faithful else 'canonical')
 
 def _sha(text):
     return hashlib.sha256(text.encode('utf-8')).hexdigest()
@@ -69,7 +148,7 @@ def _canonical_spans(quote, source):
             result.append({'start': start, 'end': end, 'original': source[start:end]})
     return result
 
-def compare_quotation(quote, source_text, comparator_metadata=None):
+def compare_quotation(quote, source_text, comparator_metadata=None, *, auxiliary_imlai=None):
     """Compare one quote against one already resolved original source string.
 
     Offsets are zero-based Unicode codepoints with exclusive ends. Separate
@@ -82,6 +161,7 @@ def compare_quotation(quote, source_text, comparator_metadata=None):
     result = dict(quote_original=quote, quote_sha256=_sha(quote), comparator_metadata=dict(comparator_metadata or {}), normalization=dict(NORMALIZATION), offsets_unit='zero-based Unicode codepoints; end exclusive', religious_authenticity='not_assessed', raw_full_match=None, raw_contiguous_match=None, exact_contiguous_source_spans=[], nfc_full_match=None, nfc_contiguous_match=None, nfc_contiguous_source_spans=[], normalized_full_match=None, normalized_contiguous_match=None, contiguous_source_spans=[], token_diff=[], omissions={'leading': [], 'internal': [], 'trailing': []}, flags=[])
     if source_text is None:
         result.update(status='source_unmatched', flags=['source_unmatched'])
+        result['comparison'] = _public_comparison(result, [], [])
         return result
     source_sha = _sha(source_text)
     declared_sha = result['comparator_metadata'].get('original_sha256') or result['comparator_metadata'].get('source_sha256')
@@ -92,6 +172,18 @@ def compare_quotation(quote, source_text, comparator_metadata=None):
     nfc_spans = _canonical_spans(quote, source_text) if quote else []
     st, qt = _tokens(source_text), _tokens(quote)
     sw, qw = [t['token'] for t in st], [t['token'] for t in qt]
+    auxiliary = _verified_auxiliary(st, auxiliary_imlai)
+    if auxiliary:
+        sw = [t['token'] for t in auxiliary]
+        # Token spelling variants can be aliased only to a unique aligned word.
+        # This preserves token count, negation and every substantive letter.
+        qw = []
+        for token in qt:
+            candidates = {a['token'] for s, a in zip(st, auxiliary)
+                          if token['token'] == a['token'] or re.fullmatch(_script_pattern(s['original']), token['token'])}
+            qw.append(next(iter(candidates)) if len(candidates) == 1 else token['token'])
+        result['comparator_metadata']['auxiliary_imlai'] = {k: auxiliary_imlai[k] for k in ('sha256', 'source_id', 'source_version', 'field')}
+        result['comparator_metadata']['auxiliary_rules_version'] = VERSION
     matches = [i for i in range(len(sw) - len(qw) + 1) if qw and sw[i:i + len(qw)] == qw]
     spans = [{'start': st[i]['start'], 'end': st[i + len(qw) - 1]['end'], 'original': source_text[st[i]['start']:st[i + len(qw) - 1]['end']], 'token_range': [i, i + len(qw)]} for i in matches]
     if matches:
@@ -142,10 +234,13 @@ def compare_quotation(quote, source_text, comparator_metadata=None):
     changes = [x for x in result['token_diff'] if x['operation'] in {'insert', 'replace'}]
     if changes:
         result['flags'].append('lexical_difference')
-    changed = {t['token'] for x in result['token_diff'] if x['operation'] != 'equal' for t in x['source_tokens'] + x['quote_tokens']}
+    changed = {t['token'] for x in result['token_diff'] if x['operation'] != 'equal'
+               and x.get('omission_location') not in {'leading', 'trailing'}
+               for t in x['source_tokens'] + x['quote_tokens']}
     if changed & NEGATION:
         result['flags'].append('negation_token_changed')
     if max(len(raw_spans), len(nfc_spans), len(spans)) > 1:
         result['flags'].append('repeated_excerpt_ambiguous')
     result['diff_alignment'] = 'First contiguous token candidate when available, otherwise deterministic SequenceMatcher; repeated candidates remain ambiguous'
+    result['comparison'] = _public_comparison(result, st, qt, bool(auxiliary), source_text)
     return result

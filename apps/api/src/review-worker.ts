@@ -9,6 +9,10 @@ import {
   suggestImprovements,
 } from '../../../packages/contracts/src/themes.js';
 import { canonical, sha256, type FoundationAdapter } from './foundation.js';
+import {
+  assessClaimApplicability,
+  CLAIM_APPLICABILITY_VERSION,
+} from '../../../packages/contracts/src/claim-applicability.js';
 import type { ReviewLease, ReviewStore, StoredEvidence, StoredFinding } from './review-store.js';
 
 export interface FoundationWorker {
@@ -77,6 +81,7 @@ export function createFoundationWorker(
       if (signal.aborted) return;
       const themes = analyzeThemes(intake);
       const improvementCards = suggestImprovements(intake, themes);
+      const applicability = assessClaimApplicability(intake);
       const generatedAt = new Date().toISOString();
       const status =
         intake.warnings.length ||
@@ -91,18 +96,19 @@ export function createFoundationWorker(
         revisionId: lease.revisionId,
         inputSha256: lease.inputSha256,
         evidenceStateSha256: '',
-        pipelineVersion: `${intake.pipelineVersion}/${themes.detectorVersion}`,
+        pipelineVersion: `${intake.pipelineVersion}/${themes.detectorVersion}/${CLAIM_APPLICABILITY_VERSION}`,
         generatedAt,
         status,
         intake,
         themes,
         improvementCards,
         interpretation: {
-          status: intake.segments.some((segment) => segment.sourceKeys.length)
-            ? 'needs_confirmation'
-            : 'not_assessed',
+          status: applicability.status === 'not_applicable' ? 'not_applicable' : 'not_assessed',
+          applicability,
           explanation:
-            'نتائج النقل والموضوع منفصلة عن كفاية الاستدلال. يلزم تأكيد ربط الادعاء بمصدره قبل التقييم الدلالي.',
+            applicability.status === 'not_applicable'
+              ? 'لم يُرصد استنتاج مكتوب لتقييم كفاية الاستدلال؛ تظل مراجعة النقل والمصادر مستقلة.'
+              : 'كفاية الاستدلال لم تُقيّم بعد؛ نتائج النقل والموضوع لا تثبت صحة الاستنتاج.',
           scholarlyApproval: false,
         },
         limitations: [

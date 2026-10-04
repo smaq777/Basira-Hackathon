@@ -105,3 +105,36 @@ it('hashes equivalent object key order identically without normalizing Arabic or
   expect(canonical({ b: 2, a: 1 })).toBe(canonical({ a: 1, b: 2 }));
   expect(sha256('آية')).not.toBe(sha256('اية'));
 });
+
+it('checks new exact fidelity independently of legacy partial status', () => {
+  const value = fixture();
+  const finding = value.quotationFindings[0]!;
+  finding.status = 'partial';
+  finding.comparison = { fidelity: 'exact', extent: 'full', differences: [], basis: 'canonical' };
+  expect(validateIntake(value, value.originalText, value.revisionId, true)).toEqual(value);
+  finding.matchedEnd = finding.matchedEnd! - 1;
+  expect(() => validateIntake(value, value.originalText, value.revisionId, true)).toThrow(
+    'INVALID_EXACT_COMPARISON',
+  );
+});
+
+it('rejects claimed full extent over a partial source span and fabricated exact basis', () => {
+  const value = fixture();
+  const finding = value.quotationFindings[0]!;
+  finding.status = 'partial';
+  finding.comparison = {
+    fidelity: 'orthographic',
+    extent: 'full',
+    differences: [],
+    basis: 'typography',
+  };
+  finding.matchedEnd = finding.matchedEnd! - 1;
+  expect(() => validateIntake(value, value.originalText, value.revisionId, true)).toThrow(
+    'INVALID_FULL_EXTENT',
+  );
+  finding.matchedEnd = value.evidence[0]!.originalText.length;
+  finding.comparison.fidelity = 'exact';
+  expect(() => validateIntake(value, value.originalText, value.revisionId, true)).toThrow(
+    'INVALID_EXACT_COMPARISON',
+  );
+});

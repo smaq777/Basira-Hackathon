@@ -7,6 +7,14 @@ bridge to the current UI. See the [integration decisions and ordered tasks](arch
 and [local evidence](evidence/2026-10-04-foundation-integration.md). This does not change
 the deployed baseline below or establish semantic accuracy, approved sources or acceptance.
 
+**Follow-up, 4 October:** [Report fixes](evidence/2026-10-04-source-report-followup.md)
+separate faithful excerpts from internal omissions and simplify public source
+details. [Isolated Neon verification](evidence/2026-10-04-neon-rag.md) passed real
+pgvector and the unchanged migration chain through 0006. Its production read-back
+found only 0001/0005 recorded; the older "through 0005" baseline below must not be
+interpreted as a verified contiguous production chain. Production was unchanged.
+Real hosted corpus ingestion, embeddings and semantic assessment remain pending.
+
 The fresh repository baseline contains the completed foundation and architecture work. Current validation is recorded by this repository's GitHub Actions runs. [Issue #27](https://github.com/smaq777/Basira-Hackathon/issues/27) tracks the judge-ready repository and deployment handoff.
 
 | Area                           | Actual state                                                                                                                                                                                                                                                                               |

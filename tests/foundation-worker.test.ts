@@ -115,6 +115,67 @@ it('preserves validated first-pass evidence when optional context is unavailable
   await worker.stop();
 });
 
+it('does not require inference confirmation for a question followed by a quotation', async () => {
+  const { intake, lease, store, adapter } = fixture();
+  const quote = 'نص مقتبس واضح';
+  const text = `ما معنى التوحيد؟ قال تعالى: «${quote}».`;
+  const start = text.indexOf(quote);
+  intake.originalText = lease.text = text;
+  intake.revisionSha256 = lease.inputSha256 = sha256(text);
+  intake.segments = [
+    {
+      ...intake.segments[0]!,
+      id: 'quote',
+      role: 'ayah',
+      originalText: quote,
+      startOffset: start,
+      endOffset: start + quote.length,
+      codePointStart: start,
+      codePointEnd: start + quote.length,
+    },
+  ];
+  const worker = createFoundationWorker(adapter, store);
+  await worker.runOnce();
+  expect(store.complete).toHaveBeenCalledWith(
+    lease,
+    expect.objectContaining({
+      result: expect.objectContaining({
+        interpretation: expect.objectContaining({
+          status: 'not_applicable',
+          applicability: {
+            status: 'not_applicable',
+            reason: 'question_and_quotations_only',
+          },
+        }),
+      }),
+    }),
+  );
+  expect(store.fail).not.toHaveBeenCalled();
+  await worker.stop();
+});
+
+it('keeps a substantive assertion unassessed without a mandatory human gate', async () => {
+  const { intake, lease, store, adapter } = fixture();
+  const worker = createFoundationWorker(adapter, store);
+  await worker.runOnce();
+  expect(store.complete).toHaveBeenCalledWith(
+    lease,
+    expect.objectContaining({
+      result: expect.objectContaining({
+        interpretation: expect.objectContaining({
+          status: 'not_assessed',
+          applicability: {
+            status: 'applicable',
+            reason: 'assertion_present',
+          },
+        }),
+      }),
+    }),
+  );
+  expect(intake.originalText).toBe(lease.text);
+  await worker.stop();
+});
+
 it('rejects enrichment from a different corpus without persisting a misleading report', async () => {
   const { intake, store, adapter } = fixture();
   vi.mocked(adapter.analyze)

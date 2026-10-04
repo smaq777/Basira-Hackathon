@@ -85,6 +85,7 @@ type AppOptions = {
     worker: { notify(): void };
     reports: Pick<ReviewStore, 'ownedReport'>;
     researchPreview: boolean;
+    liveTafsir?: boolean;
   };
   database?: BackendDatabase;
   production?: boolean;
@@ -179,7 +180,8 @@ export function createApp(options: AppOptions = {}) {
       guestDocuments: state.ready,
       reviewOrchestration: state.ready,
       verification: false,
-      liveProviders: [],
+      // Configured acquisition adapters, not a provider-health or semantic-verification claim.
+      liveProviders: options.foundation?.liveTafsir ? ['tafsir_mcp'] : [],
       accounts: reviewerAuth.configured,
       reviewerAuthentication: reviewerAuth.configured,
       reviewerAuthorization: reviewerAuth.authorizationConfigured,

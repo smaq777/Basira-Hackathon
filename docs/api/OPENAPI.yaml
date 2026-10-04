@@ -58,7 +58,10 @@ paths:
                   database: { type: boolean }
                   guestDocuments: { type: boolean }
                   verification: { const: false }
-                  liveProviders: { type: array, maxItems: 0 }
+                  liveProviders:
+                    type: array
+                    description: Configured live source adapters; does not certify reachability or semantic model availability.
+                    items: { type: string, enum: [tafsir_mcp] }
                   accounts: { type: boolean }
                   reviewerAuthentication: { type: boolean }
                   reviewerAuthorization: { type: boolean }

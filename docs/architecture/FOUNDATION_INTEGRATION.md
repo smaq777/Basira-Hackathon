@@ -18,9 +18,9 @@ changes the argument belongs to claim-support assessment. A faithful excerpt can
 still be insufficient evidence for a broad claim.
 
 Uthmani/imlai differences need a versioned auxiliary comparator with traceable
-normalization; preserve the canonical original. The current comparator can still
-over-warn on script differences, including common 2:256 input. This slice does not
-claim that this remaining issue is fixed. Neither deterministic themes nor a
+normalization; preserve the canonical original. The comparator now validates a hashed auxiliary imlai view against canonical
+tokens before comparing script variants. Exact excerpts, internal gaps and lexical
+changes have separate fields; unsafe or ambiguous alignments remain unresolved. Neither deterministic themes nor a
 transport-complete Tafsir packet establishes semantic or scholarly completeness.
 
 ## Delivered architecture
@@ -43,7 +43,8 @@ checkout's code. Its read-only SQLite/FTS5 index and Tafsir snapshots are extern
 research data. No corpus or credentials are bundled. This bridge is transitional:
 the hosted accepted corpus and retrieval path belong to #5–#8.
 
-The semantic indicator is explicitly **not assessed**. No model, provider-routing,
+The semantic indicator is explicitly **not assessed**, or **not applicable** for
+conservatively recognized question/quotation-only input. No model, provider-routing,
 hadith-grading or rewrite capability is enabled by this integration.
 
 ## Source dependencies: storage and acquisition are separate
@@ -52,7 +53,7 @@ hadith-grading or rewrite capability is enabled by this integration.
 | --------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Quran / Tanzil              | Pinned local canonical text in a read-only SQLite exact/FTS index               | Source/edition approval is still required for hosted use; originals and search views remain separate              |
 | Tafsir Muyassar and Saadi   | Stored attributable snapshots originally acquired through TafsirCenterMCP       | Snapshot replay is not a fresh MCP call; retain hashes, parent ayah, footnotes and delivery provenance            |
-| TafsirCenterMCP             | Bounded acquisition adapter exists in packaged source code                      | Server integration rejects live acquisition in this slice; default-off offline tests make no network calls        |
+| TafsirCenterMCP             | Bounded acquisition adapter exists in packaged source code                      | Opt-in live acquisition is allowed only in loopback research preview; offline tests make no network calls         |
 | KFGQPC Muyassar             | Local supplied digital package indexed as commentary                            | Separate attributed fallback when a Muyassar snapshot is absent; printed edition unspecified and approval pending |
 | Hadith research collections | IslamicEval six-book rows in the configured local index; searched when relevant | Discovery/literal comparison only; no verified authenticity, grading or canonical-numbering claim                 |
 | Dorar, HadeethEnc, Shamela  | Exploratory/planned sources                                                     | Not automatic active evidence dependencies                                                                        |

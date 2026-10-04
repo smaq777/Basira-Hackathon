@@ -14,10 +14,10 @@ from pathlib import Path
 
 from .evidence import EvidenceStore, canonical, normalize, normalized_with_offsets, sha
 from .tafsir_adapter import PROVIDER, WORKS, TafsirAdapter, verify_snapshot
-from review_flow.quotation import compare_quotation
+from review_flow.quotation import compare_quotation, VERSION as COMPARATOR_VERSION
 from .quote_discovery import QUOTES, ordered_omission
 
-VERSION = 'source-first-intake-1.4'
+VERSION = 'source-first-intake-1.6/' + COMPARATOR_VERSION
 SCHEMA_PIN = 'c492c3d0c73919981e4518a483750eae90b025559985c3fe286681e16765c332'
 FORMULAE = {normalize(x) for x in ('بسم الله', 'بسم الله الرحمن الرحيم', 'الحمد لله',
     'الحمد لله رب العالمين', 'إن شاء الله', 'إنا لله وإنا إليه راجعون')}
@@ -27,6 +27,7 @@ H_FRAME = re.compile(r'(?:قال\s+رسول\s+الله|قال\s+النبي|حد�
 MAX_EVIDENCE_ROWS = 80
 MAX_CONTEXT_ROWS = 30
 MAX_OPTIONAL_EVIDENCE_BYTES = 200_000
+NEGATIVE_CONTEXT_CACHE_SECONDS = 30.0
 NON_SOURCE_NUMERIC = re.compile(r'الساعة|ساعه|الوقت|التوقيت|موعد|الاجتماع|نتيجة|المباراة|النقاط|الاهداف|clock|time|score|\bam\b|\bpm\b', re.I)
 
 
@@ -67,6 +68,8 @@ class SourceIntake:
         self.research_preview = research_preview
         self.snapshot_directory = Path(snapshot_directory) if snapshot_directory else None
         self.context_cache = {}
+        self.context_negative_cache_until = {}
+        self.context_attempted = set()
         self.verse_views = self.store.verse_search_views
         # Source-derived four-token anchors permit a short embedded excerpt
         # without trusting an LLM role label. Ambiguous anchors remain visible.
@@ -97,17 +100,31 @@ class SourceIntake:
 
     def _snapshot(self, reference):
         if reference in self.context_cache:
-            return self.context_cache[reference]
+            cached = copy.deepcopy(self.context_cache[reference])
+            if cached:
+                cached['delivery'] = 'snapshot'
+            if reference not in self.context_negative_cache_until:
+                return cached
+            # A transient unavailable result must not poison a long-lived
+            # worker. Keep it quiet within this intake and for a bounded TTL;
+            # a later intake may recover without a process restart.
+            if (reference in self.context_attempted or
+                    time.monotonic() < self.context_negative_cache_until.get(reference, 0)):
+                return cached
+            del self.context_cache[reference]
+            self.context_negative_cache_until.pop(reference, None)
         if not re.fullmatch(r'[0-9]{1,3}:[0-9]{1,3}', reference):
             return None
         s, a = map(int, reference.split(':'))
         if reference != f'{s}:{a}' or not self.store.reference(s, a):
             return None
+        self.context_attempted.add(reference)
         folder = self.snapshot_directory
         # Prefer reviewed packets, whose original/raw/notes identities are all
         # checked. The older live directory can replay the same captured bodies.
         reviewed = folder / (reference.replace(':', '-') + '.packet.json') if folder else None
         packet = json.loads(reviewed.read_text(encoding='utf-8')) if reviewed and reviewed.is_file() else None
+        replayed_from_disk = packet is not None
         if packet and any('content_sha256' not in r for r in packet.get('sources', [])):
             def fetch(request, remaining):
                 return (folder / f'{request.surah}-{request.ayah}-{request.source}-part{request.part}.rpc.json').read_bytes()
@@ -121,6 +138,9 @@ class SourceIntake:
                 overall_deadline=getattr(self, 'live_context_deadline', time.monotonic()+12.0),
                 reference_exists=lambda surah, ayah: bool(self.store.reference(surah, ayah)))
         if packet:
+            packet['acquisition_delivery'] = packet.get('acquisition_delivery', packet.get('delivery', 'snapshot'))
+            if replayed_from_disk:
+                packet['delivery'] = 'snapshot'
             if (packet.get('provider') != PROVIDER or packet.get('reference') != reference
                     or packet.get('schema_sha256') != SCHEMA_PIN):
                 raise ValueError('Tafsir snapshot provider/reference/schema mismatch')
@@ -135,7 +155,11 @@ class SourceIntake:
                     if (not parts or [p['part'] for p in parts] != list(range(1, len(parts)+1))
                             or any(p['total_parts'] != len(parts) for p in parts)):
                         raise ValueError('Incomplete Tafsir snapshot pagination')
-        self.context_cache[reference] = packet
+        self.context_cache[reference] = copy.deepcopy(packet)
+        if not packet or not any(work.get('usable_for_research_context') for work in packet.get('sources', [])):
+            self.context_negative_cache_until[reference] = time.monotonic() + NEGATIVE_CONTEXT_CACHE_SECONDS
+        else:
+            self.context_negative_cache_until.pop(reference, None)
         return packet
 
     def _context(self, anchor, evidence):
@@ -155,7 +179,8 @@ class SourceIntake:
                         original_raw_text=page['original_raw_text'], original_raw_text_sha256=page['original_raw_text_sha256'],
                         attribution=page['attribution'], part=page['part'], total_parts=page['total_parts'],
                         anchor_evidence_id=anchor['id'], purpose='source_context', context_complete=False,
-                        retrieval_transport=packet.get('delivery', 'snapshot'))
+                        retrieval_transport=packet.get('delivery', 'snapshot'),
+                        acquisition_transport=packet.get('acquisition_delivery', packet.get('delivery', 'snapshot')))
                     row = dict(snapshotKey=identifier, sourceId=PROVIDER+':'+work['source'],
                         sourceVersion=work['content_sha256'], sourceRole='tafsir_commentary', reference=reference,
                         originalText=page['original_text'], originalSha256=page['original_text_sha256'],
@@ -204,6 +229,7 @@ class SourceIntake:
             related.append(records[0])
         normalized, offsets = normalized_with_offsets(text)
         self.live_context_deadline = time.monotonic() + 12.0
+        self.context_attempted = set()
         spans, references, warnings = [], [], related_warnings
 
         def add(start, end, role, status, method, records=(), proposal=None, conflict=False):
@@ -452,7 +478,11 @@ class SourceIntake:
             # Lexical discovery is never a resolved quotation comparator.
             resolved = len(source_keys)==1 and (status=='source_matched' or span.get('explicitComparator', False))
             record = span['records'][0] if resolved else None
-            comparison = compare_quotation(text[a:b], record['original_text'] if record else None)
+            auxiliary = next((view for view in record['metadata'].get('auxiliary_search_views', [])
+                if view.get('field') == 'publisher imlai original'), None) if record and record['role'] == 'quran_text' else None
+            comparison = compare_quotation(text[a:b], record['original_text'] if record else None,
+                {'comparator_version': COMPARATOR_VERSION, 'original_sha256': record['text_sha256']} if record else None,
+                auxiliary_imlai=auxiliary)
             quote_status = 'unresolved'
             matched = []
             if comparison['raw_full_match']:
@@ -477,7 +507,8 @@ class SourceIntake:
             quotations.append(dict(segmentId=segment_id, evidenceKey=source_keys[0] if resolved else None,
                 status=quote_status, reason=comparison['status']+'; '+','.join(comparison['flags'])+'; normalized search discovery is separate from original quotation comparison.',
                 matchedStart=utf16_length(record['original_text'][:matched[0]['start']]) if matched else None,
-                matchedEnd=utf16_length(record['original_text'][:matched[0]['end']]) if matched else None))
+                matchedEnd=utf16_length(record['original_text'][:matched[0]['end']]) if matched else None,
+                comparison=comparison['comparison']))
         covered = sorted((s['codePointStart'], s['codePointEnd']) for s in segments)
         cursor = 0
         for a, b in covered+[(len(text), len(text))]:

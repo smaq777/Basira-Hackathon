@@ -46,6 +46,39 @@ export const IntakeSegmentSchema = z
   .refine((row) => row.endOffset > row.startOffset && row.codePointEnd > row.codePointStart);
 export type IntakeSegment = z.infer<typeof IntakeSegmentSchema>;
 
+export const QuotationComparisonSchema = z
+  .object({
+    fidelity: z.enum(['exact', 'orthographic', 'different', 'unresolved']),
+    extent: z.enum(['full', 'excerpt', 'gapped', 'unknown']),
+    differences: z
+      .array(
+        z
+          .object({
+            kind: z.enum(['replace', 'omit', 'insert']),
+            quotedText: z.string().max(3000),
+            sourceText: z.string().max(30000),
+          })
+          .strict(),
+      )
+      .max(80),
+    basis: z.enum(['canonical', 'auxiliary_imlai', 'typography', 'none']),
+  })
+  .strict();
+export type QuotationComparison = z.infer<typeof QuotationComparisonSchema>;
+
+export const ClaimApplicabilitySchema = z
+  .object({
+    status: z.enum(['applicable', 'not_applicable', 'undetermined']),
+    reason: z.enum([
+      'question_and_quotations_only',
+      'quotation_only',
+      'assertion_present',
+      'unclear_author_text',
+    ]),
+  })
+  .strict();
+export type ClaimApplicability = z.infer<typeof ClaimApplicabilitySchema>;
+
 export const LiteralFindingSchema = z
   .object({
     segmentId: z.string().min(1),
@@ -54,6 +87,7 @@ export const LiteralFindingSchema = z
     reason: z.string().min(1).max(1000),
     matchedStart: z.number().int().nonnegative().nullable(),
     matchedEnd: z.number().int().nonnegative().nullable(),
+    comparison: QuotationComparisonSchema.optional(),
   })
   .strict();
 export type LiteralFinding = z.infer<typeof LiteralFindingSchema>;
@@ -104,7 +138,8 @@ export const FoundationReportSchema = z
     improvementCards: z.array(ImprovementCardSchema).max(3),
     interpretation: z
       .object({
-        status: z.enum(['needs_confirmation', 'not_assessed', 'unavailable']),
+        status: z.enum(['needs_confirmation', 'not_assessed', 'unavailable', 'not_applicable']),
+        applicability: ClaimApplicabilitySchema.optional(),
         explanation: z.string().min(1),
         scholarlyApproval: z.literal(false),
       })

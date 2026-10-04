@@ -29,8 +29,10 @@ async function initializeFoundation() {
     (process.env.NODE_ENV === 'production' || !['127.0.0.1', '::1'].includes(host))
   )
     throw new Error('RESEARCH_PREVIEW_REQUIRES_LOCAL_DEVELOPMENT');
-  if (process.env.FOUNDATION_TAFSIR_LIVE === 'true')
-    throw new Error('LIVE_SOURCE_ACQUISITION_NOT_ENABLED_IN_THIS_SLICE');
+  // This opt-in uses only numeric verse references and the pinned Tafsir adapter.
+  // Hosted activation needs separate source-edition and deployment validation.
+  if (process.env.FOUNDATION_TAFSIR_LIVE === 'true' && !researchPreview)
+    throw new Error('LIVE_SOURCE_ACQUISITION_REQUIRES_LOCAL_RESEARCH_PREVIEW');
   const python = process.env.FOUNDATION_PYTHON;
   const sourceDatabase = process.env.FOUNDATION_DATABASE;
   const workerUrl = process.env.REVIEW_WORKER_DATABASE_URL;
@@ -56,7 +58,12 @@ async function initializeFoundation() {
     const store = createReviewStore(workerUrl);
     const reports = createReviewStore(connectionString);
     const worker = createFoundationWorker(adapter, store);
-    return { worker, reports, researchPreview };
+    return {
+      worker,
+      reports,
+      researchPreview,
+      liveTafsir: process.env.FOUNDATION_TAFSIR_LIVE === 'true',
+    };
   } catch (error) {
     await adapter.close();
     throw error;

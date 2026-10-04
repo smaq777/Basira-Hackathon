@@ -10,8 +10,8 @@
       "source": "AI_Foundation/pipeline/source_intake.py",
       "packaged": "pipeline/source_intake.py",
       "original_sha256": "fb7300609c402c649e5e2972322487f1d019c08dba345aa88bfb979026ffb23e",
-      "packaged_sha256": "fb7300609c402c649e5e2972322487f1d019c08dba345aa88bfb979026ffb23e",
-      "changes": "None; original module and existing comments retained byte-for-byte."
+      "packaged_sha256": "9e6d2b9bee4196911525afdf6f398df36bc3a03c5837ce3612aad09303550528",
+      "changes": "Packaged source-first-intake-1.6: emit independent typed fidelity/extent/differences; pass attributed pinned auxiliary imlai to comparator; replay disk/in-memory Tafsir as snapshot while retaining original acquisition transport. Canonical originals and offsets preserved. Cache unavailable context for 30 seconds, with no same-intake retry, so later intakes can recover from transient transport failures."
     },
     {
       "source": "AI_Foundation/pipeline/evidence.py",
@@ -45,8 +45,8 @@
       "source": "AI_Foundation/review_flow/quotation.py",
       "packaged": "review_flow/quotation.py",
       "original_sha256": "d3f418fd1ea7fe4e286c384ace50dda825f56cc223dcb13fb05efeeed2c518ff",
-      "packaged_sha256": "d3f418fd1ea7fe4e286c384ace50dda825f56cc223dcb13fb05efeeed2c518ff",
-      "changes": "None; original module and existing comments retained byte-for-byte."
+      "packaged_sha256": "3e0821cfc46c27501f4448bb243ff9ea2303faed93e97eac13bbdf197085c1a9",
+      "changes": "Packaged quotation-fidelity-2.0: typed independent fidelity/extent, original-text edit spans and conservative token-aligned auxiliary Uthmani/imlai presentation comparison; preserve hamza, lexical madda, negation and canonical offsets. No lossy search folding used for fidelity."
     }
   ],
   "bridge_origin": {

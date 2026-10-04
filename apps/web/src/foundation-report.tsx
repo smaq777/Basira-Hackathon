@@ -1,16 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft } from '@phosphor-icons/react/ArrowLeft';
 import type {
   FoundationReport,
   IntakeSegment,
-  LiteralFinding,
 } from '../../../packages/contracts/src/foundation.js';
 import {
   analysisErrorMessage,
   awaitFoundationReport,
   cancelOwnedReview,
+  createOwnedReview,
   getOwnedReview,
+  persistDraftForAnalysis,
 } from './api.js';
+import {
+  interpretationPresentation,
+  quotationPresentation,
+  quranReaderUrl,
+  sourceCitation,
+  sourceRoleLabel,
+} from './foundation-report-presentation.js';
 
 const roleLabels: Record<IntakeSegment['role'], string> = {
   ayah: 'آية',
@@ -20,41 +28,6 @@ const roleLabels: Record<IntakeSegment['role'], string> = {
   author_text: 'كلام الكاتب',
   unclassified: 'غير مصنّف',
 };
-
-function quotationLabel(finding: LiteralFinding, report: FoundationReport): string {
-  const segment = report.intake.segments.find((row) => row.id === finding.segmentId);
-  const source = report.intake.evidence.find((row) => row.snapshotKey === finding.evidenceKey);
-  const exact =
-    source &&
-    segment &&
-    (((finding.status === 'exact' ||
-      (finding.status === 'partial' &&
-        finding.reason.split(';')[0] === 'exact_contiguous_excerpt')) &&
-      finding.matchedStart !== null &&
-      finding.matchedEnd !== null &&
-      source.originalText.slice(finding.matchedStart, finding.matchedEnd) ===
-        segment.originalText) ||
-      (finding.status === 'exact' &&
-        finding.matchedStart === null &&
-        finding.matchedEnd === null &&
-        source.originalText === segment.originalText));
-  if (exact) return 'نقل مطابق حرفيًا';
-  if (normalizedFinding(finding)) return 'تطابق بعد التطبيع؛ ليس تطابقًا حرفيًا';
-  if (finding.status === 'partial') return 'تطابق جزئي؛ دقة النقل غير مثبتة';
-  if (finding.status === 'mismatch') return 'اختلاف عن المصدر';
-  return 'لم تُحسم المطابقة';
-}
-
-function normalizedFinding(finding: LiteralFinding): boolean {
-  return (
-    finding.status === 'normalized' ||
-    (finding.status === 'partial' &&
-      [
-        'canonically_equivalent_contiguous_excerpt',
-        'contiguous_excerpt_under_declared_typography_rules',
-      ].includes(finding.reason.split(';')[0] ?? ''))
-  );
-}
 
 function OriginalText({ report }: { report: FoundationReport }) {
   const { originalText, segments } = report.intake;
@@ -87,33 +60,13 @@ function OriginalText({ report }: { report: FoundationReport }) {
   );
 }
 
-function sourceLink(value: string | null): string | undefined {
-  if (!value) return undefined;
-  try {
-    const url = new URL(value);
-    return ['https:', 'http:'].includes(url.protocol) ? value : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 export function FoundationReportContent({ report }: { report: FoundationReport }) {
   const { intake } = report;
-  const interpretation =
-    report.interpretation.status === 'not_assessed'
-      ? 'لم يُقيّم الاستدلال'
-      : report.interpretation.status === 'needs_confirmation'
-        ? 'يحتاج تأكيدًا بشريًا'
-        : 'التقييم غير متاح';
+  const interpretation = interpretationPresentation(report);
   return (
     <>
       <div className="prototype-disclosure" role="note">
-        <p>
-          {intake.researchOnly
-            ? 'معاينة بحثية بمصادر قيد الاعتماد.'
-            : 'تقرير مرتبط بنسخة النص المحفوظة.'}{' '}
-          لا يمنح هذا التقرير اعتمادًا شرعيًا أو إذنًا بالنشر.
-        </p>
+        <p>يعرض التقرير مقارنة النقل بالمصادر المتاحة؛ كفاية الاستدلال تُقيّم بصورة مستقلة.</p>
       </div>
       <span
         className={`status-pill status-pill--${report.status === 'completed' ? 'neutral' : 'warning'}`}
@@ -125,7 +78,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
             : 'اكتمل إعداد التقرير'}
       </span>
       <h1>راجع النقل وحدود الاستدلال</h1>
-      <p className="hero-copy">دقة المقتطف ومدى اكتماله وكفاية الاستدلال أمور مستقلة.</p>
+      <p className="hero-copy">دقة النقل وحدود المقتطف وكفاية الاستدلال أمور مستقلة.</p>
       <section className="source-panel">
         <div className="section-title">
           <div>
@@ -156,53 +109,47 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
           {intake.quotationFindings.map((finding, index) => {
             const segment = intake.segments.find((row) => row.id === finding.segmentId);
             const source = intake.evidence.find((row) => row.snapshotKey === finding.evidenceKey);
-            const excerpt =
-              finding.matchedStart !== null &&
-              finding.matchedEnd !== null &&
-              source &&
-              (finding.matchedStart > 0 || finding.matchedEnd < source.originalText.length);
+            const quotation = quotationPresentation(finding, report);
             return (
               <div className="foundation-quotation" key={`${finding.segmentId}-${index}`}>
-                <strong>{quotationLabel(finding, report)}</strong>
+                <strong>{quotation.label}</strong>
                 <blockquote>{segment?.originalText}</blockquote>
+                <p>{quotation.explanation}</p>
                 <p>
-                  {quotationLabel(finding, report) === 'نقل مطابق حرفيًا'
-                    ? 'أثبتت المقارنة تطابق النص المنقول حرفيًا مع موضعه في المصدر. لا تعني هذه النتيجة اكتمال الاقتباس أو كفاية الاستدلال.'
-                    : normalizedFinding(finding)
-                      ? 'توجد مطابقة بعد معالجة فروق الكتابة؛ لم تثبت المطابقة الحرفية للنص الأصلي.'
-                      : finding.status === 'mismatch'
-                        ? 'وجدت المقارنة اختلافًا عن النص المرجعي المعروض. راجع المصدر الكامل قبل تعديل المسودة.'
-                        : 'لم تثبت المقارنة دقة النص المنقول حرفيًا. راجع المصدر الكامل وحدود المقارنة.'}
+                  <b>حدود المقتطف: </b>
+                  {quotation.extent}
                 </p>
-                <p>
-                  <b>مدى النقل: </b>
-                  {excerpt
-                    ? 'مقتطف من المصدر؛ لا يمثل النص الكامل.'
-                    : finding.status === 'exact' &&
-                        source &&
-                        segment?.originalText === source.originalText
-                      ? 'النص المرجعي كاملًا.'
-                      : 'لم يثبت اكتمال النقل.'}
-                </p>
+                {finding.comparison && finding.comparison.differences.length > 0 && (
+                  <ul className="foundation-differences" aria-label="فروق النقل عن المصدر">
+                    {finding.comparison.differences.map((difference, differenceIndex) => (
+                      <li key={differenceIndex}>
+                        {difference.kind === 'omit' ? (
+                          <>ورد في المصدر ولم يرد في النقل: «{difference.sourceText}».</>
+                        ) : difference.kind === 'insert' ? (
+                          <>زيادة في النقل: «{difference.quotedText}».</>
+                        ) : (
+                          <>
+                            ورد في النقل: «{difference.quotedText}»؛ وفي المصدر: «
+                            {difference.sourceText}».
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {source && (
                   <button
                     className="text-action"
                     type="button"
                     onClick={() => {
                       document
-                        .getElementById(`source-${source.snapshotKey}`)
+                        .getElementById(`foundation-source-${intake.evidence.indexOf(source)}`)
                         ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }}
                   >
-                    عرض المصدر الكامل: {source.reference}
+                    عرض النص المرجعي كاملًا: {sourceCitation(source, intake.evidence)}
                   </button>
                 )}
-                <details>
-                  <summary>تفاصيل المقارنة الآلية</summary>
-                  <p className="foundation-provenance" dir="auto">
-                    {finding.reason}
-                  </p>
-                </details>
               </div>
             );
           })}
@@ -214,19 +161,28 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
               <p>لا تُستنتج كفاية الدليل من صحة الاقتباس</p>
             </div>
           </div>
-          <strong>{interpretation}</strong>
-          <p>{report.interpretation.explanation}</p>
-          <p>لا توجد موافقة علمية أو مراجعة شرعية ضمن هذا المؤشر.</p>
-          {intake.contextCoverage.map((coverage, index) => (
-            <p key={index}>
-              {coverage.reference}:{' '}
-              {coverage.status === 'complete_transport'
-                ? 'وصلت السياقات المطلوبة؛ اكتمال السياق العلمي غير محسوم.'
-                : coverage.status === 'partial'
-                  ? 'السياق المتاح جزئي.'
-                  : 'السياق المطلوب غير متاح.'}
-            </p>
-          ))}
+          <strong>{interpretation.label}</strong>
+          <p>{interpretation.explanation}</p>
+          {intake.contextCoverage
+            .filter((coverage) =>
+              intake.evidence.some((source) => source.reference === coverage.reference),
+            )
+            .map((coverage, index) => (
+              <p key={index}>
+                {sourceCitation(
+                  intake.evidence.find(
+                    (source) =>
+                      source.reference === coverage.reference && source.sourceRole === 'quran_text',
+                  ) ?? intake.evidence.find((source) => source.reference === coverage.reference)!,
+                )}
+                :{' '}
+                {coverage.status === 'complete_transport'
+                  ? 'تتوفر نصوص تفسير مرتبطة بالآية؛ لم يُقيّم بها الاستدلال.'
+                  : coverage.status === 'partial'
+                    ? 'بعض نصوص التفسير المرتبطة بالآية متاحة.'
+                    : 'لم تتوفر نصوص التفسير المرتبطة بالآية.'}
+              </p>
+            ))}
         </article>
       </section>
       {report.improvementCards.length > 0 && (
@@ -242,14 +198,17 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
               <h3>{card.title}</h3>
               <blockquote>{card.trigger.originalText}</blockquote>
               <p>{card.explanation}</p>
-              <p>{card.limitation}</p>
+              <p>اقرأ السياق الكامل قبل الاستناد إلى هذا النقل.</p>
               <p>
                 السياق المرتبط:{' '}
                 {card.evidenceKeys
-                  .map(
-                    (key) =>
-                      intake.evidence.find((row) => row.snapshotKey === key)?.reference ??
-                      'مصدر غير متاح',
+                  .map((key) =>
+                    intake.evidence.find((row) => row.snapshotKey === key)
+                      ? sourceCitation(
+                          intake.evidence.find((row) => row.snapshotKey === key)!,
+                          intake.evidence,
+                        )
+                      : 'مصدر غير متاح',
                   )
                   .join('، ')}
               </p>
@@ -261,80 +220,34 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
         <div className="section-title">
           <div>
             <h2>المصادر والنصوص الأصلية</h2>
-            <p>النص الكامل وبيانات النقل والاعتماد لكل مصدر.</p>
+            <p>المرجع المقروء والنص الكامل المتاح للمقارنة.</p>
           </div>
         </div>
         {intake.evidence.length === 0 && <p>لم يتوفر مصدر قابل للعرض. لا يثبت ذلك خطأ النص.</p>}
-        {intake.evidence.map((source) => (
+        {intake.evidence.map((source, index) => (
           <article
             className="foundation-source"
-            id={`source-${source.snapshotKey}`}
+            id={`foundation-source-${index}`}
             key={source.snapshotKey}
           >
-            <h3>{source.reference}</h3>
-            <p>
-              {source.work}
-              {source.author ? ` — ${source.author}` : ''}
-            </p>
+            <span className="status-pill status-pill--neutral">{sourceRoleLabel(source)}</span>
+            <h3>{sourceCitation(source, intake.evidence)}</h3>
+            {source.author && <p>{source.author}</p>}
             <blockquote>{source.originalText}</blockquote>
-            <dl className="foundation-metadata">
-              <div>
-                <dt>الطبعة</dt>
-                <dd>{source.edition ?? 'غير محددة'}</dd>
-              </div>
-              <div>
-                <dt>نسخة المصدر</dt>
-                <dd>{source.sourceVersion}</dd>
-              </div>
-              <div>
-                <dt>حالة الاعتماد</dt>
-                <dd>
-                  {source.approvalStatus === 'approved'
-                    ? 'معتمد في سجل المصدر'
-                    : 'غير معتمد للاستخدام العلمي'}
-                </dd>
-              </div>
-              <div>
-                <dt>طريقة النقل</dt>
-                <dd>{source.delivery === 'snapshot' ? 'نسخة محفوظة' : 'اتصال مباشر'}</dd>
-              </div>
-              <div>
-                <dt>دور المصدر</dt>
-                <dd>
-                  {source.sourceRole === 'quran_text'
-                    ? 'نص قرآني'
-                    : source.sourceRole === 'hadith_matn'
-                      ? 'متن حديث'
-                      : source.sourceRole === 'tafsir_footnote'
-                        ? 'حاشية تفسير'
-                        : 'تفسير'}
-                </dd>
-              </div>
-              <div>
-                <dt>الاستخدام</dt>
-                <dd>{source.researchOnly ? 'بحثي فقط' : 'ضمن حدود سجل المصدر'}</dd>
-              </div>
-            </dl>
-            {sourceLink(source.sourceUrl) && (
+            {source.sourceRole === 'hadith_matn' &&
+              /book\s*=|internal_id/u.test(source.reference) && (
+                <p>لم يثبت رقم الحديث في طبعة محددة ضمن هذا التقرير.</p>
+              )}
+            {quranReaderUrl(source) && (
               <a
                 className="text-action"
-                href={sourceLink(source.sourceUrl)}
+                href={quranReaderUrl(source)}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                فتح رابط المصدر
+                قراءة الآية على Quran.com
               </a>
             )}
-            <details>
-              <summary>بيانات التتبع</summary>
-              <div className="foundation-provenance" dir="ltr">
-                <p>
-                  Source: {source.sourceId} · Snapshot: {source.snapshotKey}
-                </p>
-                <p>Original SHA-256: {source.originalSha256}</p>
-                <pre>{JSON.stringify(source.provenance, null, 2)}</pre>
-              </div>
-            </details>
           </article>
         ))}
       </section>
@@ -345,28 +258,18 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
           </div>
         </div>
         <ul>
-          {[
-            ...new Set([...intake.warnings, ...report.limitations, ...report.themes.limitations]),
-          ].map((limitation) => (
-            <li key={limitation}>{limitation}</li>
-          ))}
+          <li>
+            تعرض المقارنة النص من النسخة الرقمية المتاحة؛ لا تثبت وحدها سلامة الطبعة أو كفاية
+            الاستدلال.
+          </li>
+          <li>حدود المقتطف تصف موضعه في المصدر؛ لا تحكم على أثره في معنى الاستدلال.</li>
+          {intake.quotationFindings.some((finding) => finding.status === 'unresolved') && (
+            <li>بعض النقول لم تُحسم مطابقتها بالمصادر المتاحة.</li>
+          )}
+          {intake.segments.some((segment) => segment.conflict) && (
+            <li>يوجد تعارض بين النسبة المذكورة والمصدر الذي عُثر عليه؛ راجع نسبة النقل.</li>
+          )}
         </ul>
-        <details>
-          <summary>نسخة المراجعة وبيانات التتبع</summary>
-          <div className="foundation-provenance" dir="ltr">
-            <p>Review: {report.reviewId}</p>
-            <p>Revision: {report.revisionId}</p>
-            <p>Input SHA-256: {report.inputSha256}</p>
-            <p>Evidence SHA-256: {report.evidenceStateSha256}</p>
-            <p>
-              Pipeline: {report.pipelineVersion} · Generated: {report.generatedAt}
-            </p>
-            <p>
-              Corpus: {intake.corpusVersion} · Themes: {report.themes.detectorVersion}{' '}
-              (uncalibrated)
-            </p>
-          </div>
-        </details>
       </section>
     </>
   );
@@ -386,6 +289,17 @@ export function FoundationResultScreen({
   const [attempt, setAttempt] = useState(0);
   const [loading, setLoading] = useState(initialReport === null);
   const [status, setStatus] = useState('جار استعادة التقرير المرتبط بجلستك');
+  const [rerunning, setRerunning] = useState(false);
+  const [rerunError, setRerunError] = useState('');
+  const rerunInFlight = useRef(false);
+  const rerunRequest = useRef<{ revisionId: string; idempotencyKey: string } | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   useEffect(() => {
     if (initialReport && attempt === 0) return;
     let active = true;
@@ -395,7 +309,12 @@ export function FoundationResultScreen({
     void getOwnedReview(reviewId)
       .then((run) =>
         awaitFoundationReport(run, controller.signal, (current) => {
-          if (active) setStatus(`حالة المراجعة: ${current.status}`);
+          if (active)
+            setStatus(
+              ['queued', 'retrieving'].includes(current.status)
+                ? 'جار البحث عن النصوص المرجعية'
+                : 'جار مقارنة النقل وإعداد التقرير',
+            );
         }),
       )
       .then((result) => {
@@ -422,6 +341,33 @@ export function FoundationResultScreen({
       onHome();
     } catch (reason) {
       setError(`تعذر تأكيد الإلغاء. ${analysisErrorMessage(reason)}`);
+    }
+  };
+  const reanalyze = async () => {
+    if (!report || rerunInFlight.current) return;
+    rerunInFlight.current = true;
+    setRerunning(true);
+    setRerunError('');
+    try {
+      if (!rerunRequest.current) {
+        const draft = await persistDraftForAnalysis(report.intake.originalText);
+        rerunRequest.current = {
+          revisionId: draft.revisionId,
+          idempotencyKey: crypto.randomUUID(),
+        };
+      }
+      if (!mounted.current) return;
+      const run = await createOwnedReview(
+        rerunRequest.current.revisionId,
+        rerunRequest.current.idempotencyKey,
+      );
+      if (mounted.current)
+        window.location.hash = `#/result?reviewId=${encodeURIComponent(run.reviewId)}`;
+    } catch (reason) {
+      if (mounted.current) setRerunError(analysisErrorMessage(reason));
+    } finally {
+      rerunInFlight.current = false;
+      if (mounted.current) setRerunning(false);
     }
   };
   return (
@@ -464,10 +410,20 @@ export function FoundationResultScreen({
             <FoundationReportContent report={report} />
             <button
               className="button button--outline foundation-refresh"
+              disabled={rerunning}
               onClick={() => setAttempt((value) => value + 1)}
             >
               تحديث التقرير المحفوظ
             </button>
+            <button
+              className="button button--primary foundation-refresh"
+              disabled={rerunning}
+              onClick={() => void reanalyze()}
+            >
+              {rerunning ? 'جار بدء تحليل جديد' : 'إعادة تحليل النص'}
+            </button>
+            <p>إعادة التحليل تنشئ تقريرًا جديدًا للنص نفسه بالمقارنة الحالية.</p>
+            {rerunError && <p role="alert">تعذر بدء التحليل الجديد. {rerunError}</p>}
           </>
         )}
       </main>

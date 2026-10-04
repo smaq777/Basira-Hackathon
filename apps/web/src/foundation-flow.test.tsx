@@ -232,4 +232,83 @@ describe('owned foundation review web flow', () => {
       (screen.getByRole('textbox', { name: 'النص المراد مراجعته' }) as HTMLTextAreaElement).value,
     ).toBe(ORIGINAL_TEXT);
   });
+
+  it('explicitly reanalyzes the identical saved text into a new owned revision and report', async () => {
+    const fetchMock = mockReviewApi();
+    const implementation = fetchMock.getMockImplementation()!;
+    const newRevision = '33333333-3333-4333-8333-333333333333';
+    const newReview = '44444444-4444-4444-8444-444444444444';
+    const newRun = { ...ownedReviewFixture(), revisionId: newRevision, reviewId: newReview };
+    const newReport = foundationReportFixture();
+    newReport.reviewId = newReview;
+    newReport.revisionId = newRevision;
+    newReport.intake.revisionId = newRevision;
+    let releaseDraft!: (response: Response) => void;
+    const pendingDraft = new Promise<Response>((resolve) => {
+      releaseDraft = resolve;
+    });
+    fetchMock.mockImplementation((input, init) => {
+      const path = String(input);
+      if (path === '/api/v1/documents') return pendingDraft;
+      if (path === '/api/v1/reviews') return Promise.resolve(json(newRun, 202));
+      if (path === `/api/v1/reviews/${newReview}`) return Promise.resolve(json(newRun));
+      if (path === `/api/v1/reviews/${newReview}/report`)
+        return Promise.resolve(json({ report: newReport }));
+      return implementation(input, init);
+    });
+    window.location.hash = `#/result?reviewId=${REVIEW_ID}`;
+    render(<App />);
+    await screen.findByRole('heading', { name: 'راجع النقل وحدود الاستدلال' });
+    expect(fetchMock.mock.calls.some(([path]) => path === '/api/v1/documents')).toBe(false);
+    const button = screen.getByRole('button', { name: 'إعادة تحليل النص' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(
+      screen.getByRole('button', { name: 'جار بدء تحليل جديد' }).hasAttribute('disabled'),
+    ).toBe(true);
+    expect(fetchMock.mock.calls.filter(([path]) => path === '/api/v1/documents')).toHaveLength(1);
+    releaseDraft(json({ documentId: 'new-document', revisionId: newRevision }, 201));
+    await waitFor(() => expect(window.location.hash).toBe(`#/result?reviewId=${newReview}`));
+    await screen.findByRole('heading', { name: 'راجع النقل وحدود الاستدلال' });
+    const draft = fetchMock.mock.calls.find(([path]) => path === '/api/v1/documents');
+    expect(JSON.parse(String(draft?.[1]?.body)).text).toBe(ORIGINAL_TEXT);
+    const runs = fetchMock.mock.calls.filter(([path]) => path === '/api/v1/reviews');
+    expect(runs).toHaveLength(1);
+    expect(JSON.parse(String(runs[0]?.[1]?.body)).revisionId).toBe(newRevision);
+    expect((runs[0]?.[1]?.headers as Record<string, string>)['Idempotency-Key']).toBeTruthy();
+    expect(screen.getByLabelText('النص الأصلي مع مواضع النقل').textContent).toBe(ORIGINAL_TEXT);
+    expect(
+      fetchMock.mock.calls.some(
+        ([path, init]) => path === `/api/v1/reviews/${REVIEW_ID}` && init?.method === 'DELETE',
+      ),
+    ).toBe(false);
+  });
+
+  it('keeps the saved report visible and retries review creation with the same revision and idempotency key', async () => {
+    const fetchMock = mockReviewApi();
+    const implementation = fetchMock.getMockImplementation()!;
+    let creationAttempts = 0;
+    fetchMock.mockImplementation((input, init) => {
+      if (String(input) === '/api/v1/reviews') {
+        creationAttempts += 1;
+        return Promise.resolve(json({ code: 'REVIEW_UNAVAILABLE' }, 503));
+      }
+      return implementation(input, init);
+    });
+    window.location.hash = `#/result?reviewId=${REVIEW_ID}`;
+    render(<App />);
+    await screen.findByRole('heading', { name: 'راجع النقل وحدود الاستدلال' });
+    await userEvent.click(screen.getByRole('button', { name: 'إعادة تحليل النص' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('تعذر بدء التحليل الجديد');
+    expect(screen.getByLabelText('النص الأصلي مع مواضع النقل').textContent).toBe(ORIGINAL_TEXT);
+    await userEvent.click(screen.getByRole('button', { name: 'إعادة تحليل النص' }));
+    await waitFor(() => expect(creationAttempts).toBe(2));
+    expect(fetchMock.mock.calls.filter(([path]) => path === '/api/v1/documents')).toHaveLength(1);
+    const calls = fetchMock.mock.calls.filter(([path]) => path === '/api/v1/reviews');
+    expect(calls[0]?.[1]?.body).toBe(calls[1]?.[1]?.body);
+    expect((calls[0]?.[1]?.headers as Record<string, string>)['Idempotency-Key']).toBe(
+      (calls[1]?.[1]?.headers as Record<string, string>)['Idempotency-Key'],
+    );
+    expect(window.location.hash).toBe(`#/result?reviewId=${REVIEW_ID}`);
+  });
 });

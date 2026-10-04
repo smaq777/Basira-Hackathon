@@ -143,6 +143,17 @@ it('preserves whitespace and Unicode originals in documents and subsequent revis
   expect(database.createDocument).toHaveBeenCalledTimes(1);
 });
 
+it('reports opted-in source acquisition without claiming semantic verification', async () => {
+  const { database, foundation } = fixture();
+  const base = await serve({ database, foundation: { ...foundation, liveTafsir: true } });
+  const response = await fetch(base + '/api/v1/capabilities');
+  expect(await response.json()).toMatchObject({
+    liveProviders: ['tafsir_mcp'],
+    verification: false,
+    draftRewrite: false,
+  });
+});
+
 it('applies the source-worker UTF16 length limit before documents, revisions or jobs are written', async () => {
   const { database, foundation } = fixture();
   const text = '🙂'.repeat(1501);

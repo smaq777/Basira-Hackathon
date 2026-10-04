@@ -3222,35 +3222,14 @@ mark {
   overflow-wrap: anywhere;
 }
 
-.foundation-metadata {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
-  gap: 10px;
-  font-size: 0.9rem;
-}
-
-.foundation-metadata dt {
-  color: var(--muted);
-}
-
-.foundation-metadata dd {
-  margin: 0;
-}
-
-.foundation-source details,
-.review-packet details {
-  margin-top: 14px;
-}
-
-.foundation-provenance {
+.foundation-differences {
+  padding-inline-start: 24px;
+  line-height: 1.9;
   overflow-wrap: anywhere;
-  text-align: start;
-  font-size: 0.85rem;
 }
 
-.foundation-provenance pre {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+.foundation-differences li + li {
+  margin-top: 6px;
 }
 
 .foundation-refresh {

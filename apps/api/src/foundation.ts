@@ -121,6 +121,9 @@ export function validateIntake(
     )
       throw new Error('UNKNOWN_LITERAL_CITATION');
     if (finding.status !== 'unresolved' && !source) throw new Error('LITERAL_EVIDENCE_REQUIRED');
+    const comparison = finding.comparison;
+    if (comparison && comparison.fidelity !== 'unresolved' && !source)
+      throw new Error('LITERAL_EVIDENCE_REQUIRED');
     if (
       (finding.matchedStart === null) !== (finding.matchedEnd === null) ||
       (finding.matchedStart !== null &&
@@ -140,6 +143,25 @@ export function validateIntake(
       source.originalText.slice(finding.matchedStart, finding.matchedEnd) !== segment.originalText
     )
       throw new Error('INVALID_EXACT_MATCH');
+    if (comparison?.fidelity === 'exact') {
+      const original =
+        finding.matchedStart === null
+          ? source?.originalText
+          : source?.originalText.slice(finding.matchedStart, finding.matchedEnd!);
+      if (
+        original !== segment.originalText ||
+        comparison.basis !== 'canonical' ||
+        comparison.differences.length
+      )
+        throw new Error('INVALID_EXACT_COMPARISON');
+    }
+    if (
+      comparison?.extent === 'full' &&
+      source &&
+      finding.matchedStart !== null &&
+      (finding.matchedStart !== 0 || finding.matchedEnd !== source.originalText.length)
+    )
+      throw new Error('INVALID_FULL_EXTENT');
     if (
       finding.status === 'exact' &&
       source &&

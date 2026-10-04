@@ -6,6 +6,8 @@ Read [current status](STATUS.md) before interpreting any diagram as implemented 
 
 The [AI foundation integration](architecture/FOUNDATION_INTEGRATION.md) records the
 current-UI bridge, indicator decisions, source dependencies and prioritized agent work.
+The [source services decision](architecture/SOURCE_SERVICES.md) records the live
+Tafsir inventory, MCP/storage roles and the report-language follow-up.
 
 ## Reading paths
 

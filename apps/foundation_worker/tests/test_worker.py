@@ -23,13 +23,15 @@ REVISION = str(uuid.UUID('550e8400-e29b-41d4-a716-446655440000'))
 ORIGINAL = 'نص تجريبي واحد واضح'
 
 
-def fixture_index(directory, *, original=ORIGINAL, matching=None, tamper_original=False):
+def fixture_index(directory, *, original=ORIGINAL, matching=None, tamper_original=False, auxiliary=None):
     """Create only an owned fixture; never label fixture content approved."""
     matching = original if matching is None else matching
     database = Path(directory) / 'owned.sqlite'
     metadata = dict(source_id='owned-offline-fixture', source_version='fixture-v1',
                     source_work='Owned synthetic source fixture', rights='owned_test_only',
                     content_approval='pending', research_only=True)
+    if auxiliary:
+        metadata['auxiliary_search_views'] = [auxiliary]
     manifest = dict(corpus_fingerprint=sha('owned-test-fixture-v1'), research_only=True,
                     publication_approved=False)
     with closing(sqlite3.connect(database)) as connection, connection:
@@ -212,6 +214,7 @@ class WorkerTests(unittest.TestCase):
         folder = Path(self.temp.name) / 'snapshots'
         folder.mkdir()
         packet = adapter(lambda request, remaining: response(request)).gather(1, 1, research_preview=True)
+        packet['delivery'] = 'live'
         snapshot = folder / '1-1.packet.json'
         snapshot.write_text(json.dumps(packet), encoding='utf-8')
         instance = SourceIntake(database, folder, research_preview=True)
@@ -221,6 +224,7 @@ class WorkerTests(unittest.TestCase):
             context = [row for row in result['evidence'] if row['sourceRole'] == 'tafsir_commentary']
             self.assertEqual(len(context), 2)
             self.assertTrue(all(row['delivery'] == 'snapshot' for row in context))
+            self.assertTrue(all(row['provenance']['acquisition_transport'] == 'live' for row in context))
             self.assertTrue(all(row['approvalStatus'] == 'pending' for row in context))
             self.assertFalse(result['contextCoverage'][0]['scholarlyContextComplete'])
         finally:
@@ -233,6 +237,46 @@ class WorkerTests(unittest.TestCase):
                 instance.analyze('[1:1]', REVISION)
         finally:
             instance.close()
+
+    def test_in_memory_context_replay_preserves_acquisition_but_is_not_a_live_call(self):
+        instance = self.intake()
+        packet = adapter(lambda request, remaining: response(request)).gather(1, 1, research_preview=True)
+        packet['delivery'] = 'live'
+        with patch('pipeline.live_tafsir.gather_live', return_value=packet) as live:
+            first = instance.analyze('[1:1]', REVISION)
+            replay = instance.analyze('[1:1]', REVISION)
+        live.assert_called_once()
+        first_context = [row for row in first['evidence'] if row['sourceRole'] == 'tafsir_commentary']
+        replay_context = [row for row in replay['evidence'] if row['sourceRole'] == 'tafsir_commentary']
+        self.assertTrue(all(row['delivery'] == 'live' for row in first_context))
+        self.assertTrue(all(row['delivery'] == 'snapshot' for row in replay_context))
+        self.assertTrue(all(row['provenance']['acquisition_transport'] == 'live' for row in replay_context))
+        self.assertEqual([row['originalSha256'] for row in first_context], [row['originalSha256'] for row in replay_context])
+
+    def test_unavailable_context_recovers_after_bounded_ttl_without_same_intake_retry(self):
+        instance = self.intake()
+        packet = adapter(lambda request, remaining: response(request)).gather(1, 1, research_preview=True)
+        packet['delivery'] = 'live'
+        now = [100.0]
+        with patch('pipeline.source_intake.time.monotonic', side_effect=lambda: now[0]), \
+                patch('pipeline.live_tafsir.gather_live', side_effect=[None, None, packet]) as live:
+            first = instance.analyze('[1:1]', REVISION)
+            self.assertEqual(first['contextCoverage'][0]['status'], 'unavailable')
+            now[0] = 110.0
+            instance.analyze('[1:1]', REVISION)
+            self.assertEqual(live.call_count, 1)
+            now[0] = 131.0
+            instance.analyze('[1:1]', REVISION)
+            self.assertEqual(live.call_count, 2)
+            # Crossing the TTL after this intake's failed attempt cannot retry.
+            now[0] = 162.0
+            self.assertIsNone(instance._snapshot('1:1'))
+            self.assertEqual(live.call_count, 2)
+            recovered = instance.analyze('[1:1]', REVISION)
+            self.assertEqual(live.call_count, 3)
+        self.assertEqual(recovered['contextCoverage'][0]['status'], 'complete_transport')
+        context = [row for row in recovered['evidence'] if row['sourceRole'] == 'tafsir_commentary']
+        self.assertTrue(all(row['delivery'] == 'live' for row in context))
 
 
 if __name__ == '__main__':

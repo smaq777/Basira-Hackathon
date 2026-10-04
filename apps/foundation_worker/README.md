@@ -6,10 +6,10 @@ religious meaning of a claim, rewrite a draft, grade hadith authenticity, or
 approve publication. Issue #14 packages the source-first slice; model routing
 and rewrite integration remain separate work (#13/#17).
 
-The six modules in `pipeline/` and `review_flow/` are copied byte-for-byte from
+The six modules in `pipeline/` and `review_flow/` originate from
 the owner-provided AI_Foundation working source. `SOURCE_PROVENANCE.json`
-records their original and packaged SHA-256 identities and the adapted bridge's
-origin. Existing code comments and notices are retained; packaging does not
+records their original and current packaged SHA-256 identities, bounded local
+adaptations, and the adapted bridge's origin. Existing code comments and notices are retained; packaging does not
 grant corpus redistribution rights. No source corpus, database, captured
 provider body, frozen research output, credential, or model module is included.
 
@@ -108,6 +108,31 @@ UTF-16 offsets, source provenance, quotation findings, context coverage and
 warnings. Pending/research source labels remain visible. A partial-token
 excerpt is a mismatch requiring review; a repeated excerpt has unresolved
 alignment. Neither result silently selects a source position.
+
+New findings also carry a typed `comparison` with independent `fidelity` and
+`extent`, plus original-text replacements, insertions and internal omissions.
+A faithfully copied contiguous excerpt retains full fidelity; its extent is
+`excerpt`. An internal gap is `gapped`, independently of lexical changes. Older
+immutable findings without this optional field remain readable.
+
+`quotation-fidelity-2.0` may use a separately attributed, SHA-256-pinned
+`publisher imlai original` auxiliary view already present in the index metadata.
+It first requires equal token counts and verifies every canonical/auxiliary token
+pair under limited Uthmani presentation rules: vowel/tatweel/recitation signs,
+optional dagger alef, wasla and the explicitly supplied maqsurah spelling.
+Hamza stays significant; only its seat may vary in the explicitly pinned
+auxiliary spelling. The lexical letter آ and its decomposed form stay significant. Arbitrary letter folding,
+token deletion, negation changes and unverified auxiliary editions never become
+orthographic fidelity. Excerpt offsets always refer to the unchanged canonical
+source, and auxiliary hashes, attribution and version remain in its provenance.
+If an edition cannot be aligned under these rules, comparison stays conservative.
+
+Stored and in-memory Tafsir replays report `delivery: snapshot`; only a fresh
+acquisition reports `live`. Their original acquisition transport remains separate
+in provenance. A replay is not evidence of a new MCP request.
+Unavailable context is cached for 30 seconds, so a later intake can recover
+from a transient transport failure without restarting the worker. The worker
+does not retry the same reference within one intake, even after that TTL.
 
 Malformed/unknown request fields or failed source integrity return
 `invalid_intake_request_or_source_integrity`. Oversized or unterminated lines
