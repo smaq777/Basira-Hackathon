@@ -12,13 +12,17 @@ type AccessState = 'checking' | 'signed-out' | 'allowed' | 'forbidden' | 'error'
 export function ReviewerAccessBoundary({
   children,
   onHome,
+  onSignedOut,
 }: {
   children: (profile: ReactNode, signOut: () => Promise<void>) => ReactNode;
   onHome: () => void;
+  onSignedOut: () => void;
 }) {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const { openUserProfile, signOut } = useClerk();
-  const [access, setAccess] = useState<AccessState>('checking');
+  const [access, setAccess] = useState<AccessState>(() =>
+    isLoaded && !isSignedIn ? 'signed-out' : 'checking',
+  );
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -70,8 +74,8 @@ export function ReviewerAccessBoundary({
         </button>
       </div>,
       async () => {
-        onHome();
         await signOut();
+        onSignedOut();
       },
     );
 

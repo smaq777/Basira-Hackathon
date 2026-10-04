@@ -3,7 +3,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import App, { ExpandableText, ReviewerShell } from './App.js';
+import App, { ExpandableText, reloadSignedOutHome, ReviewerShell } from './App.js';
 
 describe('Basirah web flow', () => {
   beforeEach(() => {
@@ -163,6 +163,15 @@ describe('Basirah web flow', () => {
 
     await user.click(screen.getByRole('button', { name: 'تسجيل الخروج' }));
     expect(onSignOut).toHaveBeenCalledOnce();
+  });
+
+  it('moves to home and reloads after reviewer sign-out', () => {
+    const location = { hash: '#/reviewer/dashboard', reload: vi.fn() };
+
+    reloadSignedOutHome(location);
+
+    expect(location.hash).toBe('#/home');
+    expect(location.reload).toHaveBeenCalledOnce();
   });
 
   it('shows a useful empty state when a reviewer search has no matches', async () => {
