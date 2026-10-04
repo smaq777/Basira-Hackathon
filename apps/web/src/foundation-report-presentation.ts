@@ -392,7 +392,9 @@ export function interpretationPresentation(report: FoundationReport) {
       label: 'تقييم دلالي أولي',
       explanation:
         report.semanticAssessment.status === 'partial'
-          ? 'تتوفر نتائج أولية لبعض العبارات، ولم يكتمل تقييم التقرير. الربط والنتائج مقترحات للمراجعة.'
+          ? report.semanticAssessment.errorCode === 'invalid_claims'
+            ? 'تتوفر نتائج أولية لبعض العبارات. تعذر التحقق من بعض العبارات المقترحة أو ربطها بالنص والمصادر، فاستُبعدت من التقييم. النتائج المعروضة مقترحات للمراجعة.'
+            : 'تتوفر نتائج أولية لبعض العبارات، ولم يكتمل تقييم التقرير. الربط والنتائج مقترحات للمراجعة.'
           : 'قارن التقييم الآلي الادعاءات بالمصادر المعروضة. الربط والنتائج مقترحات للمراجعة، ولا تمثل اعتمادًا علميًا أو شرعيًا.',
     };
   if (
@@ -403,7 +405,9 @@ export function interpretationPresentation(report: FoundationReport) {
     return {
       label: 'تعذر استكمال التقييم الدلالي',
       explanation:
-        'لم تتوفر نتيجة دلالية يمكن عرضها. نتائج النقل والمصادر محفوظة، ويمكن إعادة التحليل لاحقًا.',
+        report.semanticAssessment?.errorCode === 'invalid_claims'
+          ? 'لم يتمكن التقييم من تحديد عبارات الكاتب وربطها بالنص والمصادر بصورة موثوقة. تظل نتائج مقارنة النقل والمصادر متاحة.'
+          : 'لم تتوفر نتيجة دلالية يمكن عرضها. نتائج النقل والمصادر محفوظة، ويمكن إعادة التحليل لاحقًا.',
     };
   const applicability =
     report.interpretation.applicability ?? assessClaimApplicability(report.intake);

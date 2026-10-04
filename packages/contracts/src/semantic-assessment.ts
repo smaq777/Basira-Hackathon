@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.1';
-export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.1';
+export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.3';
+export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.3';
 
 const EvidenceKeys = z.array(z.string().min(1).max(160)).max(20);
 const Details = z.array(z.string().min(1).max(500)).max(6);
@@ -125,8 +125,16 @@ export const SemanticAssessmentReportSchema = z
     errorCode: SemanticErrorCodeSchema.nullable(),
     trace: z
       .object({
-        pipelineVersion: z.literal(SEMANTIC_PIPELINE_VERSION),
-        promptVersion: z.literal(SEMANTIC_PROMPT_VERSION),
+        pipelineVersion: z.enum([
+          'provisional-semantic-v1.1',
+          'provisional-semantic-v1.2',
+          SEMANTIC_PIPELINE_VERSION,
+        ]),
+        promptVersion: z.enum([
+          'evidence-support-v1.1',
+          'evidence-support-v1.2',
+          SEMANTIC_PROMPT_VERSION,
+        ]),
         inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),
         evidenceSha256: z.string().regex(/^[a-f0-9]{64}$/u),
         extractionInputSha256: z
@@ -142,5 +150,13 @@ export const SemanticAssessmentReportSchema = z
       .strict(),
     limitations: z.array(z.string().min(1).max(1000)).max(10),
   })
-  .strict();
+  .strict()
+  .refine(
+    (report) =>
+      report.trace.pipelineVersion.slice('provisional-semantic-'.length) ===
+      report.trace.promptVersion.slice('evidence-support-'.length),
+    {
+      message: 'Semantic prompt and pipeline versions must match',
+    },
+  );
 export type SemanticAssessmentReport = z.infer<typeof SemanticAssessmentReportSchema>;

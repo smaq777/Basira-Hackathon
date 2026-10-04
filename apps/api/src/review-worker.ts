@@ -14,7 +14,10 @@ import {
   CLAIM_APPLICABILITY_VERSION,
 } from '../../../packages/contracts/src/claim-applicability.js';
 import type { ReviewLease, ReviewStore, StoredEvidence, StoredFinding } from './review-store.js';
-import type { SemanticAssessmentAdapter } from './semantic-assessment.js';
+import {
+  SEMANTIC_PHASE_TIMEOUT_MS,
+  type SemanticAssessmentAdapter,
+} from './semantic-assessment.js';
 
 export interface FoundationWorker {
   notify(): void;
@@ -123,7 +126,10 @@ export function createFoundationWorker(
       };
       if (semantic && applicability.status !== 'not_applicable') {
         // Preserve time for binding and persistence even when an optional provider stalls.
-        const availableMs = Math.min(25_000, Date.parse(lease.deadlineAt) - Date.now() - 5_000);
+        const availableMs = Math.min(
+          SEMANTIC_PHASE_TIMEOUT_MS,
+          Date.parse(lease.deadlineAt) - Date.now() - 5_000,
+        );
         try {
           if (availableMs < 1_000) throw new Error('SEMANTIC_DEADLINE');
           const assessment = await semantic.assess(

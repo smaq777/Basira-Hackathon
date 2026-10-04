@@ -29,8 +29,11 @@ permission block. The local semantic pilot is enabled for testing; deployment
 defaults remain off. [UI and input refinements](evidence/2026-10-05-ui-input-refinements.md)
 add bounded editor/loading content, shared classification colors, precise comparison
 highlights and explicit assessment states. The first full-writing model run reached
-the provider but failed claim validation before assessment; this is not a semantic
-judgment about the writing.
+the provider but failed claim validation before assessment. Independent-claim
+recovery and a concise extraction prompt repaired that failure. A measured
+32.694-second assessment exposed an overly short timeout and missing author
+context; v1.3 preserves the full draft as non-evidence context and uses bounded
+stage budgets. These are local engineering results, not scholarly acceptance.
 
 The fresh repository baseline contains the completed foundation and architecture work. Current validation is recorded by this repository's GitHub Actions runs. [Issue #27](https://github.com/smaq777/Basira-Hackathon/issues/27) tracks the judge-ready repository and deployment handoff.
 

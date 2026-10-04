@@ -1,6 +1,10 @@
 import { expect, it } from 'vitest';
 import { FoundationReportSchema } from '../packages/contracts/src/foundation.js';
 import { foundationReportFixture } from '../apps/web/src/foundation-report.fixtures.js';
+import {
+  SEMANTIC_PIPELINE_VERSION,
+  SEMANTIC_PROMPT_VERSION,
+} from '../packages/contracts/src/semantic-assessment.js';
 
 function fixture() {
   const report = foundationReportFixture();
@@ -50,8 +54,8 @@ function fixture() {
       },
     ],
     trace: {
-      pipelineVersion: 'provisional-semantic-v1.1',
-      promptVersion: 'evidence-support-v1.1',
+      pipelineVersion: SEMANTIC_PIPELINE_VERSION,
+      promptVersion: SEMANTIC_PROMPT_VERSION,
       inputSha256: report.inputSha256,
       evidenceSha256: 'd'.repeat(64),
       extractionInputSha256: null,
@@ -65,6 +69,12 @@ function fixture() {
 
 it('accepts only an exact authored claim with a citation from its selected source family', () => {
   expect(FoundationReportSchema.safeParse(fixture()).success).toBe(true);
+});
+it('keeps immutable v1.1 semantic reports readable after a producer upgrade', () => {
+  const report = fixture();
+  report.semanticAssessment!.trace.pipelineVersion = 'provisional-semantic-v1.1';
+  report.semanticAssessment!.trace.promptVersion = 'evidence-support-v1.1';
+  expect(FoundationReportSchema.safeParse(report).success).toBe(true);
 });
 it.each([
   'unrelated_family',

@@ -5,6 +5,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { FoundationReportContent } from './foundation-report.js';
 import type { QuotationComparison } from '../../../packages/contracts/src/foundation.js';
 import {
+  SEMANTIC_PIPELINE_VERSION,
+  SEMANTIC_PROMPT_VERSION,
+} from '../../../packages/contracts/src/semantic-assessment.js';
+import {
   comparisonHighlights,
   interpretationPresentation,
   reportFindings,
@@ -425,6 +429,88 @@ it('explains a model outage while keeping source comparison available', () => {
   expect(screen.getByText('نقل مطابق حرفيًا')).not.toBeNull();
   expect(screen.queryByText('لم يُجرَ تقييم الاستدلال في هذا التقرير')).toBeNull();
 });
+
+it('explains an unavailable claim extraction without implying that source evidence failed', () => {
+  const report = semanticBindingFixture();
+  report.interpretation.status = 'unavailable';
+  report.semanticAssessment!.status = 'unavailable';
+  report.semanticAssessment!.claims = [];
+  report.semanticAssessment!.assessments = [];
+  const view = render(<FoundationReportContent report={report} />);
+  expect(screen.getByText('تعذر استكمال التقييم الدلالي')).not.toBeNull();
+  expect(
+    screen.getByText(
+      'لم يتمكن التقييم من تحديد عبارات الكاتب وربطها بالنص والمصادر بصورة موثوقة. تظل نتائج مقارنة النقل والمصادر متاحة.',
+    ),
+  ).not.toBeNull();
+  expect(screen.getByText('نقل مطابق حرفيًا')).not.toBeNull();
+  expect(view.container.textContent).not.toContain('invalid_claims');
+  expect(screen.queryByText('لا يوجد استنتاج قابل للتقييم في هذا النص')).toBeNull();
+});
+
+it('preserves partial assessments and explains that unverifiable proposed statements were skipped', () => {
+  const report = semanticBindingFixture();
+  const view = render(<FoundationReportContent report={report} />);
+  expect(screen.getByText('تقييم دلالي أولي')).not.toBeNull();
+  expect(
+    screen.getByText(
+      'تتوفر نتائج أولية لبعض العبارات. تعذر التحقق من بعض العبارات المقترحة أو ربطها بالنص والمصادر، فاستُبعدت من التقييم. النتائج المعروضة مقترحات للمراجعة.',
+    ),
+  ).not.toBeNull();
+  expect(screen.getByText('هذه نتيجة أولية لعبارة الاختبار.')).not.toBeNull();
+  expect(screen.getByText('نقل مطابق حرفيًا')).not.toBeNull();
+  expect(view.container.textContent).not.toContain('invalid_claims');
+  expect(view.container.textContent).not.toContain(SEMANTIC_PROMPT_VERSION);
+  expect(screen.queryByText('تعذر استكمال التقييم الدلالي')).toBeNull();
+});
+
+function semanticBindingFixture() {
+  const report = foundationReportFixture();
+  const originalText = 'كلامًا يحتاج إلى مراجعة';
+  const startOffset = report.intake.originalText.indexOf(originalText);
+  report.interpretation.status = 'provisional';
+  report.semanticAssessment = {
+    schemaVersion: 1,
+    status: 'partial',
+    provisional: true,
+    scholarlyApproval: false,
+    errorCode: 'invalid_claims',
+    claims: [
+      {
+        id: 'claim-' + 'a'.repeat(24),
+        segmentId: 'author',
+        originalText,
+        startOffset,
+        endOffset: startOffset + originalText.length,
+        provisional: true,
+        evidenceKeys: ['source'],
+      },
+    ],
+    assessments: [
+      {
+        claimId: 'claim-' + 'a'.repeat(24),
+        status: 'not_established',
+        conditions: [],
+        negations: [],
+        exceptions: [],
+        scope: [],
+        citations: [],
+        explanation: 'هذه نتيجة أولية لعبارة الاختبار.',
+      },
+    ],
+    trace: {
+      pipelineVersion: SEMANTIC_PIPELINE_VERSION,
+      promptVersion: SEMANTIC_PROMPT_VERSION,
+      inputSha256: report.inputSha256,
+      evidenceSha256: 'd'.repeat(64),
+      extractionInputSha256: null,
+      assessmentInputSha256: null,
+      requests: [],
+    },
+    limitations: [],
+  };
+  return report;
+}
 
 it('shows provisional semantic findings with readable sources and no model trace', () => {
   const report = foundationReportFixture();

@@ -5,7 +5,11 @@ import { createFoundationWorker } from '../apps/api/src/review-worker.js';
 import { createSemanticAssessmentAdapter } from '../apps/api/src/semantic-assessment.js';
 import type { ReviewLease, ReviewStore } from '../apps/api/src/review-store.js';
 import { canonical } from '../apps/api/src/foundation.js';
-import type { SemanticAssessmentReport } from '../packages/contracts/src/semantic-assessment.js';
+import {
+  SEMANTIC_PIPELINE_VERSION,
+  SEMANTIC_PROMPT_VERSION,
+  type SemanticAssessmentReport,
+} from '../packages/contracts/src/semantic-assessment.js';
 import type { FoundationIntake } from '../packages/contracts/src/foundation.js';
 
 function fixture() {
@@ -336,8 +340,8 @@ function semanticFixture(intake: FoundationIntake): SemanticAssessmentReport {
       },
     ],
     trace: {
-      pipelineVersion: 'provisional-semantic-v1.1',
-      promptVersion: 'evidence-support-v1.1',
+      pipelineVersion: SEMANTIC_PIPELINE_VERSION,
+      promptVersion: SEMANTIC_PROMPT_VERSION,
       inputSha256: intake.revisionSha256,
       evidenceSha256: sha256(canonical(intake.evidence)),
       extractionInputSha256: null,
@@ -375,6 +379,49 @@ it('binds provisional semantic results into the durable report without scholarly
     ),
   );
   await worker.stop();
+});
+
+it('allows a measured long assessment within the semantic budget and review deadline', async () => {
+  vi.useFakeTimers();
+  const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation((delay) => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), delay);
+    return controller.signal;
+  });
+  const { intake, lease, store, adapter } = fixture();
+  lease.deadlineAt = new Date(Date.now() + 90_000).toISOString();
+  const semantic = {
+    assess: vi.fn(
+      (_intake: FoundationIntake, signal?: AbortSignal) =>
+        new Promise<SemanticAssessmentReport>((resolve, reject) => {
+          const timer = setTimeout(() => resolve(semanticFixture(intake)), 33_000);
+          signal?.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(timer);
+              reject(new Error('ABORTED'));
+            },
+            { once: true },
+          );
+        }),
+    ),
+  };
+  const worker = createFoundationWorker(adapter, store, semantic);
+  try {
+    const pending = worker.runOnce();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(timeout).toHaveBeenCalledWith(60_000);
+    await vi.advanceTimersByTimeAsync(33_000);
+    expect(await pending).toBe(true);
+    expect(store.fail).not.toHaveBeenCalled();
+    expect(vi.mocked(store.complete).mock.calls[0]![1].result.semanticAssessment).toMatchObject({
+      status: 'completed',
+    });
+  } finally {
+    await worker.stop();
+    timeout.mockRestore();
+    vi.useRealTimers();
+  }
 });
 
 it.each(['exception', 'stale_hash', 'unknown_citation'] as const)(

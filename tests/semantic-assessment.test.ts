@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canonical, sha256 } from '../apps/api/src/foundation.js';
 import {
   createSemanticAssessmentAdapter,
+  SEMANTIC_PHASE_TIMEOUT_MS,
   type SemanticAssessmentOptions,
 } from '../apps/api/src/semantic-assessment.js';
 import type { FoundationIntake, SourceEvidence } from '../packages/contracts/src/foundation.js';
+import { SemanticAssessmentReportSchema } from '../packages/contracts/src/semantic-assessment.js';
 
 // Owned synthetic editorial controls, not religious source material or accuracy labels.
 const SOURCE = 'يحفظ الكاتب الحقوق ما لم يتعذر ذلك.';
@@ -160,7 +162,14 @@ describe('bounded semantic assessment', () => {
     ).toBe('configuration_invalid');
     expect(
       (
-        await createSemanticAssessmentAdapter(options(fetch, { overallTimeoutMs: 25_001 })).assess(
+        await createSemanticAssessmentAdapter(
+          options(fetch, { overallTimeoutMs: SEMANTIC_PHASE_TIMEOUT_MS + 1 }),
+        ).assess(fixture())
+      ).errorCode,
+    ).toBe('configuration_invalid');
+    expect(
+      (
+        await createSemanticAssessmentAdapter(options(fetch, { requestTimeoutMs: 45_001 })).assess(
           fixture(),
         )
       ).errorCode,
@@ -218,6 +227,66 @@ describe('bounded semantic assessment', () => {
     ]);
     expect(data.claims[0].evidence[0].originalText).toBe(SOURCE);
     expect(JSON.stringify(data)).not.toContain('private-operator-path');
+  });
+
+  it('provides the exact bounded draft only as untrusted context for selected claims', async () => {
+    const claim = 'يجب حفظها';
+    const text = `😀 المقصود السجلات التجريبية. لذلك ${claim}. عبارة أخرى لا تُقيّم تلقائيا.`;
+    const intake = fixture(text);
+    const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+      const { body, data } = requestData(init);
+      if (body.response_format.json_schema.name === 'extraction') return response(proposal(claim));
+      expect(data.draftContext).toEqual({
+        originalText: text,
+        inputSha256: sha256(text),
+        role: 'untrusted_author_context_not_evidence',
+      });
+      expect(data.claims).toHaveLength(1);
+      expect(data.claims[0].claim.originalText).toBe(claim);
+      expect(
+        data.claims[0].evidence.map((row: { evidenceKey: string }) => row.evidenceKey),
+      ).toEqual(['owned-source']);
+      expect(body.messages[0].content).toContain('It is not evidence');
+      return response({ assessments: [finding(data.claims[0].claim.id)] }, assessor.modelId);
+    });
+    const result = await createSemanticAssessmentAdapter(options(fetch)).assess(intake);
+    expect(result.status).toBe('completed');
+    expect(result.claims).toHaveLength(1);
+    expect(text.slice(result.claims[0]!.startOffset, result.claims[0]!.endOffset)).toBe(claim);
+    expect(result.trace.inputSha256).toBe(sha256(text));
+  });
+
+  it('cannot cite authored draft context in place of a source original', async () => {
+    const result = await createSemanticAssessmentAdapter(
+      options(
+        successfulFetch((value) => {
+          value.citations[0]!.excerpt = CLAIM;
+        }),
+      ),
+    ).assess(fixture());
+    expect(result).toMatchObject({
+      status: 'partial',
+      errorCode: 'invalid_citations',
+      assessments: [],
+    });
+    expect(result.claims).toHaveLength(1);
+  });
+
+  it('preserves matching historical trace versions while rejecting mixed-version traces', async () => {
+    const report = await createSemanticAssessmentAdapter(options(successfulFetch())).assess(
+      fixture(),
+    );
+    const historical = structuredClone(report);
+    for (const version of ['v1.1', 'v1.2'] as const) {
+      historical.trace.pipelineVersion = `provisional-semantic-${version}`;
+      historical.trace.promptVersion = `evidence-support-${version}`;
+      expect(SemanticAssessmentReportSchema.safeParse(historical).success).toBe(true);
+    }
+    historical.trace.promptVersion = report.trace.promptVersion;
+    expect(SemanticAssessmentReportSchema.safeParse(historical).success).toBe(false);
+    const reverse = structuredClone(report);
+    reverse.trace.promptVersion = 'evidence-support-v1.1';
+    expect(SemanticAssessmentReportSchema.safeParse(reverse).success).toBe(false);
   });
 
   it('skips bounded question-only input but treats empty extraction as inconclusive', async () => {
@@ -299,6 +368,92 @@ describe('bounded semantic assessment', () => {
     expect(
       (await createSemanticAssessmentAdapter(options(fetch)).assess(fixture())).errorCode,
     ).toBe('invalid_claims');
+  });
+
+  it.each(['paraphrase', 'question', 'quoted_source', 'unknown_source', 'unknown_segment'])(
+    'preserves independently bound claims after rejecting one %s proposal',
+    async (kind) => {
+      const second = 'يجب حفظ السجل';
+      const intake = fixture(
+        `😀 لذلك ${CLAIM}. هل يجب إسقاط الحقوق؟ قال الكاتب «يجب تغيير السجل». ${second}.`,
+      );
+      const invalid = {
+        segmentId: kind === 'unknown_segment' ? 'invented-segment' : 'author-1',
+        originalText:
+          kind === 'question'
+            ? 'يجب إسقاط الحقوق'
+            : kind === 'quoted_source'
+              ? 'يجب تغيير السجل'
+              : 'عبارة اخترعها النموذج',
+        evidenceKeys: kind === 'unknown_source' ? ['invented-key'] : ['owned-source'],
+      };
+      if (kind === 'unknown_source') invalid.originalText = second;
+      const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+        const { body, data } = requestData(init);
+        if (body.response_format.json_schema.name === 'extraction')
+          return response({ claims: [...proposal().claims, invalid, ...proposal(second).claims] });
+        expect(
+          data.claims.map((row: { claim: { originalText: string } }) => row.claim.originalText),
+        ).toEqual([CLAIM, second]);
+        return response(
+          {
+            assessments: data.claims.map((row: { claim: { id: string } }) => finding(row.claim.id)),
+          },
+          assessor.modelId,
+        );
+      });
+      const result = await createSemanticAssessmentAdapter(options(fetch)).assess(intake);
+      expect(result).toMatchObject({ status: 'partial', errorCode: 'invalid_claims' });
+      expect(result.claims.map((claim) => claim.originalText)).toEqual([CLAIM, second]);
+      expect(result.assessments).toHaveLength(2);
+      expect(result.limitations.some((line) => line.includes('استُبعدت'))).toBe(true);
+      expect(fetch).toHaveBeenCalledTimes(2);
+      for (const claim of result.claims)
+        expect(intake.originalText.slice(claim.startOffset, claim.endOffset)).toBe(
+          claim.originalText,
+        );
+    },
+  );
+
+  it('rejects all mutually overlapping proposals without choosing by model order', async () => {
+    const second = 'يجب حفظ السجل';
+    const intake = fixture(`😀 لذلك ${CLAIM}. ${second}.`);
+    const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+      const { body, data } = requestData(init);
+      if (body.response_format.json_schema.name === 'extraction')
+        return response({
+          claims: [
+            ...proposal().claims,
+            ...proposal('حفظ الحقوق').claims,
+            ...proposal(second).claims,
+          ],
+        });
+      expect(data.claims).toHaveLength(1);
+      return response({ assessments: [finding(data.claims[0].claim.id)] }, assessor.modelId);
+    });
+    const result = await createSemanticAssessmentAdapter(options(fetch)).assess(intake);
+    expect(result).toMatchObject({ status: 'partial', errorCode: 'invalid_claims' });
+    expect(result.claims.map((claim) => claim.originalText)).toEqual([second]);
+  });
+
+  it('keeps opening quote delimiters and question-containing paragraphs out of recovered claims', async () => {
+    const intake = fixture(`${CLAIM}. ما معنى الحقوق؟ «مصدر تجريبي»`);
+    const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+      const { body, data } = requestData(init);
+      if (body.response_format.json_schema.name === 'extraction')
+        return response({
+          claims: [
+            ...proposal(intake.originalText).claims,
+            ...proposal(`${CLAIM}. ما معنى الحقوق؟ «`).claims,
+            ...proposal().claims,
+          ],
+        });
+      return response({ assessments: [finding(data.claims[0].claim.id)] }, assessor.modelId);
+    });
+    const result = await createSemanticAssessmentAdapter(options(fetch)).assess(intake);
+    expect(result).toMatchObject({ status: 'partial', errorCode: 'invalid_claims' });
+    expect(result.claims.map((claim) => claim.originalText)).toEqual([CLAIM]);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it.each(['unknown-key', 'fabricated-excerpt', 'no-citation'])(
@@ -408,6 +563,38 @@ describe('bounded semantic assessment', () => {
     expect(result.errorCode).toBe('timeout');
     expect(result.trace.requests[0]!.durationMs).toBe(50);
     expect((fetch.mock.calls[0]![1]!.signal as AbortSignal).aborted).toBe(true);
+  });
+
+  it.each([undefined, 45_000])(
+    'caps extraction at 12 seconds with request override %s',
+    async (requestTimeoutMs) => {
+      vi.useFakeTimers();
+      const fetch = vi.fn<typeof globalThis.fetch>(() => new Promise(() => undefined));
+      const pending = createSemanticAssessmentAdapter(options(fetch, { requestTimeoutMs })).assess(
+        fixture(),
+      );
+      await vi.advanceTimersByTimeAsync(12_000);
+      expect(await pending).toMatchObject({ errorCode: 'timeout', claims: [], assessments: [] });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(SEMANTIC_PHASE_TIMEOUT_MS).toBe(60_000);
+    },
+  );
+
+  it('defaults assessment to 45 seconds and preserves bound claims on timeout', async () => {
+    vi.useFakeTimers();
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(proposal()))
+      .mockImplementation(() => new Promise(() => undefined));
+    const pending = createSemanticAssessmentAdapter(options(fetch)).assess(fixture());
+    await vi.advanceTimersByTimeAsync(44_999);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect((fetch.mock.calls[1]![1]!.signal as AbortSignal).aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const result = await pending;
+    expect(result).toMatchObject({ status: 'partial', errorCode: 'timeout', assessments: [] });
+    expect(result.claims).toHaveLength(1);
+    expect(result.trace.requests[1]!.durationMs).toBe(45_000);
   });
 
   it.each(['missing-model', 'missing-provider', 'truncated'])(

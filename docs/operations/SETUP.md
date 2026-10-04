@@ -83,9 +83,14 @@ The tested defaults use `openai/gpt-6-luna` for extraction and
 `openai/gpt-6.1-sol` for assessment, both at low reasoning through OpenAI. The
 optional `FOUNDATION_ASSESSOR_MODEL` accepts only those allowlisted models. There
 is no runtime fallback configured; unavailable providers do not produce a verdict.
-The whole optional phase is bounded to 25 seconds and each request to 12 seconds,
-with five seconds reserved before the review deadline for persistence. Longer
-real inputs still need latency/calibration evaluation.
+The optional phase is bounded to 60 seconds: extraction has a 12-second request
+limit and assessment a 45-second limit. The worker also caps this phase to the
+time remaining before the review deadline, reserving five seconds for persistence.
+The default review deadline remains 60 seconds. For the authorized full-writing
+local pilot, set `REVIEW_DEADLINE_SECONDS=90` before starting the API; this is a
+bounded experiment setting, not a measured service-level guarantee. One frozen
+five-claim assessment took 32.694 seconds, which exceeded the former 12-second
+request limit. See the [full-writing evidence](../evidence/2026-10-05-ui-input-refinements.md).
 
 Disable `FOUNDATION_SEMANTIC_ENABLED` to roll back model use. This does not alter
 stored reports or enable rewriting. See the [pilot evidence](../evidence/2026-10-04-model-and-arabic-rag-pilots.md).

@@ -71,3 +71,69 @@ remain with Saleh; deployment and Neon changes are outside this UI follow-up.
 51 Markdown files checked for local links, repository policy, formatting and
 production build. The approximately 655kB main-chunk size warning is non-failing.
 The independent second review confirmed both report repairs without further findings.
+
+## Authorized full-writing model test
+
+The owner explicitly confirmed that supplied writing is non-private and may be
+sent to models. The previous payload-permission block is resolved. Local testing
+uses the server-only owning OpenRouter credential; deployment defaults remain off.
+
+The first current-UI run of the unchanged 2,982-unit writing reached Luna/low
+successfully in 10.924 seconds, then returned `invalid_claims` before assessment.
+A captured reproduction found five proposals: two passed every binding check;
+the others included a question, overlapped a source quotation delimiter or changed
+the original wording. The all-or-nothing validator discarded the two valid claims.
+
+The v1.2 extraction prompt requests concise, verbatim assertion-only clauses.
+Independent proposals are now validated separately; all mutually overlapping
+proposals are rejected without choosing by model array order. Any rejected
+proposal forces a partial result with an explicit limitation. Original-text,
+question, quote, source-family and exact-citation guards remain intact. Correctly
+paired historical v1.1 reports remain readable without rewriting stored results.
+The UI distinguishes unavailable extraction from a partial assessment and keeps
+source results visible. Independent review found no further issues in this repair.
+
+One bounded retest extracted five valid claims in 6.372 seconds, but Sol/low
+assessment reached the unchanged 12-second request limit (12.007 seconds).
+It preserved the five bound claims and withheld all verdicts. This establishes
+an extraction improvement on this case, not semantic accuracy or model reliability.
+
+A separately recorded latency experiment replayed the exact assessment request
+with a 60-second external timeout. It returned HTTP 200 in 32.694 seconds; offline
+replay through the production validators accepted five assessments and seven exact
+source-family citations. One was supported and four abstained for insufficient
+context. Replay-validation durations are not live-provider latency. Two explanations
+reported missing pronoun antecedents that were present in the original draft but
+absent from the isolated assessment packet.
+
+The v1.3 assessment packet therefore includes the unchanged, bounded original draft
+as untrusted author context, solely to resolve references and scope. It remains
+separate from source evidence and does not add claims or authorize citations to
+the author's writing. The measured latency motivates a 12-second extraction limit,
+45-second assessment limit and 60-second phase cap. The local pilot uses a
+90-second review deadline. The worker still respects remaining review time and
+reserves five seconds for persistence; production flags remain off and the default
+review deadline is unchanged. These are experimental budgets, not a latency SLA.
+
+The final current-UI v1.3 reanalysis completed in 49.273 seconds, including source
+retrieval and persistence. Original text and input hash were unchanged; all 12
+quotation findings and 31 source rows remained. Luna extraction took 8.324 seconds;
+Sol assessment took 17.815 seconds. Four selected claims were assessed, with one
+`supported` and three `insufficient_context` findings, five validated citations and
+no semantic error. The previously omitted pronoun antecedent was correctly used in
+the supported claim. The overall report remains partial because unresolved source
+coverage is independent of completing the selected semantic claims.
+
+The browser displayed the persisted findings, explanatory scope and attributable
+source passage. This single run does not establish claim-extraction coverage,
+semantic accuracy or timing reliability; the extractor selected four claims in this
+run versus five in the preceding frozen experiment. Further representative,
+reviewer-labelled evaluation and improved context retrieval remain priorities.
+
+Final independent review found a timeout-override edge: an override could increase
+extraction beyond its 12-second stage cap. Overrides now only shorten each stage's
+limit, with regression coverage. This does not change the default timing used in
+the successful UI run.
+
+Final `npm run check` passed: 398 tests across 24 files, TypeScript, documentation
+links, policy, formatting and build. The non-failing main-chunk warning remains.
