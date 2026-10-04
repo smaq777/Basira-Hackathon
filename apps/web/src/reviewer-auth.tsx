@@ -13,11 +13,11 @@ export function ReviewerAccessBoundary({
   children,
   onHome,
 }: {
-  children: (profile: ReactNode) => ReactNode;
+  children: (profile: ReactNode, signOut: () => Promise<void>) => ReactNode;
   onHome: () => void;
 }) {
   const { isLoaded, isSignedIn, getToken } = useAuth();
-  const { openUserProfile } = useClerk();
+  const { openUserProfile, signOut } = useClerk();
   const [access, setAccess] = useState<AccessState>('checking');
   const [attempt, setAttempt] = useState(0);
 
@@ -69,6 +69,10 @@ export function ReviewerAccessBoundary({
           إدارة الحساب
         </button>
       </div>,
+      async () => {
+        await signOut();
+        onHome();
+      },
     );
 
   return (
