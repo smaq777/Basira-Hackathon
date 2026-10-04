@@ -70,12 +70,15 @@ function fixture() {
 it('accepts only an exact authored claim with a citation from its selected source family', () => {
   expect(FoundationReportSchema.safeParse(fixture()).success).toBe(true);
 });
-it('keeps immutable v1.1 semantic reports readable after a producer upgrade', () => {
-  const report = fixture();
-  report.semanticAssessment!.trace.pipelineVersion = 'provisional-semantic-v1.1';
-  report.semanticAssessment!.trace.promptVersion = 'evidence-support-v1.1';
-  expect(FoundationReportSchema.safeParse(report).success).toBe(true);
-});
+it.each(['v1.1', 'v1.2', 'v1.3'] as const)(
+  'keeps immutable %s semantic reports readable after a producer upgrade',
+  (version) => {
+    const report = fixture();
+    report.semanticAssessment!.trace.pipelineVersion = `provisional-semantic-${version}`;
+    report.semanticAssessment!.trace.promptVersion = `evidence-support-${version}`;
+    expect(FoundationReportSchema.safeParse(report).success).toBe(true);
+  },
+);
 it.each([
   'unrelated_family',
   'changed_excerpt',

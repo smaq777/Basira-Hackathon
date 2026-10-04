@@ -272,12 +272,129 @@ describe('bounded semantic assessment', () => {
     expect(result.claims).toHaveLength(1);
   });
 
+  it('interprets availability metadata without changing the evidence packet or approval', async () => {
+    const intake = fixture();
+    intake.contextCoverage = [
+      {
+        reference: 'owned:1',
+        requestedWorks: ['Owned work A', 'Owned work B'],
+        availableWorks: ['Owned work A'],
+        status: 'partial',
+        scholarlyContextComplete: false,
+      },
+    ];
+    const before = structuredClone(intake);
+    const fetch = successfulFetch();
+    const result = await createSemanticAssessmentAdapter(options(fetch)).assess(intake);
+    const { body, data } = requestData(fetch.mock.calls[1]![1]);
+    expect(data.claims[0].contextCoverage).toEqual(intake.contextCoverage);
+    expect(data.claims[0].evidence[0]).toMatchObject({
+      originalText: SOURCE,
+      approvalStatus: 'pending',
+      researchOnly: true,
+      sourceRole: 'quran_text',
+    });
+    const prompt = body.messages[0].content;
+    expect(prompt).toContain(
+      'Accept clear semantic entailment without requiring identical wording',
+    );
+    expect(prompt).toContain('which material clauses are supported and which remain unestablished');
+    expect(prompt).toContain('partial can mean one requested Tafsir work is unavailable');
+    expect(prompt).toContain(
+      'scholarlyContextComplete:false means no independent scholarly completeness determination',
+    );
+    expect(prompt).toContain('Neither flag alone warrants abstention');
+    expect(prompt).toContain('Missing evidence does not establish contradiction');
+    expect(prompt).toContain('naming the missing qualifier or antecedent and why it matters');
+    expect(prompt).toContain('packet has no evidence');
+    expect(prompt).not.toMatch(/scholar_explanation|book_excerpt/u);
+    expect(result.scholarlyApproval).toBe(false);
+    expect(result.trace).toMatchObject({
+      pipelineVersion: 'provisional-semantic-v1.4',
+      promptVersion: 'evidence-support-v1.4',
+    });
+    expect(intake).toEqual(before);
+  });
+
+  it.each([
+    {
+      claim: 'يجوز قبول الطلب س الآن',
+      source: 'الطلب س غير مكتمل، ولا يجوز قبول أي طلب غير مكتمل.',
+      negations: ['لا يجوز قبول الطلب غير المكتمل'],
+      conditions: [],
+      exceptions: [],
+      scope: ['الطلب س غير مكتمل'],
+    },
+    {
+      claim: 'إعارة الكتب هي أهم الحقوق وتتاح لكل النسخ ولكل المستعيرين بلا استثناء',
+      source: 'يمكن إعارة الكتب بإذن مالكها، باستثناء النسخ المحفوظة. لم يحدد الدليل ترتيب الحقوق.',
+      negations: ['لم يحدد ترتيب الحقوق'],
+      conditions: ['بإذن المالك'],
+      exceptions: ['النسخ المحفوظة'],
+      scope: ['أهم الحقوق وكل المستعيرين غير مثبتين'],
+    },
+  ])(
+    'preserves an owned negative control and its returned qualifications: $claim',
+    async (control) => {
+      // Mocked transport contract only; this does not test or assert model accuracy.
+      const intake = fixture(control.claim + '.');
+      intake.evidence[0]!.originalText = control.source;
+      intake.evidence[0]!.originalSha256 = sha256(control.source);
+      const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+        const { body, data } = requestData(init);
+        if (body.response_format.json_schema.name === 'extraction')
+          return response(proposal(control.claim));
+        expect(data.claims[0].evidence[0].originalText).toBe(control.source);
+        expect(data.claims[0].claim.originalText).toBe(control.claim);
+        return response(
+          {
+            assessments: [
+              {
+                ...finding(data.claims[0].claim.id),
+                status: 'contradicted',
+                negations: control.negations,
+                conditions: control.conditions,
+                exceptions: control.exceptions,
+                scope: control.scope,
+                citations: [{ evidenceKey: 'owned-source', excerpt: control.source }],
+                explanation: 'المصدر يناقض التعميم، وتبقى القيود والزيادات غير المثبتة ظاهرة.',
+              },
+            ],
+          },
+          assessor.modelId,
+        );
+      });
+      const report = await createSemanticAssessmentAdapter(options(fetch)).assess(intake);
+      expect(report.status).toBe('completed');
+      expect(report.assessments[0]).toMatchObject({
+        status: 'contradicted',
+        negations: control.negations,
+        conditions: control.conditions,
+        exceptions: control.exceptions,
+        scope: control.scope,
+      });
+    },
+  );
+
+  it('rejects a semantically similar citation with an added prefix rather than repairing it', async () => {
+    const fetch = successfulFetch((value) => {
+      value.citations[0]!.excerpt = 'وهو ' + SOURCE;
+    });
+    const report = await createSemanticAssessmentAdapter(options(fetch)).assess(fixture());
+    expect(report).toMatchObject({
+      status: 'partial',
+      errorCode: 'invalid_citations',
+      assessments: [],
+    });
+    expect(report.claims).toHaveLength(1);
+  });
+
   it('preserves matching historical trace versions while rejecting mixed-version traces', async () => {
     const report = await createSemanticAssessmentAdapter(options(successfulFetch())).assess(
       fixture(),
     );
     const historical = structuredClone(report);
-    for (const version of ['v1.1', 'v1.2'] as const) {
+    for (const version of ['v1.1', 'v1.2', 'v1.3'] as const) {
       historical.trace.pipelineVersion = `provisional-semantic-${version}`;
       historical.trace.promptVersion = `evidence-support-${version}`;
       expect(SemanticAssessmentReportSchema.safeParse(historical).success).toBe(true);

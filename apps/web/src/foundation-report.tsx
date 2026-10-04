@@ -15,6 +15,7 @@ import {
 } from './api.js';
 import {
   comparisonHighlights,
+  editorialNotes,
   interpretationPresentation,
   reportFindings,
   sourceCollections,
@@ -210,6 +211,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
   const [sourceOverride, setSourceOverride] = useState<string | null>(null);
   const [showTypes, setShowTypes] = useState(true);
   const comparisonRef = useRef<HTMLElement>(null);
+  const assessmentHeadingRef = useRef<HTMLHeadingElement>(null);
   const selected = rows.find((row) => row.segment.id === selectedId);
   const source = sourceOverride
     ? intake.evidence.find((row) => row.snapshotKey === sourceOverride)
@@ -217,6 +219,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
   const comparisonIsBound = !!selected && source?.snapshotKey === selected.finding.evidenceKey;
   const interpretation = interpretationPresentation(report);
   const collections = sourceCollections(report);
+  const notes = editorialNotes(report);
   const comparisonText = source ? sourceComparisonText(source, selected?.finding) : null;
   const highlightedDifferences = selected
     ? comparisonHighlights(report, selected, source)
@@ -281,7 +284,9 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
         </p>
       </section>
       <section className="foundation-interpretation" aria-label="مؤشر كفاية الاستدلال">
-        <h2>مؤشر كفاية الاستدلال</h2>
+        <h2 id="foundation-evidence-assessment" ref={assessmentHeadingRef} tabIndex={-1}>
+          مؤشر كفاية الاستدلال
+        </h2>
         <strong>{interpretation.label}</strong>
         <p>{interpretation.explanation}</p>
         {report.semanticAssessment?.claims.map((claim) => {
@@ -568,23 +573,47 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
           )}
         </section>
       </div>
-      {report.improvementCards.filter(
-        (card) => card.ruleId !== 'literal-mismatch' && card.ruleId !== 'citation-conflict',
-      ).length > 0 && (
+      {notes.length > 0 && (
         <details className="foundation-editorial-notes">
           <summary>ملاحظات تحريرية مرتبطة بالنص</summary>
-          {report.improvementCards
-            .filter(
-              (card) => card.ruleId !== 'literal-mismatch' && card.ruleId !== 'citation-conflict',
-            )
-            .map((card) => (
-              <article key={card.id}>
-                <h3>{card.title}</h3>
-                <blockquote>{card.trigger.originalText}</blockquote>
-                <p>{card.explanation}</p>
-                <p>اقرأ السياق الكامل قبل الاستناد إلى هذا النقل.</p>
-              </article>
-            ))}
+          {notes.map((note) => (
+            <article key={note.id}>
+              <h3>{note.title}</h3>
+              <p>{note.explanation}</p>
+              {note.occurrences.length > 1 ? (
+                <details>
+                  <summary>مواضع تحتاج مراجعة ({note.occurrences.length})</summary>
+                  <ol>
+                    {note.occurrences.map((occurrence) => (
+                      <li key={occurrence.id}>
+                        <blockquote>{occurrence.text}</blockquote>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              ) : (
+                note.occurrences.map((occurrence) => (
+                  <blockquote key={occurrence.id}>{occurrence.text}</blockquote>
+                ))
+              )}
+              {note.occurrences.some((occurrence) => occurrence.hasAssessment) && (
+                <button
+                  type="button"
+                  className="text-action"
+                  onClick={() => {
+                    assessmentHeadingRef.current?.scrollIntoView?.({
+                      behavior: 'smooth',
+                      block: 'start',
+                    });
+                    assessmentHeadingRef.current?.focus({ preventScroll: true });
+                  }}
+                >
+                  راجع نتائج كفاية الاستدلال
+                </button>
+              )}
+            </article>
+          ))}
+          <p>اقرأ المصدر كاملًا قبل الاستناد إليه.</p>
         </details>
       )}
       <details className="foundation-library">

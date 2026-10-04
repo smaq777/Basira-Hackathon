@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FoundationReportContent } from './foundation-report.js';
 import type { QuotationComparison } from '../../../packages/contracts/src/foundation.js';
 import {
@@ -10,6 +10,7 @@ import {
 } from '../../../packages/contracts/src/semantic-assessment.js';
 import {
   comparisonHighlights,
+  editorialNotes,
   interpretationPresentation,
   reportFindings,
 } from './foundation-report-presentation.js';
@@ -198,7 +199,7 @@ describe('foundation report presentation', () => {
       },
     ];
     render(<FoundationReportContent report={report} />);
-    expect(screen.getByText('اقرأ السياق الكامل قبل الاستناد إلى هذا النقل.')).not.toBeNull();
+    expect(screen.getByText('اقرأ المصدر كاملًا قبل الاستناد إليه.')).not.toBeNull();
     expect(screen.getByText('مؤشر كفاية الاستدلال')).not.toBeNull();
     expect(screen.queryByText('لم تُعتمد الطبعات علميًا')).toBeNull();
     expect(document.body.textContent).not.toContain('Tanzil Quran Text Uthmani Version');
@@ -785,6 +786,156 @@ describe('readable report comparison refinements', () => {
     expect(interpretationPresentation(report).label).toBe('تقييم دلالي أولي غير مكتمل');
   });
 });
+
+describe('consolidated editorial notes', () => {
+  it('consolidates the same action across historical source/author identities while retaining both locations', () => {
+    const report = editorialFixture();
+    report.improvementCards[1]!.trigger.segmentId = 'old-source-segment';
+    delete report.improvementCards[1]!.associationStatus;
+    const notes = editorialNotes(report);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.occurrences).toHaveLength(2);
+    expect(notes[0]!.evidenceKeys).toEqual(['source']);
+  });
+
+  it('bounds long context without splitting an emoji or losing the located keyword', () => {
+    const report = editorialFixture();
+    const text = 'ب'.repeat(121) + '😀' + ' التوحيد ' + 'ن'.repeat(500);
+    report.intake.originalText = text;
+    const startOffset = text.indexOf('التوحيد');
+    report.improvementCards = [
+      {
+        ...report.improvementCards[0]!,
+        trigger: {
+          ...report.improvementCards[0]!.trigger,
+          startOffset,
+          endOffset: startOffset + 'التوحيد'.length,
+        },
+      },
+    ];
+    const context = editorialNotes(report)[0]!.occurrences[0]!.text;
+    expect(context.length).toBeLessThanOrEqual(362);
+    expect(context).toContain('التوحيد');
+    expect(context.endsWith('…')).toBe(true);
+    expect(context).not.toMatch(
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u,
+    );
+  });
+
+  it('groups repeated topic/template hints and shows each original context without claiming the source is absent', () => {
+    const report = editorialFixture();
+    const before = JSON.stringify(report);
+    const notes = editorialNotes(report);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.occurrences.map((row) => row.text)).toEqual([
+      'يجب بيان التوحيد بالدليل الأول.',
+      'يجب شرح التوحيد بالدليل الثاني.',
+    ]);
+    const view = render(<FoundationReportContent report={report} />);
+    const section = view.container.querySelector('.foundation-editorial-notes')!;
+    expect(section.querySelectorAll('article')).toHaveLength(1);
+    expect(section.textContent).toContain('راجع ربط هذه العبارات بمصادرها');
+    expect(section.textContent).toContain('مواضع تحتاج مراجعة (2)');
+    expect(section.textContent).toContain('بيّن أي مصدر تستند إليه كل عبارة');
+    expect(section.textContent).not.toContain('دون مصدر');
+    expect(section.textContent).not.toContain('العبارة الحكمية');
+    expect(section.querySelectorAll('blockquote')).toHaveLength(2);
+    expect(JSON.stringify(report)).toBe(before);
+  });
+
+  it('preserves different topics and different editorial actions instead of dropping notes by keyword', () => {
+    const report = editorialFixture();
+    report.improvementCards[1]!.associationStatus = 'unconfirmed_candidate';
+    expect(editorialNotes(report)).toHaveLength(2);
+    report.improvementCards[1]!.associationStatus = 'no_nearby_candidate';
+    report.themes.authoredThemes[1] = {
+      ...report.themes.authoredThemes[0]!,
+      theme: 'prayer',
+      anchors: [report.themes.authoredThemes[0]!.anchors[1]!],
+    };
+    report.themes.authoredThemes[0]!.anchors = [report.themes.authoredThemes[0]!.anchors[0]!];
+    expect(editorialNotes(report)).toHaveLength(2);
+    report.improvementCards[1]!.ruleId = 'charity-undetermined';
+    const notes = editorialNotes(report);
+    expect(notes).toHaveLength(2);
+    expect(notes.some((note) => note.title === 'حدّد نوع الصدقة المقصود')).toBe(true);
+  });
+
+  it('deduplicates a shared sentence while keeping a different source gap action and raw untrusted text inert', () => {
+    const report = editorialFixture();
+    report.improvementCards[1] = { ...report.improvementCards[0]!, id: 'same-location' };
+    expect(editorialNotes(report)[0]!.occurrences).toHaveLength(1);
+    report.improvementCards[1]!.trigger = {
+      ...report.improvementCards[1]!.trigger,
+      originalText: '<img src=x onerror=alert(1)>',
+      startOffset: 900,
+      endOffset: 930,
+    };
+    const view = render(<FoundationReportContent report={report} />);
+    expect(view.container.querySelector('img')).toBeNull();
+    expect(view.container.textContent).toContain('<img src=x onerror=alert(1)>');
+  });
+
+  it('scrolls and focuses the existing assessment while preserving the report route and partial coverage', () => {
+    const report = editorialFixture();
+    const semantic = semanticBindingFixture().semanticAssessment!;
+    const text = 'يجب بيان التوحيد بالدليل الأول.';
+    semantic.claims[0]!.originalText = text;
+    semantic.claims[0]!.startOffset = 0;
+    semantic.claims[0]!.endOffset = text.length;
+    report.semanticAssessment = semantic;
+    window.location.hash = '#/result?reviewId=owned';
+    render(<FoundationReportContent report={report} />);
+    const heading = screen.getByRole('heading', { name: 'مؤشر كفاية الاستدلال' });
+    const scroll = vi.fn();
+    heading.scrollIntoView = scroll;
+    const focus = vi.spyOn(heading, 'focus');
+    fireEvent.click(screen.getByRole('button', { name: 'راجع نتائج كفاية الاستدلال' }));
+    expect(window.location.hash).toBe('#/result?reviewId=owned');
+    expect(scroll).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(document.activeElement).toBe(heading);
+    expect(editorialNotes(report)[0]!.occurrences.map((row) => row.hasAssessment)).toEqual([
+      true,
+      false,
+    ]);
+    expect(screen.queryByRole('link', { name: /التقييم|الاستدلال/ })).toBeNull();
+    expect(screen.getByText('هذه نتيجة أولية لعبارة الاختبار.')).not.toBeNull();
+    expect(screen.queryByText('دون مصدر')).toBeNull();
+    focus.mockRestore();
+  });
+});
+
+function editorialFixture() {
+  const report = foundationReportFixture();
+  report.intake.originalText = 'يجب بيان التوحيد بالدليل الأول.\nيجب شرح التوحيد بالدليل الثاني.';
+  const first = report.intake.originalText.indexOf('التوحيد');
+  const second = report.intake.originalText.lastIndexOf('التوحيد');
+  const anchors = [first, second].map((startOffset) => ({
+    segmentId: 'author',
+    startOffset,
+    endOffset: startOffset + 'التوحيد'.length,
+    originalText: 'التوحيد',
+    normative: true,
+    mentionStatus: 'assertive' as const,
+  }));
+  report.themes.authoredThemes = [
+    { theme: 'faith', anchors, mentionStatus: 'assertive', charitySubtype: null },
+  ];
+  report.improvementCards = anchors.map((trigger, index) => ({
+    id: `editorial-${index}`,
+    ruleId: 'normative-source-gap',
+    title: 'راجع مصدر العبارة الحكمية',
+    explanation: 'وردت عبارة حكمية دون مصدر قريب من موضوعها.',
+    limitation: 'unapproved-digital-edition-private',
+    trigger,
+    evidenceKeys: ['source'],
+    relatedContextOnly: true,
+    associationStatus: 'no_nearby_candidate',
+    suggestedDraft: null,
+  }));
+  return report;
+}
 
 function differenceFixture(
   draft: string,

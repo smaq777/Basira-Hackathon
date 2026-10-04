@@ -35,6 +35,15 @@ recovery and a concise extraction prompt repaired that failure. A measured
 context; v1.3 preserves the full draft as non-evidence context and uses bounded
 stage budgets. These are local engineering results, not scholarly acceptance.
 
+**Evidence coverage follow-up, 5 October:** The [six-call comparison](evidence/2026-10-05-evidence-coverage-calibration.md)
+separates source gaps from prompt sensitivity. Adding the owner's attributed
+sources supported all four selected claims with the old prompt; the revised
+enriched response failed an exact-citation check and remains recorded as invalid.
+The optional v1.4 prompt clarifies semantic entailment and acquisition metadata
+without weakening source validation. Repeated editorial notes are consolidated
+with their affected passages. Claim-driven retrieval and a persistent typed Neon
+source corpus are now the next implementation priorities.
+
 The fresh repository baseline contains the completed foundation and architecture work. Current validation is recorded by this repository's GitHub Actions runs. [Issue #27](https://github.com/smaq777/Basira-Hackathon/issues/27) tracks the judge-ready repository and deployment handoff.
 
 | Area                           | Actual state                                                                                                                                                                                                                                                                               |
@@ -62,10 +71,12 @@ Software validation results and GitHub workflow evidence are recorded in the [wo
 
 ## Immediate priorities
 
-1. Pass the real-writing regression gates for complete passage boundaries, source attachment, orthographic comparison and complete report persistence (#11/#12/#14/#18).
-2. Present an actionable integrated report with selected-quotation comparison and collapsed attributable context (#16).
-3. Compare small-model extraction and stronger evidence-bound assessment on frozen controls, including unavailable providers; enable only a labelled local experiment after validation (#11/#13/#17/#18).
-4. Measure a small research corpus on Neon with real embeddings and exact/lexical/dense/hybrid retrieval. Preserve pending approval; complete edition/rights review and least-privilege hosted runtime setup before promotion (#7/#8).
+1. Separate missing evidence from assessment calibration. Compare fixed claims on original/enriched packets with old/new instructions, including negative controls. Explain compound assertions without treating an unsupported qualifier as a contradiction (#13/#18).
+2. Split claim extraction from assessment and retrieve evidence for each assertion before freezing its final evidence packet. Preserve the independent quotation-comparison path and existing outage recovery (#8/#11/#14/#17).
+3. Add explicit scholarly-book/explanation source roles and typed cross-work links; ingest a versioned, reviewable source corpus into Neon with context, footnotes and compatible pgvector embeddings. Evaluate retrieval recall separately from support accuracy (#5/#6/#7/#8).
+4. Add bounded web discovery for identified gaps through configured sources, verified originals and attributed snapshots. Build a held-out, topic-diverse evaluation with human adjudication; keep editorial guidance concise and linked to actual passages (#8/#9/#16/#18).
 5. Gate AI-ReWrite on stable claims, evidence citations and repeatable assessment; preserve and recheck quoted text (#38).
 
-These priorities follow the 4 October real-writing review. Passing software tests or a small pilot does not establish scholarly accuracy or production readiness.
+These priorities follow the [5 October coverage review](evidence/2026-10-05-evidence-coverage-calibration.md).
+The earlier quotation/UI fixes and isolated Neon/model pilots are completed development
+evidence, not a persistent hosted source corpus or scholarly accuracy measurement.

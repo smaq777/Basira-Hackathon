@@ -66,9 +66,17 @@ still show wording differences. Original Arabic and canonical offsets stay intac
 Question/quotation-only input may have no claim to assess. A conservative syntax
 helper identifies that applicability, with an undetermined fallback. It does not
 answer the question or establish claim truth. Declarative assertions are not
-silently discarded. There is currently **no semantic model prompt executed** by
-the integrated source report. The earlier human-confirmation wording was a fixed
-worker/UI rule, not a model rejection.
+silently discarded. The default source-only mode executes no semantic prompt.
+An optional local research pilot now uses exact-span model extraction and
+source-bound assessment; see the [full-writing model evidence](../evidence/2026-10-05-ui-input-refinements.md).
+The earlier human-confirmation wording was a fixed worker/UI rule, not a model
+rejection. Current pilot results remain provisional rather than editor-confirmed.
+
+`contextCoverage` describes acquisition of requested Tafsir works. A partial work
+set does not by itself establish missing text or an unresolved semantic condition.
+Likewise, `scholarlyContextComplete=false` does not assert that a supplied passage
+is truncated. Assess material limitations for the particular claim; do not infer
+either support or failure from these acquisition flags alone.
 
 Public source citations name the surah/ayah, tafsir work or hadith work. Internal
 dataset IDs are not canonical hadith numbers. Only a derived Quran.com reader URL
@@ -83,8 +91,11 @@ new comparison/context results are not silently written into historical reports.
    conditions, negation, exceptions, scope and attachment to source IDs. Include
    question-only, quote-only and mixed assertions as controls. Never use model
    memory as source evidence.
-3. Give the support assessor only confirmed claims and bounded original evidence.
-   Require cited IDs, preserved conditions and an insufficient-evidence outcome.
+3. Give the support assessor validated exact claim spans and bounded original
+   evidence. Treat model-proposed associations as provisional until independently
+   confirmed. Require cited IDs, preserved conditions and an insufficient-evidence
+   outcome where the actual gap could change the assessment. Add claim-driven
+   retrieval before assessment; the current manifest is quotation-led.
 4. Compare a baseline, stronger reasoning model and router on identical frozen
    evidence, measuring false support, abstention, coverage, latency and cost.
    Structured output guarantees shape, not semantic correctness.
@@ -93,6 +104,13 @@ new comparison/context results are not silently written into historical reports.
 6. Add AI-ReWrite only after those gates: proposal, source checks, meaning-change
    comparison and reanalysis as a new immutable revision.
 
+The [coverage and calibration follow-up](../evidence/2026-10-05-evidence-coverage-calibration.md)
+separates missing sources, compound assertions and overly broad abstention, and
+records the ordered hosted-retrieval and bounded-discovery work.
+
 Flash-class models are candidates for extraction/wording, not a required dependency
-for these UI fixes. Exact model availability and a bounded evaluation budget must
-be established before paid testing. No stronger-model advantage is asserted here.
+for these UI fixes. The local pilot currently separates Luna extraction from Sol
+assessment on a pinned provider route. The owner authorized model testing; the
+recorded experiments still make no stronger-model advantage or calibrated-accuracy
+claim. Retrieval coverage and exact source validation remain necessary regardless
+of model size.

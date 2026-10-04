@@ -5,6 +5,136 @@ import type {
   SourceEvidence,
 } from '../../../packages/contracts/src/foundation.js';
 import { assessClaimApplicability } from '../../../packages/contracts/src/claim-applicability.js';
+import type { ImprovementCard } from '../../../packages/contracts/src/themes.js';
+
+type EditorialOccurrence = { id: string; text: string; hasAssessment: boolean };
+export type EditorialNote = {
+  id: string;
+  title: string;
+  explanation: string;
+  occurrences: EditorialOccurrence[];
+  evidenceKeys: string[];
+};
+
+/** Consolidate repeated lexical hints at presentation time, preserving their locations.
+ * A catalog association is a prompt to review the citation, not a missing-evidence verdict.
+ */
+export function editorialNotes(report: FoundationReport): EditorialNote[] {
+  const groups = new Map<string, EditorialNote>();
+  const text = report.intake.originalText;
+  const normalized = (value: string) => value.normalize('NFC').replace(/\p{M}/gu, '').trim();
+  const location = (card: ImprovementCard): EditorialOccurrence => {
+    const anchor = card.trigger;
+    if (
+      !validRange(text, anchor.startOffset, anchor.endOffset) ||
+      text.slice(anchor.startOffset, anchor.endOffset) !== anchor.originalText
+    ) {
+      let end = Math.min(anchor.originalText.length, 360);
+      if (end > 0 && !validRange(anchor.originalText, 0, end)) end--;
+      return {
+        id: card.id,
+        text: anchor.originalText.slice(0, end) + (end < anchor.originalText.length ? '…' : ''),
+        hasAssessment: false,
+      };
+    }
+    let left = anchor.startOffset;
+    let right = anchor.endOffset;
+    while (left > 0 && !/[.؛!؟\n]/u.test(text[left - 1]!)) left--;
+    while (right < text.length && !/[.؛!؟\n]/u.test(text[right]!)) right++;
+    if (right < text.length && text[right] !== '\n') right++;
+    while (left < anchor.startOffset && /\s/u.test(text[left]!)) left++;
+    while (right > anchor.endOffset && /\s/u.test(text[right - 1]!)) right--;
+    const sentenceLeft = left;
+    const sentenceRight = right;
+    if (right - left > 360) {
+      left = Math.max(left, anchor.startOffset - 120);
+      right = Math.min(right, left + 360);
+      if (!validRange(text, left, right)) {
+        if (text.charCodeAt(left) >= 0xdc00 && text.charCodeAt(left) <= 0xdfff) left--;
+        right = Math.min(right, left + 360);
+        if (text.charCodeAt(right) >= 0xdc00 && text.charCodeAt(right) <= 0xdfff) right--;
+      }
+    }
+    const hasAssessment = !!report.semanticAssessment?.claims.some(
+      (claim) =>
+        claim.startOffset <= anchor.startOffset &&
+        claim.endOffset >= anchor.endOffset &&
+        text.slice(claim.startOffset, claim.endOffset) === claim.originalText &&
+        report.semanticAssessment!.assessments.some((finding) => finding.claimId === claim.id),
+    );
+    return {
+      id: `${sentenceLeft}:${sentenceRight}`,
+      text: `${left > sentenceLeft ? '…' : ''}${text.slice(left, right)}${right < sentenceRight ? '…' : ''}`,
+      hasAssessment,
+    };
+  };
+  for (const card of report.improvementCards) {
+    // These findings already have the dedicated source comparison above.
+    if (card.ruleId === 'literal-mismatch' || card.ruleId === 'citation-conflict') continue;
+    const exactTopics = report.themes.authoredThemes
+      .filter((item) =>
+        item.anchors.some(
+          (anchor) =>
+            anchor.startOffset === card.trigger.startOffset &&
+            anchor.endOffset === card.trigger.endOffset &&
+            anchor.originalText === card.trigger.originalText,
+        ),
+      )
+      .map((item) => item.theme);
+    const topics = exactTopics.length
+      ? exactTopics
+      : report.themes.authoredThemes
+          .filter((item) =>
+            item.anchors.some(
+              (anchor) => normalized(anchor.originalText) === normalized(card.trigger.originalText),
+            ),
+          )
+          .map((item) => item.theme);
+    const topic =
+      [...new Set(topics)].sort().join(',') || `phrase:${normalized(card.trigger.originalText)}`;
+    const action =
+      card.ruleId === 'charity-undetermined'
+        ? 'charity-kind'
+        : card.associationStatus === 'unconfirmed_candidate'
+          ? 'nearby-candidate'
+          : 'source-link';
+    const key = `${card.ruleId}:${topic}:${action}`;
+    let group = groups.get(key);
+    if (!group) {
+      const nearby = card.associationStatus === 'unconfirmed_candidate';
+      group = {
+        id: card.id,
+        title:
+          card.ruleId === 'charity-undetermined'
+            ? 'حدّد نوع الصدقة المقصود'
+            : nearby
+              ? 'راجع صلة الاقتباس بالعبارة'
+              : 'راجع ربط هذه العبارات بمصادرها',
+        explanation:
+          card.ruleId === 'charity-undetermined'
+            ? 'هل تقصد الزكاة الواجبة أم صدقة التطوع؟ وضّح النوع، ثم راجع الحكم والدليل وفق المقصود.'
+            : nearby
+              ? 'تحقق أن الاقتباس القريب يؤيد المعنى الذي كتبته، ووضّح الصلة بينهما. قرب النصين أو اشتراكهما في الموضوع لا يثبت ذلك وحده.'
+              : 'بيّن أي مصدر تستند إليه كل عبارة، ثم تحقق أنه يؤيد المعنى المقصود. وجود اقتباس عن الموضوع نفسه لا يكفي لتحديد هذه الصلة.',
+        occurrences: [],
+        evidenceKeys: [],
+      };
+      groups.set(key, group);
+    }
+    const occurrence = location(card);
+    const existing = group.occurrences.find((row) => row.id === occurrence.id);
+    if (existing) existing.hasAssessment ||= occurrence.hasAssessment;
+    else group.occurrences.push(occurrence);
+    group.evidenceKeys = [...new Set([...group.evidenceKeys, ...card.evidenceKeys])];
+  }
+  return [...groups.values()].map((note) => ({
+    ...note,
+    title:
+      note.occurrences.length === 1 && note.title === 'راجع ربط هذه العبارات بمصادرها'
+        ? 'راجع ربط العبارة بمصدرها'
+        : note.title,
+  }));
+}
 
 function numericReference(reference: string): { surah: number; ayah: number } | null {
   const match = /^(\d{1,3}):(\d{1,3})$/u.exec(reference.trim());

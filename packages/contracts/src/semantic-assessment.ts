@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.3';
-export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.3';
+export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.4';
+export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.4';
 
 const EvidenceKeys = z.array(z.string().min(1).max(160)).max(20);
 const Details = z.array(z.string().min(1).max(500)).max(6);
@@ -128,11 +128,13 @@ export const SemanticAssessmentReportSchema = z
         pipelineVersion: z.enum([
           'provisional-semantic-v1.1',
           'provisional-semantic-v1.2',
+          'provisional-semantic-v1.3',
           SEMANTIC_PIPELINE_VERSION,
         ]),
         promptVersion: z.enum([
           'evidence-support-v1.1',
           'evidence-support-v1.2',
+          'evidence-support-v1.3',
           SEMANTIC_PROMPT_VERSION,
         ]),
         inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),
