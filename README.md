@@ -18,7 +18,7 @@ Browse the [documentation hub](docs/README.md) and [English–Arabic terminology
 | Engineering        | [Complete system blueprint](docs/architecture/SYSTEM_BLUEPRINT.md), [architecture summary](docs/architecture/ARCHITECTURE.md), [RAG](docs/architecture/RAG.md), [data model](docs/architecture/DATA_MODEL.md)                                               |
 | Integrations       | [Credential setup](docs/operations/CREDENTIALS.md), [API/source registry](docs/api/PROVIDERS.md), [API contract](docs/api/OPENAPI.yaml)                                                                                                                     |
 | Quality            | [Testing](docs/testing/STRATEGY.md), [test cases](docs/testing/CASES.md), [security](SECURITY.md)                                                                                                                                                           |
-| Planning           | [Backlog](docs/planning/BACKLOG.md), [GitHub Issues](https://github.com/smaq777/basirah/issues), [team workflow](docs/governance/WORKFLOW.md)                                                                                                               |
+| Planning           | [Backlog](docs/planning/BACKLOG.md), [GitHub Issues](https://github.com/smaq777/Basira-Hackathon/issues), [team workflow](docs/governance/WORKFLOW.md)                                                                                                      |
 | Evidence           | [Provider setup evidence](docs/evidence/2026-10-02-provider-setup.md), [foundation work](docs/evidence/2026-09-30.md), [Dorar assessment](docs/api/DORAR_AUDIT.md)                                                                                          |
 
 ## Local development
@@ -52,7 +52,7 @@ Never commit a real value to `.env.example`. Backend credentials belong in Railw
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Railway                 | Public staging app and isolated staging PostgreSQL are live; production remains gated                                                           | [Railway](https://railway.com/) and [project-token guidance](https://docs.railway.com/cli#authentication)                                               |
 | Clerk                   | Reviewer sign-in is implemented; production defaults to owner-approved user IDs, with an explicit authenticated-user mode for hackathon staging | [Clerk API keys](https://dashboard.clerk.com/last-active?path=api-keys) and [React quickstart](https://clerk.com/docs/react/getting-started/quickstart) |
-| Vercel                  | Basirah project and PR checks are connected; preview deployments are public and production is off                                               | [Vercel GitHub integration](https://vercel.com/docs/git/vercel-for-github) and [account tokens](https://vercel.com/account/tokens)                      |
+| Vercel                  | Configuration is checked in; authorize and verify this repository before relying on preview checks                                              | [Vercel GitHub integration](https://vercel.com/docs/git/vercel-for-github) and [account tokens](https://vercel.com/account/tokens)                      |
 | Neon                    | Production project/schema exist; production runtime and latest migrations need final verification                                               | [Neon console](https://console.neon.tech/)                                                                                                              |
 | Cohere                  | Candidate embeddings; not selected by evaluation                                                                                                | [Cohere API keys](https://dashboard.cohere.com/api-keys)                                                                                                |
 | Language-model provider | Not selected; do not create a key yet                                                                                                           | The accepted release must name and link the chosen provider's official key page                                                                         |
@@ -61,7 +61,7 @@ Exact variables, scope, storage, rotation and environment separation are in the 
 
 ## Intended architecture
 
-React + TypeScript + Vite; Node.js + Express on Railway; Neon PostgreSQL with pgvector and pg_trgm. Cohere Embed v4 is an **evaluation candidate**, not a proven winner. Drizzle is planned for database implementation. Vercel previews are optional; the verified connection provides public pre-production builds while `main` remains undeployed.
+React + TypeScript + Vite; Node.js + Express on Railway; Neon PostgreSQL with pgvector and pg_trgm. Cohere Embed v4 is an **evaluation candidate**, not a proven winner. Drizzle is planned for database implementation. Vercel previews are optional and require a provider-side connection specifically authorized for this repository; `main` remains undeployed.
 
 ```mermaid
 flowchart TD

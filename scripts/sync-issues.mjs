@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 if (!process.argv.includes('--apply')) throw new Error('External write requires explicit --apply');
-const repository = 'smaq777/basirah';
+const repository = 'smaq777/Basira-Hackathon';
 const entries = JSON.parse(readFileSync('docs/planning/issues.json', 'utf8'));
 const api = (path, method = 'GET', input) =>
   JSON.parse(
