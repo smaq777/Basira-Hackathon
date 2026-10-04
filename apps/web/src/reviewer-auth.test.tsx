@@ -9,11 +9,15 @@ const clerkState = vi.hoisted(() => ({
   isSignedIn: false,
   getToken: vi.fn<() => Promise<string | null>>(),
   openUserProfile: vi.fn(),
+  signOut: vi.fn<() => Promise<void>>(),
 }));
 
 vi.mock('@clerk/react', () => ({
   useAuth: () => clerkState,
-  useClerk: () => ({ openUserProfile: clerkState.openUserProfile }),
+  useClerk: () => ({
+    openUserProfile: clerkState.openUserProfile,
+    signOut: clerkState.signOut,
+  }),
   SignInButton: ({ children }: { children: unknown }) => children,
   UserButton: () => <span>صورة الحساب</span>,
 }));
@@ -24,6 +28,7 @@ describe('reviewer access boundary', () => {
     clerkState.isSignedIn = false;
     clerkState.getToken.mockReset();
     clerkState.openUserProfile.mockReset();
+    clerkState.signOut.mockReset();
     vi.stubGlobal('fetch', vi.fn());
   });
 
@@ -96,6 +101,38 @@ describe('reviewer access boundary', () => {
         expect.objectContaining({ headers: { authorization: 'Bearer session-token' } }),
       ),
     );
+  });
+
+  it('terminates the Clerk session before returning to the public interface', async () => {
+    clerkState.isSignedIn = true;
+    clerkState.getToken.mockResolvedValue('session-token');
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ authenticated: true, reviewer: true }), { status: 200 }),
+    );
+    const onHome = vi.fn();
+    let finishSignOut!: () => void;
+    clerkState.signOut.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishSignOut = resolve;
+      }),
+    );
+
+    render(
+      <ReviewerAccessBoundary onHome={onHome}>
+        {(_profile, onSignOut) => (
+          <button type="button" onClick={() => void onSignOut()}>
+            تسجيل الخروج
+          </button>
+        )}
+      </ReviewerAccessBoundary>,
+    );
+
+    (await screen.findByRole('button', { name: 'تسجيل الخروج' })).click();
+    expect(clerkState.signOut).toHaveBeenCalledOnce();
+    expect(onHome).not.toHaveBeenCalled();
+
+    finishSignOut();
+    await waitFor(() => expect(onHome).toHaveBeenCalledOnce());
   });
 
   it('keeps reviewer content hidden when a successful response has the wrong contract', async () => {

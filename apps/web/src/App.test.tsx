@@ -144,17 +144,31 @@ describe('Basirah web flow', () => {
   });
 
   it('renders the authorized reviewer workspace with a simple labelled sidebar', () => {
-    render(<ReviewerShell route="dashboard" navigate={vi.fn()} />);
+    render(<ReviewerShell route="dashboard" navigate={vi.fn()} onSignOut={vi.fn()} />);
 
     expect(screen.getByRole('navigation', { name: 'مساحة المراجع' })).not.toBeNull();
     expect(screen.getByRole('button', { name: /طلبات المراجعة/ })).not.toBeNull();
     expect(screen.getByText('بيانات تجريبية')).not.toBeNull();
   });
 
+  it('keeps public navigation separate from terminating the Clerk session', async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    const onSignOut = vi.fn().mockResolvedValue(undefined);
+    render(<ReviewerShell route="dashboard" navigate={navigate} onSignOut={onSignOut} />);
+
+    await user.click(screen.getByRole('button', { name: 'العودة للواجهة العامة' }));
+    expect(navigate).toHaveBeenCalledWith('home');
+    expect(onSignOut).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'تسجيل الخروج' }));
+    expect(onSignOut).toHaveBeenCalledOnce();
+  });
+
   it('shows a useful empty state when a reviewer search has no matches', async () => {
     const user = userEvent.setup();
     window.location.hash = '#/reviewer/queue';
-    render(<ReviewerShell route="queue" navigate={vi.fn()} />);
+    render(<ReviewerShell route="queue" navigate={vi.fn()} onSignOut={vi.fn()} />);
 
     await user.type(screen.getByPlaceholderText('ابحث برقم الطلب أو موضوعه'), 'لا توجد نتيجة');
 
@@ -164,7 +178,7 @@ describe('Basirah web flow', () => {
 
   it('shows a recoverable reviewer error state', () => {
     window.location.hash = '#/reviewer/queue?state=error';
-    render(<ReviewerShell route="queue" navigate={vi.fn()} />);
+    render(<ReviewerShell route="queue" navigate={vi.fn()} onSignOut={vi.fn()} />);
 
     expect(screen.getByRole('alert').textContent).toContain('تعذر تحميل الطلبات');
     expect(screen.getByRole('button', { name: 'إعادة المحاولة' })).not.toBeNull();

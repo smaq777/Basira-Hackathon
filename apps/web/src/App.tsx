@@ -1456,12 +1456,26 @@ export function ReviewerShell({
   route,
   navigate,
   profile,
+  onSignOut,
 }: {
   route: ReviewerRoute;
   navigate: (route: Route) => void;
   profile?: ReactNode;
+  onSignOut: () => Promise<void>;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await onSignOut();
+    } catch {
+      setSigningOut(false);
+    }
+  };
+
   return (
     <div className={`reviewer-shell ${collapsed ? 'reviewer-shell--collapsed' : ''}`}>
       <aside className="reviewer-sidebar">
@@ -1497,8 +1511,12 @@ export function ReviewerShell({
             <span>الإعدادات</span>
           </button>
           <button onClick={() => navigate('home')}>
+            <House size={22} />
+            <span>العودة للواجهة العامة</span>
+          </button>
+          <button disabled={signingOut} onClick={() => void handleSignOut()}>
             <SignOut size={22} />
-            <span>الخروج للواجهة العامة</span>
+            <span>{signingOut ? 'جاري تسجيل الخروج…' : 'تسجيل الخروج'}</span>
           </button>
           <div className="reviewer-profile">
             {profile ?? <span aria-hidden="true">م</span>}
@@ -1984,11 +2002,12 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
     if (!clerkConfigured) return <ReviewerAuthUnavailable onHome={() => navigate('home')} />;
     return (
       <ReviewerAccessBoundary onHome={() => navigate('home')}>
-        {(profile) => (
+        {(profile, onSignOut) => (
           <ReviewerShell
             route={route.replace('reviewer-', '') as ReviewerRoute}
             navigate={navigate}
             profile={profile}
+            onSignOut={onSignOut}
           />
         )}
       </ReviewerAccessBoundary>
