@@ -9,7 +9,9 @@ import {
   getFoundationReport,
   awaitFoundationReport,
   requireFoundationReview,
+  requestDraftPreflight,
 } from './api.js';
+import { buildDemoPreflight } from '../../api/src/preflight.js';
 import {
   foundationReportFixture,
   ownedReviewFixture,
@@ -24,6 +26,19 @@ function jsonResponse(body: unknown, status = 200) {
     headers: { 'Content-Type': 'application/json' },
   });
 }
+
+it('binds classification spans to the unmodified draft including leading whitespace', async () => {
+  const text = '  \n🙂 قال رسول الله ﷺ: «إنما الأعمال بالنيات» [صحيح البخاري: 1].';
+  const result = buildDemoPreflight({ text });
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(result));
+  await expect(requestDraftPreflight(text)).resolves.toMatchObject({
+    annotations: result.annotations,
+  });
+  const shifted = structuredClone(result);
+  shifted.annotations[0]!.startOffset += 1;
+  fetchMock.mockResolvedValue(jsonResponse(shifted));
+  await expect(requestDraftPreflight(text)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+});
 
 describe('same-origin draft analysis client', () => {
   afterEach(() => vi.restoreAllMocks());

@@ -1,5 +1,5 @@
 import type { ComponentType, FormEvent, ReactNode } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Archive } from '@phosphor-icons/react/Archive';
 import { ArrowLeft } from '@phosphor-icons/react/ArrowLeft';
 import { ArrowUp } from '@phosphor-icons/react/ArrowUp';
@@ -59,6 +59,8 @@ import { FoundationResultScreen } from './foundation-report.js';
 import type { FoundationReport } from '../../../packages/contracts/src/foundation.js';
 import { ReviewerAccessBoundary, ReviewerAuthUnavailable } from './reviewer-auth.js';
 import { answerReviewQuestion, VOICE_GREETING, type VoiceTone } from './voice.js';
+import { MAX_DRAFT_LENGTH, isSafeDraftText } from '../../../packages/contracts/src/draft-text.js';
+import { compactDraftPreview } from './text-preview.js';
 
 type PublicRoute = 'home' | 'analysis' | 'result' | 'unresolved' | 'ticket';
 type ReviewerRoute = 'dashboard' | 'queue' | 'detail' | 'sources';
@@ -326,6 +328,78 @@ function HomeScreen({
   >('idle');
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
+  const acceptedTextRef = useRef(initialText);
+
+  const syncHighlights = () => {
+    const textarea = textAreaRef.current;
+    const highlights = highlightRef.current;
+    if (!textarea || !highlights) return;
+    highlights.style.left = `${textarea.clientLeft}px`;
+    highlights.style.top = `${textarea.clientTop}px`;
+    highlights.style.width = `${textarea.clientWidth}px`;
+    highlights.style.height = `${textarea.clientHeight}px`;
+    highlights.scrollTop = textarea.scrollTop;
+    highlights.scrollLeft = textarea.scrollLeft;
+  };
+
+  useLayoutEffect(() => {
+    const textarea = textAreaRef.current;
+    if (!textarea) return;
+    const resize = () => {
+      const scrollTop = textarea.scrollTop;
+      textarea.style.height = '0px';
+      const cap = Math.max(128, Math.min(420, window.innerHeight * 0.45));
+      textarea.style.height = `${Math.max(128, Math.min(cap, textarea.scrollHeight))}px`;
+      textarea.scrollTop = scrollTop;
+      syncHighlights();
+    };
+    resize();
+    window.addEventListener('resize', resize);
+    let width = textarea.clientWidth;
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            if (width !== textarea.clientWidth) {
+              width = textarea.clientWidth;
+              resize();
+            }
+          });
+    observer?.observe(textarea);
+    let active = true;
+    void document.fonts?.ready.then(() => {
+      if (active) resize();
+    });
+    return () => {
+      active = false;
+      window.removeEventListener('resize', resize);
+      observer?.disconnect();
+    };
+  }, [text]);
+
+  const updateText = (next: string) => {
+    setNotice('');
+    if (next.length > MAX_DRAFT_LENGTH) {
+      setError(
+        'لم يُضف النص لأن الحد الأقصى ٣٠٠٠ حرف. اختصره ثم حاول مجددًا؛ بقي النص الحالي كما هو.',
+      );
+      return false;
+    }
+    if (!isSafeDraftText(next)) {
+      setError('لم يُضف النص لوجود محارف غير صالحة. أعد نسخه كنص عادي؛ بقي النص الحالي كما هو.');
+      return false;
+    }
+    if (next === acceptedTextRef.current) {
+      setError('');
+      return true;
+    }
+    setPreflight(null);
+    setPreflightStatus(next.trim().length >= 20 ? 'checking' : 'idle');
+    acceptedTextRef.current = next;
+    setText(next);
+    setError('');
+    return true;
+  };
 
   useEffect(() => {
     if (text.trim().length < 20) {
@@ -335,16 +409,17 @@ function HomeScreen({
     }
     const controller = new AbortController();
     let active = true;
+    setPreflight(null);
     setPreflightStatus('checking');
     const timer = window.setTimeout(() => {
       void requestDraftPreflight(text, controller.signal)
         .then((result) => {
-          if (!active) return;
+          if (!active || acceptedTextRef.current !== text) return;
           setPreflight(result);
           setPreflightStatus('ready');
         })
         .catch((reason: unknown) => {
-          if (!active) return;
+          if (!active || acceptedTextRef.current !== text) return;
           if (reason instanceof DOMException && reason.name === 'AbortError') return;
           setPreflight(null);
           setPreflightStatus('unavailable');
@@ -370,8 +445,12 @@ function HomeScreen({
       return;
     }
     setError('');
-    if (text.length > 3000) {
+    if (text.length > MAX_DRAFT_LENGTH) {
       setError('الحد الأقصى للمراجعة ٣٠٠٠ حرف. اختصر النص ثم أعد المحاولة.');
+      return;
+    }
+    if (!isSafeDraftText(text)) {
+      setError('يتضمن النص محارف غير صالحة. أعد نسخه كنص عادي ثم حاول مجددًا.');
       return;
     }
     onReview(text);
@@ -381,8 +460,7 @@ function HomeScreen({
     try {
       const clipboard = await navigator.clipboard.readText();
       if (!clipboard) throw new Error('empty');
-      setText(clipboard.slice(0, 3000));
-      setError('');
+      if (!updateText(clipboard)) return;
       setNotice('تم لصق النص.');
     } catch {
       setError('تعذر الوصول إلى الحافظة. الصق النص يدويًا داخل الحقل.');
@@ -410,22 +488,36 @@ function HomeScreen({
                   annotations={preflight?.annotations ?? []}
                   findings={preflight?.findings ?? []}
                 />
+                {'\u200b'}
               </div>
               <textarea
                 id="review-text"
                 ref={textAreaRef}
                 value={text}
-                maxLength={3000}
                 rows={4}
-                aria-describedby={preflightStatus !== 'ready' ? 'preflight-status' : undefined}
-                onScroll={(event) => {
-                  if (!highlightRef.current) return;
-                  highlightRef.current.scrollTop = event.currentTarget.scrollTop;
-                  highlightRef.current.scrollLeft = event.currentTarget.scrollLeft;
+                aria-invalid={Boolean(error)}
+                aria-describedby={
+                  [
+                    error ? 'composer-error' : '',
+                    preflightStatus !== 'ready' ? 'preflight-status' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ') || undefined
+                }
+                onScroll={syncHighlights}
+                onPaste={(event) => {
+                  event.preventDefault();
+                  const textarea = event.currentTarget;
+                  const pasted = event.clipboardData.getData('text/plain');
+                  const start = textarea.selectionStart;
+                  const next = text.slice(0, start) + pasted + text.slice(textarea.selectionEnd);
+                  if (!updateText(next)) return;
+                  queueMicrotask(() =>
+                    textarea.setSelectionRange(start + pasted.length, start + pasted.length),
+                  );
                 }}
                 onChange={(event) => {
-                  setText(event.target.value);
-                  setError('');
+                  updateText(event.target.value);
                 }}
                 placeholder="ألصق منشورك أو اكتب العبارة التي تريد التحقق منها…"
               />
@@ -457,6 +549,9 @@ function HomeScreen({
                   اللون يصف نوع الجزء، والخط السفلي يوضح حالة الفحص. المصدر المذكور هو إحالة كتبها
                   المستخدم، وليس مصدرًا معتمدًا تلقائيًا.
                 </p>
+                {preflight.warnings.includes('annotation_limit_reached') && (
+                  <p role="status">التصنيف الأولي المعروض جزئي؛ راجع بقية النص في التقرير.</p>
+                )}
                 <div className="verification-legend" aria-label="دليل حالة الفحص">
                   <span className="verification-key verification-key--info">
                     <CheckCircle size={15} /> تطابق أولي
@@ -494,7 +589,7 @@ function HomeScreen({
                 لصق نص
               </button>
               <span className="counter" dir="ltr">
-                {text.length} / 3000
+                {text.length} / {MAX_DRAFT_LENGTH}
               </span>
               <button className="composer-submit" type="submit" aria-label="ابدأ المراجعة">
                 <span>ابدأ المراجعة</span>
@@ -507,8 +602,7 @@ function HomeScreen({
               className="text-action"
               type="button"
               onClick={() => {
-                setText(DEMO_TEXT);
-                setError('');
+                updateText(DEMO_TEXT);
                 setNotice('تم تحميل مثال توضيحي.');
               }}
             >
@@ -526,8 +620,7 @@ function HomeScreen({
                   key={example.label}
                   type="button"
                   onClick={() => {
-                    setText(example.text);
-                    setError('');
+                    updateText(example.text);
                     setNotice(`تم تحميل مثال: ${example.label}`);
                   }}
                 >
@@ -537,7 +630,7 @@ function HomeScreen({
             </div>
           </details>
           {error && (
-            <p className="field-error" role="alert">
+            <p id="composer-error" className="field-error" role="alert">
               <WarningCircle size={18} /> {error}
             </p>
           )}
@@ -862,8 +955,8 @@ function AnalysisScreen({
         </p>
         <section className="analysis-card" aria-live="polite">
           <div className="analysis-text">
-            <span>النص الجاري تحليله</span>
-            <p>{text}</p>
+            <span>مقتطف من النص الجاري تحليله</span>
+            <p aria-label="مقتطف النص الجاري تحليله">{compactDraftPreview(text)}</p>
           </div>
           <div className="analysis-progress">
             {phases.map((item, index) => (

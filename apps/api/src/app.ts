@@ -17,6 +17,7 @@ import {
 } from './reviewer-auth.js';
 import { buildDemoPreflight, PreflightInputSchema } from './preflight.js';
 import { FoundationReportSchema } from '../../../packages/contracts/src/foundation.js';
+import { isSafeDraftText, MAX_DRAFT_LENGTH } from '../../../packages/contracts/src/draft-text.js';
 import type { ReviewStore } from './review-store.js';
 
 const TextInput = z
@@ -25,7 +26,7 @@ const TextInput = z
       .string()
       .min(1)
       .max(12_000)
-      .refine((text) => text.trim().length > 0),
+      .refine((text) => text.trim().length > 0 && isSafeDraftText(text)),
   })
   .strict();
 const DocumentParams = z.object({ documentId: z.uuid() }).strict();
@@ -196,7 +197,7 @@ export function createApp(options: AppOptions = {}) {
         state.ready &&
         Number(state.migrationVersion?.slice(0, 4)) >= 7,
       researchPreview: options.foundation?.researchPreview ?? false,
-      maximumTextLength: options.foundation ? 3_000 : 12_000,
+      maximumTextLength: MAX_DRAFT_LENGTH,
       draftRewrite: false,
     });
   });
@@ -257,7 +258,7 @@ export function createApp(options: AppOptions = {}) {
       const credentials = guestCredentials(req);
       if (!credentials) return res.status(401).json({ code: 'INVALID_OR_EXPIRED_SESSION' });
       const { text } = TextInput.parse(req.body);
-      if (options.foundation && text.length > 3_000)
+      if (text.length > MAX_DRAFT_LENGTH)
         return res.status(400).json({ code: 'TEXT_TOO_LONG', maximumTextLength: 3_000 });
       const created = await database.createDocument(
         credentials.publicId,
@@ -278,7 +279,7 @@ export function createApp(options: AppOptions = {}) {
         if (!credentials) return res.status(401).json({ code: 'INVALID_OR_EXPIRED_SESSION' });
         const { documentId } = DocumentParams.parse(req.params);
         const { text } = TextInput.parse(req.body);
-        if (options.foundation && text.length > 3_000)
+        if (text.length > MAX_DRAFT_LENGTH)
           return res.status(400).json({ code: 'TEXT_TOO_LONG', maximumTextLength: 3_000 });
         const created = await database.createRevision(
           credentials.publicId,

@@ -14,6 +14,7 @@ import {
   persistDraftForAnalysis,
 } from './api.js';
 import {
+  comparisonHighlights,
   interpretationPresentation,
   reportFindings,
   sourceCollections,
@@ -23,6 +24,7 @@ import {
   quranReaderUrl,
   sourceCitation,
   sourceRoleLabel,
+  type ComparisonHighlight,
 } from './foundation-report-presentation.js';
 
 const roleLabels: Record<IntakeSegment['role'], string> = {
@@ -33,6 +35,51 @@ const roleLabels: Record<IntakeSegment['role'], string> = {
   author_text: 'كلام الكاتب',
   unclassified: 'غير مصنّف',
 };
+const roleColorClasses: Record<IntakeSegment['role'], string> = {
+  ayah: 'quran',
+  matn: 'hadith_matn',
+  isnad: 'isnad',
+  claimed_source: 'claimed_source',
+  author_text: 'general_claim',
+  unclassified: 'unknown',
+};
+const legendRoles = ['ayah', 'matn', 'isnad', 'claimed_source', 'unclassified'] as const;
+
+function ComparedWords({
+  text,
+  ranges,
+  side,
+}: {
+  text: string;
+  ranges: ComparisonHighlight[];
+  side: 'draft' | 'source';
+}) {
+  let cursor = 0;
+  const pieces = [];
+  for (const range of ranges) {
+    pieces.push(text.slice(cursor, range.startOffset));
+    pieces.push(
+      <mark
+        key={`${range.startOffset}-${range.endOffset}`}
+        className={`foundation-word-difference foundation-word-difference--${side} foundation-word-difference--${range.kind}`}
+        title={
+          range.kind === 'omit'
+            ? 'ورد في المصدر ولم يرد في النقل'
+            : range.kind === 'insert'
+              ? 'زيادة في النقل'
+              : side === 'draft'
+                ? 'لفظ مختلف في المسودة'
+                : 'لفظ المصدر المقابل'
+        }
+      >
+        {text.slice(range.startOffset, range.endOffset)}
+      </mark>,
+    );
+    cursor = range.endOffset;
+  }
+  pieces.push(text.slice(cursor));
+  return <>{pieces}</>;
+}
 
 function OriginalText({
   report,
@@ -62,7 +109,14 @@ function OriginalText({
     const text =
       active || (showTypes && segment.role !== 'author_text') ? (
         <mark
-          className={`foundation-highlight ${active ? 'foundation-highlight--selected' : `foundation-highlight--${segment.role}`}`}
+          className={[
+            showTypes && segment.role !== 'author_text'
+              ? `semantic-highlight semantic-highlight--${roleColorClasses[segment.role]}`
+              : 'foundation-highlight',
+            active ? 'foundation-highlight--active' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
         >
           {segment.originalText}
         </mark>
@@ -140,7 +194,7 @@ const findingGroups = [
   },
   {
     key: 'faithful',
-    label: 'نقول مطابقة',
+    label: 'نقل مطابق',
     description: 'تشمل المقتطفات الصحيحة وفروق الرسم أو الضبط.',
   },
 ] as const;
@@ -154,15 +208,19 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
     rows[0];
   const [selectedId, setSelectedId] = useState<string | undefined>(initial?.segment.id);
   const [sourceOverride, setSourceOverride] = useState<string | null>(null);
-  const [showTypes, setShowTypes] = useState(false);
+  const [showTypes, setShowTypes] = useState(true);
   const comparisonRef = useRef<HTMLElement>(null);
   const selected = rows.find((row) => row.segment.id === selectedId);
   const source = sourceOverride
     ? intake.evidence.find((row) => row.snapshotKey === sourceOverride)
     : selected?.source;
+  const comparisonIsBound = !!selected && source?.snapshotKey === selected.finding.evidenceKey;
   const interpretation = interpretationPresentation(report);
   const collections = sourceCollections(report);
   const comparisonText = source ? sourceComparisonText(source, selected?.finding) : null;
+  const highlightedDifferences = selected
+    ? comparisonHighlights(report, selected, source)
+    : { draft: [], source: [] };
   const select = (row: ReportFinding) => {
     setSelectedId(row.segment.id);
     setSourceOverride(null);
@@ -176,8 +234,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
     setSourceOverride(item.snapshotKey);
     comparisonRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
   };
-  const overrideIsCandidate =
-    sourceOverride && source?.snapshotKey !== selected?.finding.evidenceKey;
+  const overrideIsCandidate = !!selected && !!source && !comparisonIsBound;
   const selectedContexts = source
     ? collections.context.filter(
         (row) => row.parentSnapshotKey === source.snapshotKey || row.reference === source.reference,
@@ -286,7 +343,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
         <div className="section-title">
           <div>
             <h2>النص الأصلي</h2>
-            <p>يُميز التحديد النقل الذي تقارنه الآن.</p>
+            <p>الإطار يحدد النقل الذي تقارنه الآن؛ الألوان تبين نوع العبارة.</p>
           </div>
         </div>
         <OriginalText
@@ -295,14 +352,32 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
           showTypes={showTypes}
           onSelect={select}
         />
-        <label className="foundation-types-toggle">
-          <input
-            type="checkbox"
-            checked={showTypes}
-            onChange={(event) => setShowTypes(event.target.checked)}
-          />{' '}
-          إظهار أنواع العبارات المنقولة
-        </label>
+        <footer className="foundation-original-footer">
+          <label className="foundation-types-toggle">
+            <input
+              type="checkbox"
+              checked={showTypes}
+              onChange={(event) => setShowTypes(event.target.checked)}
+            />{' '}
+            إظهار أنواع العبارات المنقولة
+          </label>
+          <ul className="foundation-type-legend" aria-label="دليل ألوان أنواع العبارات">
+            {legendRoles.map((role) => (
+              <li key={role}>
+                <span
+                  className={`foundation-legend-swatch semantic-highlight--${roleColorClasses[role]}`}
+                  aria-hidden="true"
+                />
+                {roleLabels[role]}
+              </li>
+            ))}
+            <li>كلام الكاتب بلا تلوين</li>
+          </ul>
+          <p>
+            الألوان توضح نوع العبارة، ولا تحكم على صحتها. يُلوّن الإسناد إذا ورد ضمن العبارات
+            المصنّفة في هذا التقرير.
+          </p>
+        </footer>
       </section>
       <div className="foundation-workspace">
         <aside className="foundation-finding-list" aria-label="نتائج مقارنة النقل">
@@ -349,21 +424,35 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
           {selected && (
             <>
               <strong
-                className={`foundation-result-label foundation-result-label--${selected.group}`}
+                className={`foundation-result-label foundation-result-label--${comparisonIsBound ? selected.group : 'unresolved'}`}
               >
-                {selected.presentation.label}
+                {comparisonIsBound
+                  ? selected.presentation.label
+                  : source
+                    ? 'مصدر مرشح لم تثبت مطابقته'
+                    : 'لم تُحسم مطابقة النقل'}
               </strong>
               <p>
-                {selected.group === 'unresolved'
-                  ? unresolvedExplanation(selected)
-                  : selected.presentation.explanation}
+                {!comparisonIsBound && source
+                  ? 'لم تثبت مطابقة النقل للمصدر المعروض؛ قارن النصين للتحقق من الموضع والنسبة.'
+                  : !comparisonIsBound || selected.group === 'unresolved'
+                    ? unresolvedExplanation(selected)
+                    : selected.presentation.explanation}
               </p>
               <div className="foundation-compare-texts">
-                <div>
+                <div
+                  className={`foundation-compare-card foundation-compare-card--draft ${comparisonIsBound && selected.group === 'different' ? 'foundation-compare-card--different' : ''}`}
+                >
                   <h3>النقل في المسودة</h3>
-                  <blockquote>{selected.segment.originalText}</blockquote>
+                  <blockquote>
+                    <ComparedWords
+                      text={selected.segment.originalText}
+                      ranges={highlightedDifferences.draft}
+                      side="draft"
+                    />
+                  </blockquote>
                 </div>
-                <div>
+                <div className="foundation-compare-card foundation-compare-card--reference">
                   {source && comparisonText ? (
                     <>
                       <h3>{sourceCitation(source, intake.evidence)}</h3>
@@ -373,7 +462,14 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
                         </p>
                       )}
                       <p className="foundation-compare-caption">{comparisonText.label}</p>
-                      <blockquote>{comparisonText.text}</blockquote>
+                      <blockquote>
+                        <ComparedWords
+                          text={comparisonText.text}
+                          ranges={highlightedDifferences.source}
+                          side="source"
+                        />
+                        {comparisonText.truncated ? '…' : ''}
+                      </blockquote>
                     </>
                   ) : (
                     <>
@@ -383,11 +479,20 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
                   )}
                 </div>
               </div>
-              <p>
-                <b>حدود المقتطف: </b>
-                {selected.presentation.extent}
-              </p>
-              {selected.finding.comparison &&
+              {(highlightedDifferences.draft.length > 0 ||
+                highlightedDifferences.source.length > 0) && (
+                <p className="foundation-difference-key">
+                  الكلمات المحددة فروق في النقل؛ يوضح النص المرجعي الألفاظ المقابلة وما حُذف منه.
+                </p>
+              )}
+              {comparisonIsBound && (
+                <p>
+                  <b>حدود المقتطف: </b>
+                  {selected.presentation.extent}
+                </p>
+              )}
+              {comparisonIsBound &&
+                selected.finding.comparison &&
                 selected.finding.comparison.differences.length > 0 && (
                   <ul className="foundation-differences" aria-label="فروق النقل عن المصدر">
                     {selected.finding.comparison.differences.map((difference, index) => (
@@ -406,7 +511,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
                     ))}
                   </ul>
                 )}
-              {selected.segment.conflict && (
+              {comparisonIsBound && selected.segment.conflict && (
                 <p className="foundation-candidate-notice">
                   تعارضت النسبة المذكورة مع المصدر المرشح؛ راجع المرجع الملحق بهذا النقل.
                 </p>
@@ -434,7 +539,11 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
             <>
               <h3>{sourceCitation(source, intake.evidence)}</h3>
               <p>هذا النص متاح للقراءة؛ لم تُعرض هنا مطابقة لنقل محدد من المسودة.</p>
-              <blockquote>{comparisonText.text}</blockquote>
+              <p className="foundation-compare-caption">{comparisonText.label}</p>
+              <blockquote>
+                {comparisonText.text}
+                {comparisonText.truncated ? '…' : ''}
+              </blockquote>
             </>
           )}
           {!selected && !source && <p>اختر نقلًا أو مصدرًا لعرض تفاصيله هنا.</p>}

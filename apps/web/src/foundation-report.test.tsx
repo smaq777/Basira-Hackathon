@@ -3,6 +3,12 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FoundationReportContent } from './foundation-report.js';
+import type { QuotationComparison } from '../../../packages/contracts/src/foundation.js';
+import {
+  comparisonHighlights,
+  interpretationPresentation,
+  reportFindings,
+} from './foundation-report-presentation.js';
 import {
   foundationReportFixture,
   ORIGINAL_TEXT,
@@ -17,7 +23,7 @@ describe('foundation report presentation', () => {
     render(<FoundationReportContent report={report} />);
     expect(screen.getByText('نقل مطابق حرفيًا')).not.toBeNull();
     expect(screen.getByText('مقتطف متصل من المصدر؛ لا يشمل النص الكامل.')).not.toBeNull();
-    expect(screen.getByText('لم يُقيّم الاستدلال')).not.toBeNull();
+    expect(screen.getByText('لم يُجرَ تقييم الاستدلال في هذا التقرير')).not.toBeNull();
     expect(screen.getByLabelText('النص الأصلي مع مواضع النقل').textContent).toBe(ORIGINAL_TEXT);
     expect(screen.getByText(`بداية ${SYNTHETIC_QUOTE} نهاية`)).not.toBeNull();
     expect(screen.queryByText(/نسخة اختبار/)).toBeNull();
@@ -271,7 +277,7 @@ describe('foundation report presentation', () => {
     quote.startOffset = report.intake.originalText.indexOf(SYNTHETIC_QUOTE);
     quote.endOffset = quote.startOffset + SYNTHETIC_QUOTE.length;
     render(<FoundationReportContent report={report} />);
-    expect(screen.getByText('لم يُقيّم الاستدلال')).not.toBeNull();
+    expect(screen.getByText('لم يُجرَ تقييم الاستدلال في هذا التقرير')).not.toBeNull();
     expect(screen.queryByText('لا يوجد استنتاج قابل للتقييم في هذا النص')).toBeNull();
     expect(screen.queryByText('يحتاج تأكيدًا بشريًا')).toBeNull();
   });
@@ -281,9 +287,9 @@ describe('foundation report presentation', () => {
     render(<FoundationReportContent report={report} />);
     expect(screen.getByRole('button', { name: 'اختلافات النقل (1)' })).not.toBeNull();
     expect(screen.getByRole('button', { name: 'مطابقة غير محسومة (1)' })).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'نقول مطابقة (1)' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'نقل مطابق (1)' })).not.toBeNull();
     expect(screen.queryByRole('button', { name: /مقارنة النقل.*٣/ })).toBeNull();
-    expect(screen.getAllByText('لم يُقيّم الاستدلال')).toHaveLength(1);
+    expect(screen.getAllByText('لم يُجرَ تقييم الاستدلال في هذا التقرير')).toHaveLength(1);
   });
 
   it('selects a draft quote and compares its source without highlighting authored paragraphs', () => {
@@ -291,15 +297,19 @@ describe('foundation report presentation', () => {
     const view = render(<FoundationReportContent report={report} />);
     const original = screen.getByLabelText('النص الأصلي مع مواضع النقل');
     expect(original.textContent).toBe(report.intake.originalText);
-    expect(original.querySelectorAll('mark')).toHaveLength(1);
+    expect(original.querySelectorAll('mark')).toHaveLength(4);
     expect(view.container.querySelector('.foundation-highlight--author_text')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'مقارنة النقل 2: نقل غير محسوم' }));
     expect(screen.getByRole('region', { name: 'مقارنة النقل المحدد' }).textContent).toContain(
       'توجد عدة مصادر مرشحة',
     );
-    expect(original.querySelector('mark')?.textContent).toBe('نقل غير محسوم');
+    expect(original.querySelector('.foundation-highlight--active')?.textContent).toBe(
+      'نقل غير محسوم',
+    );
     fireEvent.click(screen.getByRole('button', { name: 'إظهار مقارنة: نص تجريبي مطابق' }));
-    expect(original.querySelector('mark')?.textContent).toBe('نص تجريبي مطابق');
+    expect(original.querySelector('.foundation-highlight--active')?.textContent).toBe(
+      'نص تجريبي مطابق',
+    );
   });
 
   it('collapses source text and distinguishes selected sources, candidates and optional topic context', () => {
@@ -413,7 +423,7 @@ it('explains a model outage while keeping source comparison available', () => {
   render(<FoundationReportContent report={report} />);
   expect(screen.getByText('تعذر استكمال التقييم الدلالي')).not.toBeNull();
   expect(screen.getByText('نقل مطابق حرفيًا')).not.toBeNull();
-  expect(screen.queryByText('لم يُقيّم الاستدلال')).toBeNull();
+  expect(screen.queryByText('لم يُجرَ تقييم الاستدلال في هذا التقرير')).toBeNull();
 });
 
 it('shows provisional semantic findings with readable sources and no model trace', () => {
@@ -465,3 +475,249 @@ it('shows provisional semantic findings with readable sources and no model trace
   expect(screen.getByText('شرط تجريبي')).not.toBeNull();
   expect(screen.queryByText('evidence-support-v1.1')).toBeNull();
 });
+
+describe('readable report comparison refinements', () => {
+  it('labels a standalone long source preview as clipped and preserves full reading text', () => {
+    const report = foundationReportFixture();
+    const text = 'ب'.repeat(399) + '😀' + 'خ'.repeat(400);
+    report.intake.evidence.push({
+      ...report.intake.evidence[0]!,
+      snapshotKey: 'standalone',
+      work: 'مصدر طويل للاختبار',
+      reference: 'مصدر طويل للاختبار',
+      originalText: text,
+    });
+    render(<FoundationReportContent report={report} />);
+    fireEvent.click(screen.getByText('المصادر والسياقات (2)'));
+    fireEvent.click(screen.getByRole('button', { name: /مصدر طويل للاختبار/ }));
+    const comparison = screen.getByRole('region', { name: 'مقارنة النقل المحدد' });
+    expect(comparison.querySelector('.foundation-compare-caption')?.textContent).toBe(
+      'بداية النص المرجعي؛ موضع المقتطف غير محدد',
+    );
+    expect(comparison.querySelector('blockquote')?.textContent).toBe('ب'.repeat(399) + '…');
+    expect(comparison.querySelector('.foundation-full-source blockquote')?.textContent).toBe(text);
+  });
+
+  it('does not carry the bound source verdict or differences into a selected candidate source', () => {
+    const report = differenceFixture('نص جديد', 'نص قديم', [
+      { kind: 'replace', quotedText: 'جديد', sourceText: 'قديم' },
+    ]);
+    report.intake.segments[0]!.sourceKeys.push('candidate');
+    report.intake.evidence.push({
+      ...report.intake.evidence[0]!,
+      snapshotKey: 'candidate',
+      work: 'مصدر بديل للاختبار',
+      reference: 'مصدر بديل للاختبار',
+      originalText: 'عبارة المصدر المرشح المختلف',
+    });
+    const view = render(<FoundationReportContent report={report} />);
+    const comparison = screen.getByRole('region', { name: 'مقارنة النقل المحدد' });
+    expect(comparison.textContent).toContain('اختلاف في ألفاظ النقل');
+    expect(comparison.querySelector('.foundation-differences')).not.toBeNull();
+    fireEvent.click(screen.getByText('المصادر والسياقات (2)'));
+    fireEvent.click(screen.getByRole('button', { name: /مصدر بديل للاختبار/ }));
+    expect(comparison.textContent).toContain('مصدر مرشح لم تثبت مطابقته');
+    expect(comparison.textContent).not.toContain('اختلاف في ألفاظ النقل');
+    expect(comparison.textContent).not.toContain(
+      'توجد ألفاظ مختلفة أو محذوفة أو مضافة داخل النقل.',
+    );
+    expect(comparison.textContent).not.toContain('حدود المقتطف');
+    expect(comparison.textContent).not.toContain('يتضمن النقل حذفًا داخل موضعه في المصدر.');
+    expect(comparison.querySelector('.foundation-differences')).toBeNull();
+    expect(comparison.querySelector('.foundation-word-difference')).toBeNull();
+    expect(comparison.querySelector('.foundation-compare-card--different')).toBeNull();
+    expect(
+      comparison.querySelector('.foundation-compare-card--draft blockquote')?.textContent,
+    ).toBe('نص جديد');
+    expect(
+      comparison.querySelector('.foundation-compare-card--reference blockquote')?.textContent,
+    ).toBe('عبارة المصدر المرشح المختلف');
+    expect(view.container.querySelector('.foundation-highlight--active')?.textContent).toBe(
+      'نص جديد',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'إظهار مقارنة: نص جديد' }));
+    expect(comparison.textContent).toContain('اختلاف في ألفاظ النقل');
+    expect(comparison.querySelectorAll('.foundation-word-difference')).toHaveLength(2);
+  });
+
+  it('uses a green reference card and reserves the red draft card for actual word differences', () => {
+    const view = render(<FoundationReportContent report={foundationReportFixture()} />);
+    expect(view.container.querySelector('.foundation-compare-card--reference')).not.toBeNull();
+    expect(view.container.querySelector('.foundation-compare-card--different')).toBeNull();
+    expect(view.container.querySelectorAll('.foundation-word-difference')).toHaveLength(0);
+    view.unmount();
+    const report = differenceFixture('نص جديد', 'نص قديم', [
+      { kind: 'replace', quotedText: 'جديد', sourceText: 'قديم' },
+    ]);
+    const differing = render(<FoundationReportContent report={report} />);
+    expect(differing.container.querySelector('.foundation-compare-card--different')).not.toBeNull();
+    expect(
+      differing.container.querySelector('.foundation-compare-card--draft blockquote')?.textContent,
+    ).toBe('نص جديد');
+    expect(
+      differing.container.querySelector('.foundation-compare-card--reference blockquote')
+        ?.textContent,
+    ).toBe('نص قديم');
+    expect(
+      [...differing.container.querySelectorAll('.foundation-word-difference')].map(
+        (row) => row.textContent,
+      ),
+    ).toEqual(['جديد', 'قديم']);
+  });
+
+  it('maps omissions to the reference excerpt with full-source UTF16 offsets and leaves draft words intact', () => {
+    const prefix = '😀 مقدمة طويلة: ';
+    const reference = 'أول كلمة محذوفة آخر';
+    const report = differenceFixture(
+      'أول آخر',
+      prefix + reference + ' خاتمة',
+      [{ kind: 'omit', quotedText: '', sourceText: 'كلمة محذوفة' }],
+      prefix.length,
+      prefix.length + reference.length,
+    );
+    const row = reportFindings(report)[0]!;
+    const highlights = comparisonHighlights(report, row, row.source);
+    expect(highlights.draft).toEqual([]);
+    expect(highlights.source).toEqual([{ startOffset: 4, endOffset: 15, kind: 'omit' }]);
+    const view = render(<FoundationReportContent report={report} />);
+    expect(
+      view.container.querySelector('.foundation-compare-card--draft blockquote')?.textContent,
+    ).toBe('أول آخر');
+    expect(
+      view.container.querySelector('.foundation-compare-card--reference blockquote')?.textContent,
+    ).toBe(reference);
+    expect(view.container.querySelector('.foundation-word-difference--omit')?.textContent).toBe(
+      'كلمة محذوفة',
+    );
+  });
+
+  it('highlights a unique insertion only in the draft and never injects markup from a source', () => {
+    const report = differenceFixture('أول <img> آخر', 'أول آخر', [
+      { kind: 'insert', quotedText: '<img>', sourceText: '' },
+    ]);
+    const view = render(<FoundationReportContent report={report} />);
+    expect(view.container.querySelector('img')).toBeNull();
+    expect(
+      view.container.querySelector('.foundation-compare-card--draft .foundation-word-difference')
+        ?.textContent,
+    ).toBe('<img>');
+    expect(
+      view.container.querySelector(
+        '.foundation-compare-card--reference .foundation-word-difference',
+      ),
+    ).toBeNull();
+  });
+
+  it('keeps explicit difference text without guessing a repeated or noncanonical occurrence', () => {
+    for (const [draft, source, quotedText, sourceText] of [
+      ['جديد جديد', 'قديم', 'جديد', 'قديم'],
+      ['جديد', 'قديم قديم', 'جديد', 'قديم'],
+      ['جديد', 'قَدِيم', 'جديد', 'قديم'],
+    ]) {
+      const report = differenceFixture(draft!, source!, [
+        { kind: 'replace', quotedText: quotedText!, sourceText: sourceText! },
+      ]);
+      const view = render(<FoundationReportContent report={report} />);
+      expect(view.container.querySelectorAll('.foundation-word-difference')).toHaveLength(0);
+      expect(screen.getByLabelText('فروق النقل عن المصدر').textContent).toContain(sourceText);
+      view.unmount();
+    }
+  });
+
+  it('validates surrogate boundaries, detached draft spans and overlapping difference ranges', () => {
+    const report = differenceFixture('😀 لفظ', '😀 كلمة', [
+      { kind: 'replace', quotedText: 'لفظ', sourceText: 'كلمة' },
+    ]);
+    let row = reportFindings(report)[0]!;
+    expect(comparisonHighlights(report, row, row.source).draft[0]?.startOffset).toBe(3);
+    report.intake.quotationFindings[0]!.matchedStart = 1; // Inside the emoji surrogate pair.
+    row = reportFindings(report)[0]!;
+    expect(comparisonHighlights(report, row, row.source)).toEqual({ draft: [], source: [] });
+    report.intake.quotationFindings[0]!.matchedStart = 0;
+    report.intake.segments[0]!.startOffset += 1;
+    row = reportFindings(report)[0]!;
+    expect(comparisonHighlights(report, row, row.source)).toEqual({ draft: [], source: [] });
+    report.intake.segments[0]!.startOffset -= 1;
+    report.intake.quotationFindings[0]!.comparison!.differences.push({
+      kind: 'replace',
+      quotedText: 'لفظ',
+      sourceText: 'كلمة',
+    });
+    row = reportFindings(report)[0]!;
+    expect(comparisonHighlights(report, row, row.source)).toEqual({ draft: [], source: [] });
+  });
+
+  it('keeps a whole emoji difference intact and does not highlight a candidate source', () => {
+    const report = differenceFixture('أول 😀 آخر', 'أول 😃 آخر', [
+      { kind: 'replace', quotedText: '😀', sourceText: '😃' },
+    ]);
+    const row = reportFindings(report)[0]!;
+    expect(comparisonHighlights(report, row, row.source)).toEqual({
+      draft: [{ startOffset: 4, endOffset: 6, kind: 'replace' }],
+      source: [{ startOffset: 4, endOffset: 6, kind: 'replace' }],
+    });
+    expect(comparisonHighlights(report, row, { ...row.source!, snapshotKey: 'candidate' })).toEqual(
+      { draft: [], source: [] },
+    );
+  });
+
+  it('shows a footer legend using the mainpage content-type classes and keeps author prose uncolored', () => {
+    const report = actionableFixture();
+    report.intake.segments[0]!.role = 'ayah';
+    report.intake.segments[1]!.role = 'isnad';
+    report.intake.segments[3]!.role = 'claimed_source';
+    const view = render(<FoundationReportContent report={report} />);
+    const original = screen.getByLabelText('النص الأصلي مع مواضع النقل');
+    const legend = screen.getByLabelText('دليل ألوان أنواع العبارات');
+    for (const className of ['quran', 'hadith_matn', 'isnad', 'claimed_source']) {
+      expect(original.querySelector(`.semantic-highlight--${className}`)).not.toBeNull();
+      expect(legend.querySelector(`.semantic-highlight--${className}`)).not.toBeNull();
+    }
+    expect(original.textContent).toBe(report.intake.originalText);
+    expect(view.container.querySelector('.foundation-highlight--author_text')).toBeNull();
+    const checkbox = screen.getByRole('checkbox', {
+      name: 'إظهار أنواع العبارات المنقولة',
+    }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+    fireEvent.click(checkbox);
+    expect(original.querySelectorAll('mark')).toHaveLength(1);
+  });
+
+  it('separates assessment not run from outage, no conclusion and provisional assessment', () => {
+    const report = foundationReportFixture();
+    expect(interpretationPresentation(report).label).toBe(
+      'لم يُجرَ تقييم الاستدلال في هذا التقرير',
+    );
+    expect(interpretationPresentation(report).explanation).toContain('لم تُشغّل');
+    report.interpretation.status = 'unavailable';
+    expect(interpretationPresentation(report).label).toBe('تعذر استكمال التقييم الدلالي');
+    report.interpretation.status = 'not_applicable';
+    expect(interpretationPresentation(report).label).toBe(
+      'لا يوجد استنتاج قابل للتقييم في هذا النص',
+    );
+    report.interpretation.status = 'provisional';
+    expect(interpretationPresentation(report).label).toBe('تقييم دلالي أولي غير مكتمل');
+  });
+});
+
+function differenceFixture(
+  draft: string,
+  source: string,
+  differences: QuotationComparison['differences'],
+  matchedStart = 0,
+  matchedEnd = source.length,
+) {
+  const report = foundationReportFixture();
+  report.intake.originalText = `مقدمة 😀 «${draft}» خاتمة`;
+  const segment = report.intake.segments[0]!;
+  segment.originalText = draft;
+  segment.startOffset = report.intake.originalText.indexOf(draft);
+  segment.endOffset = segment.startOffset + draft.length;
+  report.intake.evidence[0]!.originalText = source;
+  const finding = report.intake.quotationFindings[0]!;
+  finding.status = 'mismatch';
+  finding.matchedStart = matchedStart;
+  finding.matchedEnd = matchedEnd;
+  finding.comparison = { fidelity: 'different', extent: 'gapped', basis: 'canonical', differences };
+  return report;
+}

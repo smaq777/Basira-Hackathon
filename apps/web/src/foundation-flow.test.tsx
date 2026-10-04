@@ -81,6 +81,29 @@ describe('owned foundation review web flow', () => {
     vi.restoreAllMocks();
   });
 
+  it('shows a compact loading excerpt while sending and retaining the complete raw draft', async () => {
+    const fetchMock = mockReviewApi({ queued: true, keepQueued: true });
+    const text = `  قَالَ الكاتب 😀 <img id="loading-injection" src=x>\n${'نص عربي محفوظ\n'.repeat(100)}`;
+    render(<App />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'النص المراد مراجعته' }), {
+      target: { value: text },
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'ابدأ المراجعة' }));
+    const excerpt = screen.getByLabelText('مقتطف النص الجاري تحليله').textContent!;
+    expect(excerpt.length).toBeLessThanOrEqual(161);
+    expect(excerpt.endsWith('…')).toBe(true);
+    expect(text.startsWith(excerpt.slice(0, -1))).toBe(true);
+    expect(document.getElementById('loading-injection')).toBeNull();
+    await waitFor(() => expect(window.location.hash).toContain(`reviewId=${REVIEW_ID}`));
+    const draft = fetchMock.mock.calls.find(([path]) => path === '/api/v1/documents');
+    expect(JSON.parse(String(draft?.[1]?.body)).text).toBe(text);
+    await userEvent.click(screen.getByRole('button', { name: 'إلغاء والعودة للنص' }));
+    expect(
+      ((await screen.findByRole('textbox', { name: 'النص المراد مراجعته' })) as HTMLTextAreaElement)
+        .value,
+    ).toBe(text);
+  });
+
   it('preserves the exact submitted text and replaces the illustrative result with its owned report', async () => {
     const fetchMock = mockReviewApi({ queued: true });
     render(<App />);

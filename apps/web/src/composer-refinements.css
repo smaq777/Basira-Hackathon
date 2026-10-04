@@ -1,0 +1,24 @@
+/* Match both text layers, including the native RTL scrollbar's content box. */
+.composer .composer-editor textarea {
+  min-height: 128px;
+  max-height: max(128px, min(420px, 45vh));
+  overflow-y: auto;
+  resize: none;
+}
+
+.composer .composer-highlights {
+  inset: auto;
+  min-height: 0;
+}
+
+.analysis-card .analysis-text p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  max-height: 7.2em;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-size: 1rem;
+  line-height: 1.8;
+}

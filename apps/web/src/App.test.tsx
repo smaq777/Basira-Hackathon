@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App, { ExpandableText, reloadSignedOutHome, ReviewerShell } from './App.js';
+
+const initialViewportHeight = window.innerHeight;
 
 describe('Basirah web flow', () => {
   beforeEach(() => {
@@ -17,6 +19,162 @@ describe('Basirah web flow', () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: initialViewportHeight,
+    });
+  });
+
+  it('preserves complete bounded raw text and rejects oversize or unsafe edits', () => {
+    render(<App />);
+    const textarea = screen.getByRole('textbox', {
+      name: 'النص المراد مراجعته',
+    }) as HTMLTextAreaElement;
+    const accepted = `${'ن'.repeat(2998)}😀`;
+    fireEvent.change(textarea, { target: { value: accepted } });
+    expect(textarea.value).toBe(accepted);
+    fireEvent.change(textarea, { target: { value: `${accepted}ن` } });
+    expect(textarea.value).toBe(accepted);
+    expect(screen.getByRole('alert').textContent).toContain('بقي النص الحالي كما هو');
+    fireEvent.change(textarea, { target: { value: 'نص غير صالح\u0000' } });
+    expect(textarea.value).toBe(accepted);
+    expect(screen.getByRole('alert').textContent).toContain('محارف غير صالحة');
+  });
+
+  it('rejects native paste whole instead of truncating at an emoji boundary', () => {
+    render(<App />);
+    const textarea = screen.getByRole('textbox', {
+      name: 'النص المراد مراجعته',
+    }) as HTMLTextAreaElement;
+    const accepted = 'ن'.repeat(2999);
+    fireEvent.change(textarea, { target: { value: accepted } });
+    textarea.setSelectionRange(accepted.length, accepted.length);
+    fireEvent.paste(textarea, { clipboardData: { getData: () => '😀' } });
+    expect(textarea.value).toBe(accepted);
+    expect(screen.getByRole('alert').textContent).toContain('الحد الأقصى ٣٠٠٠');
+    textarea.setSelectionRange(2998, 2999);
+    fireEvent.paste(textarea, { clipboardData: { getData: () => '😀' } });
+    expect(textarea.value).toBe(`${'ن'.repeat(2998)}😀`);
+  });
+
+  it('rejects the oversized clipboard button payload while preserving the draft', async () => {
+    const user = userEvent.setup();
+    const readText = vi.fn().mockResolvedValue(`${'ن'.repeat(2999)}😀`);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { readText } });
+    render(<App />);
+    const textarea = screen.getByRole('textbox', {
+      name: 'النص المراد مراجعته',
+    }) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'النص الحالي' } });
+    await user.click(screen.getByRole('button', { name: 'لصق نص' }));
+    expect(textarea.value).toBe('النص الحالي');
+    expect(screen.getByRole('alert').textContent).toContain('بقي النص الحالي كما هو');
+    readText.mockResolvedValue('  قَالَ الكاتب 😀\nنص محفوظ  ');
+    await user.click(screen.getByRole('button', { name: 'لصق نص' }));
+    expect(textarea.value).toBe('  قَالَ الكاتب 😀\nنص محفوظ  ');
+  });
+
+  it('grows to the viewport cap and keeps the highlight content box and scroll aligned', () => {
+    render(<App />);
+    const textarea = screen.getByRole('textbox', {
+      name: 'النص المراد مراجعته',
+    }) as HTMLTextAreaElement;
+    const overlay = document.querySelector('.composer-highlights') as HTMLDivElement;
+    Object.defineProperties(textarea, {
+      scrollHeight: { configurable: true, value: 1000 },
+      clientWidth: { configurable: true, value: 480 },
+      clientHeight: { configurable: true, value: 360 },
+      clientLeft: { configurable: true, value: 17 },
+    });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    fireEvent.change(textarea, { target: { value: 'سطر عربي طويل\n'.repeat(80) } });
+    expect(textarea.style.height).toBe('360px');
+    expect(overlay.style.width).toBe('480px');
+    expect(overlay.style.left).toBe('17px');
+    expect(overlay.style.height).toBe('360px');
+    textarea.scrollTop = 200;
+    textarea.scrollLeft = -12;
+    fireEvent.scroll(textarea);
+    expect(overlay.scrollTop).toBe(200);
+    expect(overlay.scrollLeft).toBe(-12);
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 600 });
+    fireEvent(window, new Event('resize'));
+    expect(textarea.style.height).toBe('270px');
+    expect(overlay.scrollTop).toBe(textarea.scrollTop);
+  });
+
+  it('clears old classification on edit and ignores an aborted late response', async () => {
+    vi.useFakeTimers();
+    const pending: Array<(response: Response) => void> = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      () => new Promise((resolve) => pending.push(resolve)),
+    );
+    render(<App />);
+    const textarea = screen.getByRole('textbox', {
+      name: 'النص المراد مراجعته',
+    }) as HTMLTextAreaElement;
+    const packet = (text: string) =>
+      new Response(
+        JSON.stringify({
+          mode: 'local_demo',
+          verification: false,
+          corpusVersion: 'software-fixture-v1',
+          inputHash: 'a'.repeat(64),
+          offsetUnit: 'utf16_code_unit',
+          annotations: [
+            {
+              id: 'owned-annotation',
+              text,
+              startOffset: 0,
+              endOffset: text.length,
+              contentType: 'quran',
+              contentTypeLabel: 'آية قرآنية',
+              classificationBasis: 'fixture_match',
+            },
+          ],
+          findings: [],
+          warnings: ['annotation_limit_reached'],
+        }),
+      );
+    const first = 'نص أول طويل للتصنيف الأولي';
+    fireEvent.change(textarea, { target: { value: first } });
+    await vi.advanceTimersByTimeAsync(450);
+    await act(async () => {
+      pending[0]!(packet(first));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(document.querySelector('.semantic-highlight--quran')).not.toBeNull();
+    expect(
+      screen.getByText('التصنيف الأولي المعروض جزئي؛ راجع بقية النص في التقرير.'),
+    ).not.toBeNull();
+    const second = 'نص ثان طويل للتصنيف الأولي';
+    fireEvent.change(textarea, { target: { value: second } });
+    expect(document.querySelector('.semantic-highlight--quran')).toBeNull();
+    expect(screen.queryByLabelText('دليل ألوان تصنيف أجزاء النص')).toBeNull();
+    expect(
+      screen.queryByText('التصنيف الأولي المعروض جزئي؛ راجع بقية النص في التقرير.'),
+    ).toBeNull();
+    await vi.advanceTimersByTimeAsync(450);
+    fireEvent.change(textarea, { target: { value: 'نص ثالث مختلف لا يحمل النتيجة السابقة' } });
+    await act(async () => {
+      pending[1]!(packet(second));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(document.querySelector('.semantic-highlight--quran')).toBeNull();
+  });
+
+  it('renders pasted markup literally in the overlay without creating an element', () => {
+    render(<App />);
+    const textarea = screen.getByRole('textbox', {
+      name: 'النص المراد مراجعته',
+    }) as HTMLTextAreaElement;
+    const raw = '<img id="owned-injection" src=x onerror="alert(1)"> نص عربي 😀';
+    fireEvent.paste(textarea, { clipboardData: { getData: () => raw } });
+    expect(textarea.value).toBe(raw);
+    expect(document.querySelector('.composer-highlights')!.textContent).toContain(raw);
+    expect(document.getElementById('owned-injection')).toBeNull();
   });
 
   it('explains an empty submission instead of starting an analysis', async () => {

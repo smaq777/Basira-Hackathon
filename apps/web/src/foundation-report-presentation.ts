@@ -73,8 +73,7 @@ export function quotationPresentation(finding: LiteralFinding, report: Foundatio
     finding.matchedStart !== null &&
     finding.matchedEnd !== null &&
     source &&
-    finding.matchedEnd > finding.matchedStart &&
-    finding.matchedEnd <= source.originalText.length;
+    validRange(source.originalText, finding.matchedStart, finding.matchedEnd);
   const rawExact =
     source &&
     segment &&
@@ -221,24 +220,169 @@ export function sourceCollections(report: FoundationReport) {
   };
 }
 
+/** Offsets refer to the untouched UTF-16 source; never slice a surrogate pair. */
+function validRange(text: string, start: number, end: number): boolean {
+  const boundary = (offset: number) =>
+    !(
+      text.charCodeAt(offset) >= 0xdc00 &&
+      text.charCodeAt(offset) <= 0xdfff &&
+      text.charCodeAt(offset - 1) >= 0xd800 &&
+      text.charCodeAt(offset - 1) <= 0xdbff
+    );
+  return (
+    Number.isInteger(start) &&
+    Number.isInteger(end) &&
+    start >= 0 &&
+    end > start &&
+    end <= text.length &&
+    boundary(start) &&
+    boundary(end)
+  );
+}
+
 export function sourceComparisonText(source: SourceEvidence, finding?: LiteralFinding) {
   if (
     finding?.evidenceKey === source.snapshotKey &&
     finding.matchedStart !== null &&
     finding.matchedEnd !== null &&
-    finding.matchedEnd > finding.matchedStart &&
-    finding.matchedEnd <= source.originalText.length
+    validRange(source.originalText, finding.matchedStart, finding.matchedEnd)
   ) {
     return {
       label: 'موضع النقل في المصدر',
       text: source.originalText.slice(finding.matchedStart, finding.matchedEnd),
+      startOffset: finding.matchedStart,
+      endOffset: finding.matchedEnd,
+      truncated: false,
     };
   }
   if (source.originalText.length <= 600)
-    return { label: 'النص المرجعي', text: source.originalText };
+    return {
+      label: 'النص المرجعي',
+      text: source.originalText,
+      startOffset: 0,
+      endOffset: source.originalText.length,
+      truncated: false,
+    };
+  const endOffset = validRange(source.originalText, 0, 400) ? 400 : 399;
   return {
     label: 'بداية النص المرجعي؛ موضع المقتطف غير محدد',
-    text: `${source.originalText.slice(0, 400)}…`,
+    text: source.originalText.slice(0, endOffset),
+    startOffset: 0,
+    endOffset,
+    truncated: true,
+  };
+}
+
+export type ComparisonHighlight = {
+  startOffset: number;
+  endOffset: number;
+  kind: 'replace' | 'omit' | 'insert';
+};
+
+/** Legacy differences have no locations. Highlight only unique, raw, validated slices.
+ * Repeated/normalized/overlapping words remain in the explicit differences list.
+ */
+export function comparisonHighlights(
+  report: FoundationReport,
+  row: ReportFinding,
+  source?: SourceEvidence,
+): {
+  draft: ComparisonHighlight[];
+  source: ComparisonHighlight[];
+} {
+  const empty = { draft: [], source: [] };
+  const { segment, finding } = row;
+  if (
+    !source ||
+    finding.evidenceKey !== source.snapshotKey ||
+    finding.comparison?.fidelity !== 'different' ||
+    !validRange(report.intake.originalText, segment.startOffset, segment.endOffset) ||
+    report.intake.originalText.slice(segment.startOffset, segment.endOffset) !==
+      segment.originalText
+  )
+    return empty;
+  const hasOffsets = finding.matchedStart !== null || finding.matchedEnd !== null;
+  if (
+    hasOffsets &&
+    (finding.matchedStart === null ||
+      finding.matchedEnd === null ||
+      !validRange(source.originalText, finding.matchedStart, finding.matchedEnd))
+  )
+    return empty;
+  const displayed = sourceComparisonText(source, finding);
+  if (source.originalText.slice(displayed.startOffset, displayed.endOffset) !== displayed.text)
+    return empty;
+  const sourceScope = hasOffsets ? displayed.text : source.originalText;
+  const unique = (
+    text: string,
+    needle: string,
+    kind: ComparisonHighlight['kind'],
+  ): ComparisonHighlight | null => {
+    if (!needle) return null;
+    const startOffset = text.indexOf(needle);
+    const endOffset = startOffset + needle.length;
+    if (
+      startOffset < 0 ||
+      text.indexOf(needle, startOffset + 1) >= 0 ||
+      !validRange(text, startOffset, endOffset)
+    )
+      return null;
+    // A normalized token must not accidentally match part of a different raw word.
+    const word = /[\p{L}\p{M}\p{N}]/u;
+    if (
+      (word.test(needle[0]!) && word.test(text[startOffset - 1] ?? '')) ||
+      (word.test(needle[needle.length - 1]!) && word.test(text[endOffset] ?? ''))
+    )
+      return null;
+    return { startOffset, endOffset, kind };
+  };
+  const pairs = finding.comparison.differences.flatMap((difference) => {
+    const draft =
+      difference.kind === 'omit'
+        ? null
+        : unique(segment.originalText, difference.quotedText, difference.kind);
+    const fullSource =
+      difference.kind === 'insert'
+        ? null
+        : unique(sourceScope, difference.sourceText, difference.kind);
+    if (
+      (difference.kind === 'replace' &&
+        (!draft || !fullSource || difference.quotedText === difference.sourceText)) ||
+      (difference.kind === 'omit' && (difference.quotedText !== '' || !fullSource)) ||
+      (difference.kind === 'insert' && (difference.sourceText !== '' || !draft))
+    )
+      return [];
+    const shift = hasOffsets ? 0 : displayed.startOffset;
+    const sourceRange = fullSource
+      ? {
+          ...fullSource,
+          startOffset: fullSource.startOffset - shift,
+          endOffset: fullSource.endOffset - shift,
+        }
+      : null;
+    if (
+      sourceRange &&
+      (!validRange(displayed.text, sourceRange.startOffset, sourceRange.endOffset) ||
+        displayed.text.slice(sourceRange.startOffset, sourceRange.endOffset) !==
+          difference.sourceText)
+    )
+      return [];
+    return [{ draft, source: sourceRange }];
+  });
+  const overlaps = (a: ComparisonHighlight | null, b: ComparisonHighlight | null) =>
+    !!a && !!b && a.startOffset < b.endOffset && a.endOffset > b.startOffset;
+  const safe = pairs.filter(
+    (pair, index) =>
+      !pairs.some(
+        (other, at) =>
+          at !== index &&
+          (overlaps(pair.draft, other.draft) || overlaps(pair.source, other.source)),
+      ),
+  );
+  const order = (a: ComparisonHighlight, b: ComparisonHighlight) => a.startOffset - b.startOffset;
+  return {
+    draft: safe.flatMap((pair) => (pair.draft ? [pair.draft] : [])).sort(order),
+    source: safe.flatMap((pair) => (pair.source ? [pair.source] : [])).sort(order),
   };
 }
 
@@ -247,9 +391,15 @@ export function interpretationPresentation(report: FoundationReport) {
     return {
       label: 'تقييم دلالي أولي',
       explanation:
-        'قارن التقييم الآلي الادعاءات بالمصادر المعروضة. الربط والنتائج مقترحات للمراجعة، ولا تمثل اعتمادًا علميًا أو شرعيًا.',
+        report.semanticAssessment.status === 'partial'
+          ? 'تتوفر نتائج أولية لبعض العبارات، ولم يكتمل تقييم التقرير. الربط والنتائج مقترحات للمراجعة.'
+          : 'قارن التقييم الآلي الادعاءات بالمصادر المعروضة. الربط والنتائج مقترحات للمراجعة، ولا تمثل اعتمادًا علميًا أو شرعيًا.',
     };
-  if (report.interpretation.status === 'unavailable')
+  if (
+    report.interpretation.status === 'unavailable' ||
+    report.semanticAssessment?.status === 'unavailable' ||
+    report.semanticAssessment?.status === 'partial'
+  )
     return {
       label: 'تعذر استكمال التقييم الدلالي',
       explanation:
@@ -259,6 +409,7 @@ export function interpretationPresentation(report: FoundationReport) {
     report.interpretation.applicability ?? assessClaimApplicability(report.intake);
   if (
     report.interpretation.status === 'not_applicable' ||
+    report.semanticAssessment?.status === 'not_applicable' ||
     applicability.status === 'not_applicable'
   )
     return {
@@ -266,9 +417,15 @@ export function interpretationPresentation(report: FoundationReport) {
       explanation:
         'لم يُستخرج استنتاج واضح يربط الدليل بادعاء. تظل مقارنة النقل مستقلة؛ هذه النتيجة لا تعني صحة النص أو خطأه.',
     };
+  if (report.interpretation.status === 'provisional')
+    return {
+      label: 'تقييم دلالي أولي غير مكتمل',
+      explanation:
+        'بدأ تقييم آلي أولي، ولم تتوفر نتائج مكتملة لعرضها. تبقى مقارنة النقل متاحة بصورة مستقلة.',
+    };
   return {
-    label: 'لم يُقيّم الاستدلال',
+    label: 'لم يُجرَ تقييم الاستدلال في هذا التقرير',
     explanation:
-      'لم تُجرَ مقارنة دلالية بين الادعاء والدليل في هذا التقرير. نتائج مطابقة النقل وحدها لا تثبت كفاية الاستدلال.',
+      'لم تُشغّل مرحلة مقارنة الادعاء بالدليل في هذا التقرير. المعروض هنا هو مقارنة النقل بالمصادر، وليس نتيجة عن كفاية الدليل.',
   };
 }

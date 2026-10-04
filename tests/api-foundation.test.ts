@@ -154,6 +154,27 @@ it('reports opted-in source acquisition without claiming semantic verification',
   });
 });
 
+it('preserves script-like text as data and rejects malformed text before storage', async () => {
+  const { database } = fixture();
+  const base = await serve({ database });
+  const literal = '  نَصٌّ 🙂 <script>alert(1)</script> <img src=x onerror=alert(2)> & " \' --  ';
+  const response = await post(base, '/api/v1/documents', { text: literal });
+  expect(response.status).toBe(201);
+  expect(response.headers.get('content-security-policy')).toContain("object-src 'none'");
+  expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+  expect(database.createDocument).toHaveBeenLastCalledWith(sessionId, secret, literal);
+  database.createDocument.mockClear();
+  for (const text of ['نص\u0000مرفوض', 'نص\u001bمرفوض', 'نص\ud800مرفوض']) {
+    expect((await post(base, '/api/v1/documents', { text })).status).toBe(400);
+    expect((await post(base, `/api/v1/documents/${documentId}/revisions`, { text })).status).toBe(
+      400,
+    );
+    expect((await post(base, '/api/v1/preflight', { text: text.repeat(5) })).status).toBe(400);
+  }
+  expect(database.createDocument).not.toHaveBeenCalled();
+  expect(database.createRevision).not.toHaveBeenCalled();
+});
+
 it('applies the source-worker UTF16 length limit before documents, revisions or jobs are written', async () => {
   const { database, foundation } = fixture();
   const text = '🙂'.repeat(1501);
@@ -178,14 +199,20 @@ it('applies the source-worker UTF16 length limit before documents, revisions or 
   expect(foundation.worker.notify).not.toHaveBeenCalled();
 });
 
-it('keeps the existing intake limit when source review is unconfigured', async () => {
+it('enforces the same 3000-unit intake limit when source review is unconfigured', async () => {
   const { database } = fixture();
   const base = await serve({ database });
-  expect((await post(base, '/api/v1/documents', { text: 'ن'.repeat(3001) })).status).toBe(201);
+  expect((await post(base, '/api/v1/documents', { text: 'ن'.repeat(3001) })).status).toBe(400);
+  expect(
+    (await post(base, `/api/v1/documents/${documentId}/revisions`, { text: 'ن'.repeat(3001) }))
+      .status,
+  ).toBe(400);
+  expect(database.createDocument).not.toHaveBeenCalled();
+  expect(database.createRevision).not.toHaveBeenCalled();
   const capabilities = await fetch(base + '/api/v1/capabilities');
   expect(await capabilities.json()).toMatchObject({
     foundationReview: false,
-    maximumTextLength: 12000,
+    maximumTextLength: 3000,
   });
 });
 

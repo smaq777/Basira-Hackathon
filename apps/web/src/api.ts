@@ -354,6 +354,7 @@ function validPreflightFinding(value: unknown): value is PreflightFinding {
     typeof finding.text === 'string' &&
     typeof finding.startOffset === 'number' &&
     Number.isInteger(finding.startOffset) &&
+    finding.startOffset >= 0 &&
     typeof finding.endOffset === 'number' &&
     Number.isInteger(finding.endOffset) &&
     finding.endOffset > finding.startOffset &&
@@ -372,6 +373,7 @@ function validPreflightAnnotation(value: unknown): value is PreflightAnnotation 
     typeof annotation.text === 'string' &&
     typeof annotation.startOffset === 'number' &&
     Number.isInteger(annotation.startOffset) &&
+    annotation.startOffset >= 0 &&
     typeof annotation.endOffset === 'number' &&
     Number.isInteger(annotation.endOffset) &&
     annotation.endOffset > annotation.startOffset &&
@@ -408,9 +410,19 @@ export async function requestDraftPreflight(
     body.offsetUnit !== 'utf16_code_unit' ||
     typeof body.inputHash !== 'string' ||
     !Array.isArray(body.annotations) ||
-    !body.annotations.every(validPreflightAnnotation) ||
+    !body.annotations.every(
+      (row) =>
+        validPreflightAnnotation(row) &&
+        row.endOffset <= text.length &&
+        text.slice(row.startOffset, row.endOffset) === row.text,
+    ) ||
     !Array.isArray(body.findings) ||
-    !body.findings.every(validPreflightFinding) ||
+    !body.findings.every(
+      (row) =>
+        validPreflightFinding(row) &&
+        row.endOffset <= text.length &&
+        text.slice(row.startOffset, row.endOffset) === row.text,
+    ) ||
     !Array.isArray(body.warnings)
   )
     throw new BasirahApiError('INVALID_RESPONSE', 0);

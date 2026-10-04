@@ -20,8 +20,17 @@ are fixed and migration 0007 preserves all bounded quotation findings. The
 [model and Arabic retrieval pilots](evidence/2026-10-04-model-and-arabic-rag-pilots.md)
 used synthetic claim controls and real embeddings on an isolated 40-passage Neon
 research corpus. Optional provisional semantic assessment is integrated behind a
-default-off local flag. Private-case model permission, permanent hosted corpus
-integration, source approval and broader evaluation remain pending.
+default-off local flag. Permanent hosted corpus integration, source approval and
+broader evaluation remain pending.
+
+**UI and model follow-up, 5 October:** The owner confirmed that supplied writing
+is non-private and authorized sending it to models, resolving the previous payload
+permission block. The local semantic pilot is enabled for testing; deployment
+defaults remain off. [UI and input refinements](evidence/2026-10-05-ui-input-refinements.md)
+add bounded editor/loading content, shared classification colors, precise comparison
+highlights and explicit assessment states. The first full-writing model run reached
+the provider but failed claim validation before assessment; this is not a semantic
+judgment about the writing.
 
 The fresh repository baseline contains the completed foundation and architecture work. Current validation is recorded by this repository's GitHub Actions runs. [Issue #27](https://github.com/smaq777/Basira-Hackathon/issues/27) tracks the judge-ready repository and deployment handoff.
 
