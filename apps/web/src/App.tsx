@@ -152,6 +152,11 @@ function pathFor(route: Route) {
   return `#/${route}`;
 }
 
+export function reloadSignedOutHome(location: Pick<Location, 'hash' | 'reload'> = window.location) {
+  location.hash = '#/home';
+  location.reload();
+}
+
 function useRoute() {
   const [location, setLocation] = useState(() => ({
     route: routeFromHash(),
@@ -2001,7 +2006,10 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
   if (route.startsWith('reviewer-')) {
     if (!clerkConfigured) return <ReviewerAuthUnavailable onHome={() => navigate('home')} />;
     return (
-      <ReviewerAccessBoundary onHome={() => navigate('home')}>
+      <ReviewerAccessBoundary
+        onHome={() => navigate('home')}
+        onSignedOut={() => reloadSignedOutHome()}
+      >
         {(profile, onSignOut) => (
           <ReviewerShell
             route={route.replace('reviewer-', '') as ReviewerRoute}
