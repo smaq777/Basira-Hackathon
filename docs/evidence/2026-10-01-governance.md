@@ -1,6 +1,6 @@
 # Repository governance evidence — 1 October 2026
 
-This is a sanitized engineering record for issue [#31](https://github.com/smaq777/basirah/issues/31). It contains no credential values, team conversations, personal notes, local paths or private provider output.
+This is a sanitized engineering record for issue [#31](https://github.com/smaq777/Basira-Hackathon/issues/27). It contains no credential values, team conversations, personal notes, local paths or private provider output.
 
 ## GitHub settings verified
 

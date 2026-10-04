@@ -2,7 +2,7 @@
 
 **Not yet migrated or deployed.** PostgreSQL is planned; Drizzle migrations are a candidate implementation mechanism.
 
-This document is the physical database handoff for [Issue #5](https://github.com/smaq777/basirah/issues/5), [Issue #6](https://github.com/smaq777/basirah/issues/6), [Issue #7](https://github.com/smaq777/basirah/issues/7), and the [complete system blueprint](SYSTEM_BLUEPRINT.md). Table and index names are proposed contracts, not evidence of a deployed Neon schema.
+This document is the physical database handoff for [Issue #5](https://github.com/smaq777/Basira-Hackathon/issues/6), [Issue #6](https://github.com/smaq777/Basira-Hackathon/issues/7), [Issue #7](https://github.com/smaq777/Basira-Hackathon/issues/8), and the [complete system blueprint](SYSTEM_BLUEPRINT.md). Table and index names are proposed contracts, not evidence of a deployed Neon schema.
 
 ```mermaid
 erDiagram

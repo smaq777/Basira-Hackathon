@@ -65,4 +65,4 @@ All rows below are **planned product acceptance cases** unless a linked automate
 | TC-059 | Export unresolved case                          | Include evidence, provenance, limitations and review questions |
 | TC-060 | Committee clean-install demonstration           | Reproducible documented build and honestly scoped live flow    |
 
-Track implementation and evidence in [GitHub Issues](https://github.com/smaq777/basirah/issues). Record actual automated test counts from the runner; do not infer them from this table.
+Track implementation and evidence in [GitHub Issues](https://github.com/smaq777/Basira-Hackathon/issues). Record actual automated test counts from the runner; do not infer them from this table.

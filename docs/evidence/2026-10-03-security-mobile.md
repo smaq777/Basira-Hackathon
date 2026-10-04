@@ -5,7 +5,7 @@ No private user text, credentials, cookies or internal conversation notes are in
 
 ## Accepted repository change
 
-- [PR #62](https://github.com/smaq777/basirah/pull/62) merged into `development` with a merge
+- The security and mobile changes are included in the repository baseline, with a merge
   commit after all quality, policy, dependency-audit and Vercel checks passed.
 - The change added in-process burst limits, database-backed guest resource caps, forward migration
   `0005_expired_guest_cleanup`, accurate retention wording and documented residual controls.

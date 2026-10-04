@@ -1,17 +1,17 @@
 # Provider setup evidence — 2–3 October 2026
 
-This record distinguishes provider configuration from connection, deployment and product readiness. It contains identifiers and state only; no credential value is recorded.
+This record distinguishes provider configuration from connection, deployment and product readiness. It contains identifiers and state only; no credential value is recorded. Provider-side GitHub access must be authorized and verified specifically for the current repository before this record is used as current connection evidence.
 
 ## GitHub
 
-- Repository: private `smaq777/basirah` under the owner's personal account. The owner cancelled organization transfer.
+- Repository: private `smaq777/Basira-Hackathon` under the owner's personal account. The owner cancelled organization transfer.
 - Default branch: `development`; production branch: `main`.
 - Merge commits enabled; squash, rebase and auto-merge disabled.
 - GitHub environment branch policies read back as `development` for `staging` and `main` for `production`.
 - Repository deploy variables remain safe-off: `DEPLOY_STAGING_ENABLED=false`, `DEPLOY_PRODUCTION_ENABLED=false`, `DEPLOY_RAILWAY_ENABLED=false`, and `DEPLOY_VERCEL_ENABLED=false`.
 - Environment variable `RAILWAY_SERVICE_ID=4d15a8f1-0028-42d6-adfa-cef07e55a9bc` was read back in both GitHub deployment environments.
 - No Railway or Vercel deployment token is stored in the GitHub environments.
-- GitHub App settings were read back after authorization: Railway and Vercel can access only `smaq777/basirah`, not every repository on the account.
+- Railway and Vercel GitHub App access for `smaq777/Basira-Hackathon` is pending authorization and read-back.
 
 ## Railway
 
@@ -19,7 +19,7 @@ This record distinguishes provider configuration from connection, deployment and
 - Shared `api` service: `4d15a8f1-0028-42d6-adfa-cef07e55a9bc`.
 - Production environment: `2427994d-35f6-453d-b9af-d50e337a6b41`.
 - Staging environment created and read back: `97179b92-48b1-412f-95ff-1901bb826458`.
-- Production remains offline and unexposed. Staging is live at `https://api-staging-42bc.up.railway.app`; the `api` service is connected to GitHub branch `development`, waits for CI and automatically deploys accepted merge commits.
+- Production remains offline and unexposed. The recorded staging service is available at `https://api-staging-42bc.up.railway.app`; automatic deployment from this repository remains disabled until the provider source connection is reauthorized and verified.
 - Successful staging deployment `0daf8a76-a385-4640-ab15-61cf905b70c7` built accepted application revision `428f85960c8097de9bc15e64cbbf371263419fdf` with `npm ci && npm run build`, starts with `npm start`, and uses `/health` for liveness. PR #38 then merged that revision into `development` as merge commit `c534eca1b0aadbc4e94ae3cc5f2636441ab657d5` without squash.
 - Restart/redeploy verification `5bdf5061-debd-4a6f-8d21-d7bc485e4aa7` succeeded from the same staged image. After replacement, `/ready` returned migration `0004_runtime_private_schema_usage`, guest-session creation returned `201`, and deletion returned `204`.
 - Staging stores `NODE_ENV`, `DORAR_ENABLED`, `GUEST_RETENTION_HOURS`, `TAFSIR_MCP_URL`, `DATABASE_URL`, and `DATABASE_TLS_MODE` in Railway configuration. Secret values were not printed, copied to GitHub or recorded here.
@@ -42,7 +42,7 @@ This record distinguishes provider configuration from connection, deployment and
 ## Vercel
 
 - The signed-in account scope `smaq777-hotmailcoms-projects` and Basirah project were read back.
-- The Vercel GitHub App is limited to `smaq777/basirah`. Vercel shows `main` as the production source and creates deployments/checks for pull-request and `development` updates.
+- The Vercel GitHub App must be authorized for `smaq777/Basira-Hackathon`. After authorization, verify `main` as the production source and confirm that pull-request and `development` updates receive checks.
 - PR #52 commit `ca3ee202cefaab383dcfe7d83bf0a36dd0a0a1e3` produced a successful Basirah Vercel deployment check at `https://vercel.com/smaq777-hotmailcoms-projects/basirah/9ZBdVGoQasrm47BBSB3QAtd7Cekn`. This is direct Basirah evidence; another repository's bot history is not used.
 - The owner explicitly approved public preview access. Vercel Authentication was disabled and read back as off, so preview aliases no longer require Vercel membership. The `basirah-teal.vercel.app` production alias was removed; the Domains page then read back “No domains have been added yet.” `main` remains undeployed.
 - Non-secret config `VITE_SESSION_VOICE_ENABLED=true` is scoped only to Preview. It is absent from Production and requires no provider credential.
