@@ -1,5 +1,5 @@
 import type { ComponentType, FormEvent, ReactNode } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Archive } from '@phosphor-icons/react/Archive';
 import { ArrowLeft } from '@phosphor-icons/react/ArrowLeft';
 import { ArrowUp } from '@phosphor-icons/react/ArrowUp';
@@ -156,12 +156,12 @@ function useRoute() {
     return () => window.removeEventListener('hashchange', update);
   }, []);
 
-  const navigate = (next: Route) => {
+  const navigate = useCallback((next: Route) => {
     const hash = pathFor(next);
     window.location.hash = hash;
     setLocation({ route: next, hash });
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }, []);
 
   return { route: location.route, navigate };
 }
@@ -2079,17 +2079,28 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
   const [reviewText, setReviewText] = useState('');
   const [analysisReceipt, setAnalysisReceipt] = useState<DraftAnalysisReceipt | null>(null);
 
-  const startReview = (text: string) => {
-    setReviewText(text);
-    setAnalysisReceipt(null);
-    navigate('analysis');
-  };
+  const startReview = useCallback(
+    (text: string) => {
+      setReviewText(text);
+      setAnalysisReceipt(null);
+      navigate('analysis');
+    },
+    [navigate],
+  );
 
-  const startNewReview = () => {
+  const startNewReview = useCallback(() => {
     setReviewText('');
     setAnalysisReceipt(null);
     navigate('home');
-  };
+  }, [navigate]);
+
+  const completeAnalysis = useCallback(
+    (receipt: DraftAnalysisReceipt) => {
+      setAnalysisReceipt(receipt);
+      navigate('result');
+    },
+    [navigate],
+  );
 
   if (route.startsWith('reviewer-')) {
     if (!clerkConfigured) return <ReviewerAuthUnavailable onHome={() => navigate('home')} />;
@@ -2114,10 +2125,7 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
       <AnalysisScreen
         text={reviewText}
         onCancel={() => navigate('home')}
-        onComplete={(receipt) => {
-          setAnalysisReceipt(receipt);
-          navigate('result');
-        }}
+        onComplete={completeAnalysis}
       />
     );
   if (route === 'result')
