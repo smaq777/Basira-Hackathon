@@ -86,6 +86,7 @@ type AppOptions = {
     reports: Pick<ReviewStore, 'ownedReport'>;
     researchPreview: boolean;
     liveTafsir?: boolean;
+    semanticPilot?: boolean;
   };
   database?: BackendDatabase;
   production?: boolean;
@@ -181,7 +182,11 @@ export function createApp(options: AppOptions = {}) {
       reviewOrchestration: state.ready,
       verification: false,
       // Configured acquisition adapters, not a provider-health or semantic-verification claim.
-      liveProviders: options.foundation?.liveTafsir ? ['tafsir_mcp'] : [],
+      liveProviders: [
+        ...(options.foundation?.liveTafsir ? ['tafsir_mcp'] : []),
+        ...(options.foundation?.semanticPilot ? ['openrouter'] : []),
+      ],
+      provisionalSemanticAssessment: options.foundation?.semanticPilot ?? false,
       accounts: reviewerAuth.configured,
       reviewerAuthentication: reviewerAuth.configured,
       reviewerAuthorization: reviewerAuth.authorizationConfigured,
@@ -189,7 +194,7 @@ export function createApp(options: AppOptions = {}) {
       foundationReview:
         Boolean(options.foundation) &&
         state.ready &&
-        Number(state.migrationVersion?.slice(0, 4)) >= 6,
+        Number(state.migrationVersion?.slice(0, 4)) >= 7,
       researchPreview: options.foundation?.researchPreview ?? false,
       maximumTextLength: options.foundation ? 3_000 : 12_000,
       draftRewrite: false,

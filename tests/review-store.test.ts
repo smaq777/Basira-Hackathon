@@ -102,6 +102,14 @@ function fixture(): { lease: ReviewLease; report: DurableReviewReport } {
   return { lease, report };
 }
 describe('durable report validation', () => {
+  it('preserves more than five findings while enforcing the 80-item report bound', () => {
+    const { lease, report } = fixture();
+    const first = report.findings[0]!;
+    report.findings = Array.from({ length: 80 }, (_, i) => ({ ...first, id: `finding-${i}` }));
+    expect(() => validateStoredReport(lease, report)).not.toThrow();
+    report.findings.push({ ...first, id: 'overflow' });
+    expect(() => validateStoredReport(lease, report)).toThrow('INVALID_REPORT_BOUNDS');
+  });
   it('binds public snapshot keys independently from worker UUID evidence identities', () => {
     const { lease, report } = fixture();
     report.evidence[0]!.id = 'worker-uuid';

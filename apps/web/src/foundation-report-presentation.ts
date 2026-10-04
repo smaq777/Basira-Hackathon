@@ -1,11 +1,10 @@
 import type {
   FoundationReport,
+  IntakeSegment,
   LiteralFinding,
   SourceEvidence,
 } from '../../../packages/contracts/src/foundation.js';
 import { assessClaimApplicability } from '../../../packages/contracts/src/claim-applicability.js';
-
-const surahNames: Record<number, string> = { 2: 'البقرة', 39: 'الزمر' };
 
 function numericReference(reference: string): { surah: number; ayah: number } | null {
   const match = /^(\d{1,3}):(\d{1,3})$/u.exec(reference.trim());
@@ -34,15 +33,20 @@ export function sourceCitation(source: SourceEvidence, evidence: SourceEvidence[
     const anchor = evidence.find(
       (row) => row.sourceRole === 'quran_text' && row.reference === source.reference,
     );
-    const storedName =
-      source.provenance.surah_name ??
-      source.provenance.surah_name_original ??
-      anchor?.provenance.surah_name ??
-      anchor?.provenance.surah_name_original;
-    const name =
-      typeof storedName === 'string' && /^[\p{Script=Arabic}\s]+$/u.test(storedName)
-        ? storedName.replace(/^سورة\s+/u, '')
-        : surahNames[location.surah];
+    const name = [
+      source.provenance.surah_name_original,
+      source.provenance.surah_name,
+      anchor?.provenance.surah_name_original,
+      anchor?.provenance.surah_name,
+    ]
+      .find(
+        (value): value is string =>
+          typeof value === 'string' &&
+          value.trim().length > 0 &&
+          /^[\p{Script=Arabic}\p{M}\s]+$/u.test(value),
+      )
+      ?.trim()
+      .replace(/^سورة\s+/u, '');
     const verse = `سورة ${name ?? location.surah}، الآية ${location.ayah}`;
     return `${source.sourceRole === 'quran_text' ? 'القرآن الكريم' : humanWork(source)} — ${verse}`;
   }
@@ -133,13 +137,124 @@ export function quotationPresentation(finding: LiteralFinding, report: Foundatio
     unknown: 'لم يتحدد موضع المقتطف وحدوده في المصدر.',
   };
   return {
+    fidelity,
     label: labels[fidelity],
     explanation: explanations[fidelity],
     extent: extentLabels[extent],
   };
 }
 
+export type ReportFinding = {
+  finding: LiteralFinding;
+  segment: IntakeSegment;
+  source: SourceEvidence | undefined;
+  presentation: ReturnType<typeof quotationPresentation>;
+  group: 'different' | 'unresolved' | 'faithful';
+  position: number;
+};
+
+export function reportFindings(report: FoundationReport): ReportFinding[] {
+  return report.intake.quotationFindings
+    .flatMap((finding) => {
+      const segment = report.intake.segments.find((row) => row.id === finding.segmentId);
+      // Legacy packets treated verse numbers and footnotes as quote bodies.
+      // Retain those packets internally, but do not count markers as quotation findings.
+      if (!segment || /^[\p{N}\p{P}\s]+$/u.test(segment.originalText)) return [];
+      const presentation = quotationPresentation(finding, report);
+      return [
+        {
+          finding,
+          segment,
+          presentation,
+          source: report.intake.evidence.find((row) => row.snapshotKey === finding.evidenceKey),
+          group:
+            presentation.fidelity === 'different'
+              ? ('different' as const)
+              : presentation.fidelity === 'unresolved'
+                ? ('unresolved' as const)
+                : ('faithful' as const),
+          position: 0,
+        },
+      ];
+    })
+    .sort((a, b) => a.segment.startOffset - b.segment.startOffset)
+    .map((row, index) => ({ ...row, position: index + 1 }));
+}
+
+export function unresolvedExplanation(row: ReportFinding): string {
+  if (row.segment.conflict)
+    return 'تعارضت النسبة المذكورة مع المصدر المرشح؛ راجع المرجع الملحق بهذا النقل.';
+  if (/boundary|reference_boundary/u.test(row.segment.method))
+    return 'لم تتحدد حدود النقل بوضوح؛ راجع موضع بدايته ونهايته في المسودة.';
+  if (row.segment.sourceKeys.length > 1)
+    return 'توجد عدة مصادر مرشحة؛ لم يتحدد المصدر المقصود بهذا النقل.';
+  if (row.segment.sourceKeys.length === 1) return 'عُثر على مصدر مرشح، ولم تثبت مطابقة النقل معه.';
+  return 'لم يُعثر على مصدر محدد لهذا النقل ضمن المصادر المتاحة.';
+}
+
+export function sourceCollections(report: FoundationReport) {
+  const sources = report.intake.evidence;
+  const selected = new Set(reportFindings(report).map((row) => row.finding.evidenceKey));
+  const isAdditional = (source: SourceEvidence, visited = new Set<string>()): boolean => {
+    if (source.provenance.purpose === 'related_context_candidate') return true;
+    if (!source.parentSnapshotKey || visited.has(source.snapshotKey)) return false;
+    visited.add(source.snapshotKey);
+    const parent = sources.find((row) => row.snapshotKey === source.parentSnapshotKey);
+    return parent ? isAdditional(parent, visited) : false;
+  };
+  return {
+    matched: sources.filter((source) => !isAdditional(source) && selected.has(source.snapshotKey)),
+    candidates: sources.filter(
+      (source) =>
+        !isAdditional(source) &&
+        !selected.has(source.snapshotKey) &&
+        source.sourceRole !== 'tafsir_commentary' &&
+        source.sourceRole !== 'tafsir_footnote',
+    ),
+    context: sources.filter(
+      (source) =>
+        !isAdditional(source) &&
+        !selected.has(source.snapshotKey) &&
+        (source.sourceRole === 'tafsir_commentary' || source.sourceRole === 'tafsir_footnote'),
+    ),
+    additional: sources.filter((source) => isAdditional(source)),
+  };
+}
+
+export function sourceComparisonText(source: SourceEvidence, finding?: LiteralFinding) {
+  if (
+    finding?.evidenceKey === source.snapshotKey &&
+    finding.matchedStart !== null &&
+    finding.matchedEnd !== null &&
+    finding.matchedEnd > finding.matchedStart &&
+    finding.matchedEnd <= source.originalText.length
+  ) {
+    return {
+      label: 'موضع النقل في المصدر',
+      text: source.originalText.slice(finding.matchedStart, finding.matchedEnd),
+    };
+  }
+  if (source.originalText.length <= 600)
+    return { label: 'النص المرجعي', text: source.originalText };
+  return {
+    label: 'بداية النص المرجعي؛ موضع المقتطف غير محدد',
+    text: `${source.originalText.slice(0, 400)}…`,
+  };
+}
+
 export function interpretationPresentation(report: FoundationReport) {
+  if (report.semanticAssessment?.assessments.length)
+    return {
+      label: 'تقييم دلالي أولي',
+      explanation:
+        'قارن التقييم الآلي الادعاءات بالمصادر المعروضة. الربط والنتائج مقترحات للمراجعة، ولا تمثل اعتمادًا علميًا أو شرعيًا.',
+    };
+  if (report.interpretation.status === 'unavailable')
+    return {
+      label: 'تعذر استكمال التقييم الدلالي',
+      explanation:
+        'لم تتوفر نتيجة دلالية يمكن عرضها. نتائج النقل والمصادر محفوظة، ويمكن إعادة التحليل لاحقًا.',
+    };
   const applicability =
     report.interpretation.applicability ?? assessClaimApplicability(report.intake);
   if (
@@ -149,7 +264,7 @@ export function interpretationPresentation(report: FoundationReport) {
     return {
       label: 'لا يوجد استنتاج قابل للتقييم في هذا النص',
       explanation:
-        'يعرض النص سؤالًا أو نقولًا دون استنتاج يربط الدليل بادعاء. تُعرض مقارنة النقل مستقلة عن الإجابة عن السؤال.',
+        'لم يُستخرج استنتاج واضح يربط الدليل بادعاء. تظل مقارنة النقل مستقلة؛ هذه النتيجة لا تعني صحة النص أو خطأه.',
     };
   return {
     label: 'لم يُقيّم الاستدلال',

@@ -32,7 +32,7 @@ function fixture() {
   const database = {
     readiness: vi.fn<BackendDatabase['readiness']>().mockResolvedValue({
       ready: true,
-      migrationVersion: '0006_foundation_review_bridge',
+      migrationVersion: '0007_complete_quotation_findings',
     }),
     purgeExpiredGuestSessions: vi.fn<BackendDatabase['purgeExpiredGuestSessions']>(),
     createGuestSession: vi.fn<BackendDatabase['createGuestSession']>(),

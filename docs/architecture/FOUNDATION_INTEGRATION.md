@@ -43,9 +43,10 @@ checkout's code. Its read-only SQLite/FTS5 index and Tafsir snapshots are extern
 research data. No corpus or credentials are bundled. This bridge is transitional:
 the hosted accepted corpus and retrieval path belong to #5–#8.
 
-The semantic indicator is explicitly **not assessed**, or **not applicable** for
-conservatively recognized question/quotation-only input. No model, provider-routing,
-hadith-grading or rewrite capability is enabled by this integration.
+The default semantic indicator is explicitly **not assessed**, or **not applicable** for
+conservatively recognized question/quotation-only input. The default source-only path enables no model, hadith grading or rewrite. An
+optional loopback-only semantic experiment now adds provisional, evidence-bound
+results; see the [model and retrieval pilot](../evidence/2026-10-04-model-and-arabic-rag-pilots.md).
 
 ## Source dependencies: storage and acquisition are separate
 
@@ -95,27 +96,21 @@ The lead freezes contracts, reviews changes and evidence, and integrates scoped
 Sol-agent branches. Agents receive non-overlapping file ownership. Saleh retains
 acceptance and merge authority; the work below does not close its issues.
 
-| Priority | Issues        | Sol-agent task                                                                                       | Acceptance evidence                                                                                                                                              |
-| -------- | ------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1        | #14, #16      | Finish current-UI source review, reports and recoverable lifecycle                                   | Owned input-to-report flow, refresh, cancellation, stale-worker rejection and no demonstration fallback                                                          |
-| 2        | #12           | Separate fidelity/extent; fix script and reference-span handling conservatively                      | Full/prefix/middle/suffix verses, ellipses, internal deletion, altered negation, repeated/partial-token excerpts and quote-only controls                         |
-| 3        | #4–#9         | Approve a small source corpus; reconcile hosted schema/roles; ingest versioned originals and context | Isolated Neon migration/role tests, edition/rights approvals, manifests, exact/lexical baseline and retrieval recall                                             |
-| 4        | #17, #14      | Port assessment-scoped provider blocking and enforce overall deadlines                               | Injected 401/402/403/timeouts across multiple claims; remaining-time/cost accounting; source report survives outage                                              |
-| 5        | #11, #13, #18 | Automatic claim/condition attachment and frozen semantic calibration comparison                      | Same evidence packets across baseline, stronger model, independent pair and router; false support/contradiction, abstention, coverage, latency and cost reported |
-| 6        | #16, #18      | Editor/judge pilot with reproducible evidence                                                        | Task completion and observed errors; demonstration failures disclosed; no unsupported empirical or religious claims                                              |
-| 7        | #38           | Evidence-bound AI-ReWrite                                                                            | Proposal only, citation identity checked server-side, meaning-change diff, new immutable revision, mandatory recheck                                             |
+| Priority | Issues             | Task and gate                                                                                                                                                                             |
+| -------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0       | #11, #12, #18      | Freeze realistic controls; preserve complete passages and reference ownership; distinguish edition presentation from genuine wording changes.                                             |
+| P0       | #12, #14           | Preserve all quotation findings with migration 0007; verify canonical identity, omissions, negation and durable storage parity.                                                           |
+| P1       | #16                | Action summary and selected comparison in the current UI; readable references and collapsed attributable context.                                                                         |
+| P1       | #11, #13, #17, #18 | Compare structured small-model extraction and stronger evidence-bound assessment with fixed evidence, provider failures, latency and cost. Default off until local experiment gates pass. |
+| P1       | #7, #8             | Small Neon research corpus with real embeddings; measure exact, lexical, dense and hybrid retrieval. Approval and hosted runtime remain separate gates.                                   |
+| P2       | #38                | AI-ReWrite after reliable claims, citations and assessment; preserve original quotations and recheck every revision.                                                                      |
 
-Stronger thinking models are a testable hypothesis, not an accepted accuracy
-claim. Avoid serial escalation that exhausts the request deadline, shared-provider
-failures masquerading as independent reviewers, and a baseline veto that prevents
-valid correction. Preserve substantive disagreements and abstain when evidence or
-review capacity is insufficient. A source-only report remains useful during an
-API outage, but cannot claim semantic verification.
+See the [real-writing regression evidence](../evidence/2026-10-04-real-writing-regression.md). Model size is a hypothesis to test, never a substitute for source coverage or acceptance.
 
 ## Configuration and validation boundary
 
 Default flags in `.env.example` leave the bridge disabled. Enabling requires
-migration 0006, a runtime login inheriting `basirah_runtime`, a separate worker
+migrations through 0007, a runtime login inheriting `basirah_runtime`, a separate worker
 login inheriting `basirah_worker`, Python 3.11+ with SQLite FTS5, and external
 index/manifest paths. Approved source editions are required outside local research
 preview. Research preview requires a loopback host and non-production mode.

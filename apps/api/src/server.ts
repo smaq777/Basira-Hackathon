@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { createPythonAdapter } from './foundation.js';
 import { createReviewStore } from './review-store.js';
 import { createFoundationWorker } from './review-worker.js';
+import { createSemanticAssessmentAdapter } from './semantic-assessment.js';
 
 const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
@@ -33,13 +34,16 @@ async function initializeFoundation() {
   // Hosted activation needs separate source-edition and deployment validation.
   if (process.env.FOUNDATION_TAFSIR_LIVE === 'true' && !researchPreview)
     throw new Error('LIVE_SOURCE_ACQUISITION_REQUIRES_LOCAL_RESEARCH_PREVIEW');
+  const semanticEnabled = process.env.FOUNDATION_SEMANTIC_ENABLED === 'true';
+  if (semanticEnabled && !researchPreview)
+    throw new Error('SEMANTIC_PILOT_REQUIRES_LOCAL_RESEARCH_PREVIEW');
   const python = process.env.FOUNDATION_PYTHON;
   const sourceDatabase = process.env.FOUNDATION_DATABASE;
   const workerUrl = process.env.REVIEW_WORKER_DATABASE_URL;
   if (!connectionString || !python || !sourceDatabase || !workerUrl)
     throw new Error('FOUNDATION_CONFIGURATION_INCOMPLETE');
   const readiness = await database.readiness();
-  if (!readiness.ready || !(Number(readiness.migrationVersion?.slice(0, 4)) >= 6))
+  if (!readiness.ready || !(Number(readiness.migrationVersion?.slice(0, 4)) >= 7))
     throw new Error('FOUNDATION_MIGRATION_REQUIRED');
   const adapter = createPythonAdapter({
     python,
@@ -57,12 +61,27 @@ async function initializeFoundation() {
     process.env.CORPUS_VERSION = intake.corpusVersion;
     const store = createReviewStore(workerUrl);
     const reports = createReviewStore(connectionString);
-    const worker = createFoundationWorker(adapter, store);
+    const semantic = semanticEnabled
+      ? createSemanticAssessmentAdapter({
+          enabled: true,
+          apiKey: process.env.OPENROUTER_API_KEY,
+          extractor: { modelId: 'openai/gpt-6-luna', providerId: 'OpenAI', reasoningEffort: 'low' },
+          assessor: {
+            modelId: process.env.FOUNDATION_ASSESSOR_MODEL || 'openai/gpt-6.1-sol',
+            providerId: 'OpenAI',
+            reasoningEffort: 'low',
+          },
+          allowedModels: ['openai/gpt-6-luna', 'openai/gpt-6.1-sol'],
+          allowedProviders: ['OpenAI'],
+        })
+      : undefined;
+    const worker = createFoundationWorker(adapter, store, semantic);
     return {
       worker,
       reports,
       researchPreview,
       liveTafsir: process.env.FOUNDATION_TAFSIR_LIVE === 'true',
+      semanticPilot: semanticEnabled,
     };
   } catch (error) {
     await adapter.close();
@@ -81,7 +100,7 @@ const server = createApp({
 }).listen(port, host, () => {
   foundation?.worker.start();
   console.info(
-    `Basirah API listening on port ${port}; source review ${foundation ? 'enabled' : 'unavailable'}; semantic verification unavailable.`,
+    `Basirah API listening on port ${port}; source review ${foundation ? 'enabled' : 'unavailable'}; provisional semantic pilot ${foundation?.semanticPilot ? 'enabled' : 'disabled'}.`,
   );
 });
 async function closeResources() {

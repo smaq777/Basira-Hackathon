@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ImprovementCardSchema, ThemeAnalysisSchema } from './themes.js';
+import { SemanticAssessmentReportSchema } from './semantic-assessment.js';
 
 export const SourceEvidenceSchema = z
   .object({
@@ -136,9 +137,16 @@ export const FoundationReportSchema = z
     intake: FoundationIntakeSchema,
     themes: ThemeAnalysisSchema,
     improvementCards: z.array(ImprovementCardSchema).max(3),
+    semanticAssessment: SemanticAssessmentReportSchema.optional(),
     interpretation: z
       .object({
-        status: z.enum(['needs_confirmation', 'not_assessed', 'unavailable', 'not_applicable']),
+        status: z.enum([
+          'needs_confirmation',
+          'not_assessed',
+          'unavailable',
+          'not_applicable',
+          'provisional',
+        ]),
         applicability: ClaimApplicabilitySchema.optional(),
         explanation: z.string().min(1),
         scholarlyApproval: z.literal(false),
@@ -146,5 +154,76 @@ export const FoundationReportSchema = z
       .strict(),
     limitations: z.array(z.string()).max(30),
   })
-  .strict();
+  .strict()
+  .superRefine((report, context) => {
+    const semantic = report.semanticAssessment;
+    if (!semantic) return;
+    const invalid = () =>
+      context.addIssue({ code: 'custom', message: 'Semantic report binding mismatch' });
+    if (semantic.trace.inputSha256 !== report.inputSha256) invalid();
+    const ids = new Set<string>();
+    for (const claim of semantic.claims) {
+      const segment = report.intake.segments.find((row) => row.id === claim.segmentId);
+      if (
+        ids.has(claim.id) ||
+        !segment ||
+        segment.role !== 'author_text' ||
+        claim.startOffset < segment.startOffset ||
+        claim.endOffset > segment.endOffset ||
+        report.intake.originalText.slice(claim.startOffset, claim.endOffset) !==
+          claim.originalText ||
+        claim.evidenceKeys.some(
+          (key) => !report.intake.evidence.some((row) => row.snapshotKey === key),
+        )
+      )
+        invalid();
+      ids.add(claim.id);
+    }
+    const assessed = new Set<string>();
+    const sources = new Map(report.intake.evidence.map((source) => [source.snapshotKey, source]));
+    const sourceRoot = (key: string): string | undefined => {
+      const visited = new Set<string>();
+      while (!visited.has(key)) {
+        visited.add(key);
+        const source = sources.get(key);
+        if (!source) return undefined;
+        if (!source.parentSnapshotKey) return key;
+        key = source.parentSnapshotKey;
+      }
+      return undefined;
+    };
+    for (const finding of semantic.assessments) {
+      const claim = semantic.claims.find((row) => row.id === finding.claimId);
+      const allowedRoots = new Set(claim?.evidenceKeys.map(sourceRoot).filter(Boolean));
+      if (
+        !ids.has(finding.claimId) ||
+        assessed.has(finding.claimId) ||
+        (['supported', 'contradicted'].includes(finding.status) && !finding.citations.length)
+      )
+        invalid();
+      assessed.add(finding.claimId);
+      for (const citation of finding.citations) {
+        const source = report.intake.evidence.find(
+          (row) => row.snapshotKey === citation.evidenceKey,
+        );
+        if (
+          !source ||
+          !allowedRoots.has(sourceRoot(citation.evidenceKey)) ||
+          !source.originalText.includes(citation.excerpt)
+        )
+          invalid();
+      }
+      if (
+        !allowedRoots.size &&
+        !['insufficient_context', 'not_applicable'].includes(finding.status)
+      )
+        invalid();
+    }
+    if (semantic.status === 'completed' && (!ids.size || assessed.size !== ids.size)) invalid();
+    if (
+      ['disabled', 'unavailable', 'not_applicable'].includes(semantic.status) &&
+      semantic.assessments.length
+    )
+      invalid();
+  });
 export type FoundationReport = z.infer<typeof FoundationReportSchema>;

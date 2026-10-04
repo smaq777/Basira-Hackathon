@@ -36,3 +36,5 @@ Local workflow tests on PostgreSQL without pgvector are not full migration valid
 fresh and production-shaped isolated Neon validation remains required under #6.
 
 Do not edit an applied migration. Add a numbered migration, test it against a fresh database and a production-shaped copy, and prefer expand-and-contract changes. Do not put destructive migrations in application startup. Production data deletion, restore, reset or project removal requires separate owner approval.
+
+Migration `0007` preserves up to 80 quotation findings per report. The former five-item bound belonged to claim proposals and truncated longer quotation reviews. Apply this forward migration before enabling the source worker. Existing immutable reports remain unchanged; reanalysis produces a new complete report. Roll back the application flag rather than rewriting applied migration history.

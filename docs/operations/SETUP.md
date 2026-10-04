@@ -68,3 +68,24 @@ Use `npm ci` in CI for locked dependencies. If a dependency changes, regenerate 
 - Provider errors cannot be fixed by adding arbitrary credentials to the browser. Keep integrations server-side.
 - Missing database/model keys should not prevent foundation tests; production feature readiness remains separate.
 - Read [deployment](DEPLOYMENT.md) before connecting live services. No shared/production migration should run as part of ordinary local tests.
+
+## Optional local semantic experiment
+
+Apply migration `0007_complete_quotation_findings` before source review. Keep
+`FOUNDATION_SEMANTIC_ENABLED=false` unless an operator has authorized the test
+payload to be sent to OpenRouter and its selected provider. Activation requires
+`FOUNDATION_RESEARCH_PREVIEW=true`, a loopback `HOST`, non-production mode and a
+server-only `OPENROUTER_API_KEY` from the owning project. No key belongs in Vite or
+browser storage. Missing keys produce an unavailable semantic result while source
+results remain available.
+
+The tested defaults use `openai/gpt-6-luna` for extraction and
+`openai/gpt-6.1-sol` for assessment, both at low reasoning through OpenAI. The
+optional `FOUNDATION_ASSESSOR_MODEL` accepts only those allowlisted models. There
+is no runtime fallback configured; unavailable providers do not produce a verdict.
+The whole optional phase is bounded to 25 seconds and each request to 12 seconds,
+with five seconds reserved before the review deadline for persistence. Longer
+real inputs still need latency/calibration evaluation.
+
+Disable `FOUNDATION_SEMANTIC_ENABLED` to roll back model use. This does not alter
+stored reports or enable rewriting. See the [pilot evidence](../evidence/2026-10-04-model-and-arabic-rag-pilots.md).

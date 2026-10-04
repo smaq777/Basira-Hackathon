@@ -14,6 +14,7 @@ import {
   CLAIM_APPLICABILITY_VERSION,
 } from '../../../packages/contracts/src/claim-applicability.js';
 import type { ReviewLease, ReviewStore, StoredEvidence, StoredFinding } from './review-store.js';
+import type { SemanticAssessmentAdapter } from './semantic-assessment.js';
 
 export interface FoundationWorker {
   notify(): void;
@@ -26,6 +27,7 @@ export interface FoundationWorker {
 export function createFoundationWorker(
   adapter: FoundationAdapter,
   store: ReviewStore,
+  semantic?: SemanticAssessmentAdapter,
 ): FoundationWorker {
   let stopped = false;
   let polling: ReturnType<typeof setInterval> | null = null;
@@ -119,12 +121,56 @@ export function createFoundationWorker(
           'مطابقة نص الحديث لا تثبت صحة الإسناد أو درجة الحديث؛ مراجع المجموعة البحثية ليست ترقيم طبعة معتمدة.',
         ],
       };
+      if (semantic && applicability.status !== 'not_applicable') {
+        // Preserve time for binding and persistence even when an optional provider stalls.
+        const availableMs = Math.min(25_000, Date.parse(lease.deadlineAt) - Date.now() - 5_000);
+        try {
+          if (availableMs < 1_000) throw new Error('SEMANTIC_DEADLINE');
+          const assessment = await semantic.assess(
+            intake,
+            AbortSignal.any([signal, AbortSignal.timeout(availableMs)]),
+          );
+          if (
+            assessment.trace.inputSha256 !== lease.inputSha256 ||
+            assessment.trace.evidenceSha256 !== sha256(canonical(intake.evidence))
+          )
+            throw new Error('SEMANTIC_BINDING');
+          // Validate the additive result before attaching it to the durable report.
+          FoundationReportSchema.parse({
+            ...report,
+            evidenceStateSha256: '0'.repeat(64),
+            semanticAssessment: assessment,
+          });
+          if (assessment.status !== 'disabled') {
+            report.semanticAssessment = assessment;
+            report.pipelineVersion += `/${assessment.trace.pipelineVersion}`;
+            report.interpretation.status = assessment.assessments.length
+              ? 'provisional'
+              : assessment.status === 'not_applicable'
+                ? 'not_applicable'
+                : 'unavailable';
+            report.interpretation.explanation = assessment.assessments.length
+              ? 'تقييم آلي أولي للادعاءات في ضوء المصادر المعروضة؛ لا يمثل اعتمادًا علميًا أو شرعيًا.'
+              : assessment.status === 'not_applicable'
+                ? 'لم يُستخرج استنتاج واضح قابل للتقييم من كلام الكاتب.'
+                : 'تعذر استكمال التقييم الدلالي؛ نتائج النقل والمصادر ما زالت متاحة.';
+            if (['partial', 'unavailable'].includes(assessment.status)) report.status = 'partial';
+          }
+        } catch {
+          report.status = 'partial';
+          report.interpretation.status = 'unavailable';
+          report.interpretation.explanation =
+            'تعذر استكمال التقييم الدلالي؛ نتائج النقل والمصادر ما زالت متاحة.';
+        }
+      }
+      if (signal.aborted) return;
       report.evidenceStateSha256 = sha256(
         canonical({
           intake,
           themes,
           improvementCards,
           interpretation: report.interpretation,
+          ...(report.semanticAssessment ? { semanticAssessment: report.semanticAssessment } : {}),
           pipelineVersion: report.pipelineVersion,
         }),
       );
@@ -172,7 +218,7 @@ export function createFoundationWorker(
         retrievalModes: item.retrievalModes,
         provenance: { ...item.provenance, snapshotKey: item.snapshotKey },
       }));
-      const findings: StoredFinding[] = intake.quotationFindings.slice(0, 5).map((finding) => {
+      const findings: StoredFinding[] = intake.quotationFindings.map((finding) => {
         const segment = intake.segments.find((item) => item.id === finding.segmentId)!;
         return {
           id: randomUUID(),
@@ -193,7 +239,7 @@ export function createFoundationWorker(
         inputSha256: lease.inputSha256,
         evidenceStateSha256: report.evidenceStateSha256,
         attempt: lease.attempt,
-        status,
+        status: report.status,
         evidence,
         findings,
         result: report as unknown as Record<string, unknown>,

@@ -108,7 +108,7 @@ export function validateStoredReport(lease: ReviewLease, report: DurableReviewRe
   if (
     !/^[0-9a-f]{64}$/u.test(report.evidenceStateSha256) ||
     report.evidence.length > 80 ||
-    report.findings.length > 5
+    report.findings.length > 80
   )
     throw new Error('INVALID_REPORT_BOUNDS');
   const evidence = new Map(report.evidence.map((item) => [item.id, item]));

@@ -2,7 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
 import { sha256, type FoundationAdapter } from '../apps/api/src/foundation.js';
 import { createFoundationWorker } from '../apps/api/src/review-worker.js';
+import { createSemanticAssessmentAdapter } from '../apps/api/src/semantic-assessment.js';
 import type { ReviewLease, ReviewStore } from '../apps/api/src/review-store.js';
+import { canonical } from '../apps/api/src/foundation.js';
+import type { SemanticAssessmentReport } from '../packages/contracts/src/semantic-assessment.js';
 import type { FoundationIntake } from '../packages/contracts/src/foundation.js';
 
 function fixture() {
@@ -268,6 +271,256 @@ it('a late heartbeat from a finished lease cannot abort the next review', async 
     expect(store.complete).toHaveBeenCalledTimes(2);
   } finally {
     await worker.stop();
+    vi.useRealTimers();
+  }
+});
+
+it('persists every quotation finding beyond the five-claim proposal limit', async () => {
+  const { intake, store, adapter } = fixture();
+  const segment = intake.segments[0]!;
+  intake.quotationFindings = Array.from({ length: 12 }, (_, i) => ({
+    segmentId: `quote-${i}`,
+    evidenceKey: null,
+    status: 'unresolved' as const,
+    matchedStart: null,
+    matchedEnd: null,
+    reason: 'Source identification required',
+    comparison: {
+      fidelity: 'unresolved' as const,
+      extent: 'unknown' as const,
+      differences: [],
+      basis: 'none' as const,
+    },
+  }));
+  intake.segments = intake.quotationFindings.map((finding) => ({
+    ...segment,
+    id: finding.segmentId,
+  }));
+  const worker = createFoundationWorker(adapter, store);
+  await worker.runOnce();
+  expect(store.fail).not.toHaveBeenCalled();
+  const report = vi.mocked(store.complete).mock.calls[0]![1];
+  expect(report.findings).toHaveLength(12);
+  expect(report.findings.every((finding) => finding.claimText === intake.originalText)).toBe(true);
+  await worker.stop();
+});
+
+function semanticFixture(intake: FoundationIntake): SemanticAssessmentReport {
+  return {
+    schemaVersion: 1,
+    status: 'completed',
+    provisional: true,
+    scholarlyApproval: false,
+    errorCode: null,
+    claims: [
+      {
+        id: 'claim-' + 'a'.repeat(24),
+        segmentId: 's1',
+        originalText: intake.originalText,
+        startOffset: 0,
+        endOffset: intake.originalText.length,
+        evidenceKeys: [],
+        provisional: true,
+      },
+    ],
+    assessments: [
+      {
+        claimId: 'claim-' + 'a'.repeat(24),
+        status: 'insufficient_context',
+        conditions: [],
+        negations: [],
+        exceptions: [],
+        scope: [],
+        citations: [],
+        explanation: 'لا تتوفر مصادر كافية لهذا الادعاء.',
+      },
+    ],
+    trace: {
+      pipelineVersion: 'provisional-semantic-v1.1',
+      promptVersion: 'evidence-support-v1.1',
+      inputSha256: intake.revisionSha256,
+      evidenceSha256: sha256(canonical(intake.evidence)),
+      extractionInputSha256: null,
+      assessmentInputSha256: null,
+      requests: [],
+    },
+    limitations: [],
+  };
+}
+
+it('binds provisional semantic results into the durable report without scholarly approval', async () => {
+  const { intake, store, adapter } = fixture();
+  const semantic = { assess: vi.fn().mockResolvedValue(semanticFixture(intake)) };
+  const worker = createFoundationWorker(adapter, store, semantic);
+  await worker.runOnce();
+  expect(store.fail).not.toHaveBeenCalled();
+  const stored = vi.mocked(store.complete).mock.calls[0]![1];
+  expect(stored.result.semanticAssessment).toMatchObject({
+    status: 'completed',
+    scholarlyApproval: false,
+  });
+  expect(stored.result.interpretation).toMatchObject({ status: 'provisional' });
+  const result =
+    stored.result as unknown as import('../packages/contracts/src/foundation.js').FoundationReport;
+  expect(stored.evidenceStateSha256).toBe(
+    sha256(
+      canonical({
+        intake: result.intake,
+        themes: result.themes,
+        improvementCards: result.improvementCards,
+        interpretation: result.interpretation,
+        semanticAssessment: result.semanticAssessment,
+        pipelineVersion: result.pipelineVersion,
+      }),
+    ),
+  );
+  await worker.stop();
+});
+
+it.each(['exception', 'stale_hash', 'unknown_citation'] as const)(
+  'preserves source results after semantic %s',
+  async (kind) => {
+    const { intake, store, adapter } = fixture();
+    const result = semanticFixture(intake);
+    if (kind === 'stale_hash') result.trace.inputSha256 = '0'.repeat(64);
+    if (kind === 'unknown_citation')
+      result.assessments[0]!.citations = [{ evidenceKey: 'invented', excerpt: 'نص' }];
+    const semantic = {
+      assess:
+        kind === 'exception'
+          ? vi.fn().mockRejectedValue(new Error('PRIVATE_PROVIDER_ERROR'))
+          : vi.fn().mockResolvedValue(result),
+    };
+    const worker = createFoundationWorker(adapter, store, semantic);
+    await worker.runOnce();
+    expect(store.fail).not.toHaveBeenCalled();
+    const report = vi.mocked(store.complete).mock.calls[0]![1];
+    expect(report.status).toBe('partial');
+    expect(report.result.interpretation).toMatchObject({ status: 'unavailable' });
+    expect(report.result).not.toHaveProperty('semanticAssessment');
+    expect(JSON.stringify(report)).not.toContain('PRIVATE_PROVIDER_ERROR');
+    expect(report.result.intake).toEqual(intake);
+    await worker.stop();
+  },
+);
+
+it('persists source results before the worker deadline when the real semantic adapter hangs', async () => {
+  vi.useFakeTimers();
+  // Node's native AbortSignal timer is not controlled by Vitest's fake clock.
+  const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation((delay) => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(new DOMException('Timed out', 'TimeoutError')), delay);
+    return controller.signal;
+  });
+  const { intake, lease, store, adapter } = fixture();
+  // Owned synthetic source passage; this control tests persistence, not authenticity.
+  const author = 'يجب حفظ حقوق الكاتب. ';
+  const quote = 'نص إداري محفوظ';
+  const text = `${author}«${quote}»`;
+  const start = text.indexOf(quote);
+  intake.originalText = lease.text = text;
+  intake.revisionSha256 = lease.inputSha256 = sha256(text);
+  intake.segments = [
+    {
+      ...intake.segments[0]!,
+      originalText: author,
+      endOffset: author.length,
+      codePointEnd: author.length,
+    },
+    {
+      ...intake.segments[0]!,
+      id: 'source-quote',
+      role: 'matn',
+      roleStatus: 'source_matched',
+      originalText: quote,
+      startOffset: start,
+      endOffset: start + quote.length,
+      codePointStart: start,
+      codePointEnd: start + quote.length,
+      sourceKeys: ['owned-source'],
+    },
+  ];
+  intake.evidence = [
+    {
+      snapshotKey: 'owned-source',
+      sourceId: 'owned-fixture',
+      sourceVersion: 'fixture-1',
+      sourceRole: 'hadith_matn',
+      reference: 'owned:1',
+      originalText: quote,
+      originalSha256: sha256(quote),
+      work: 'Owned persistence fixture',
+      author: null,
+      edition: null,
+      sourceUrl: null,
+      approvalStatus: 'approved',
+      researchOnly: false,
+      parentSnapshotKey: null,
+      delivery: 'snapshot',
+      retrievalModes: ['exact'],
+      provenance: { synthetic: true },
+    },
+  ];
+  intake.quotationFindings = [
+    {
+      segmentId: 'source-quote',
+      evidenceKey: 'owned-source',
+      status: 'exact',
+      reason: 'Owned exact control',
+      matchedStart: 0,
+      matchedEnd: quote.length,
+      comparison: { fidelity: 'exact', extent: 'full', differences: [], basis: 'canonical' },
+    },
+  ];
+  const startedAt = Date.now();
+  lease.deadlineAt = new Date(startedAt + 6_100).toISOString();
+  const fetch = vi.fn<typeof globalThis.fetch>(() => new Promise(() => undefined));
+  const semantic = createSemanticAssessmentAdapter({
+    enabled: true,
+    apiKey: 'owned-test-secret',
+    extractor: { modelId: 'owned/extractor', providerId: 'owned-provider' },
+    assessor: { modelId: 'owned/assessor', providerId: 'owned-provider' },
+    allowedModels: ['owned/extractor', 'owned/assessor'],
+    allowedProviders: ['owned-provider'],
+    fetch,
+  });
+  const worker = createFoundationWorker(adapter, store, semantic);
+  try {
+    const pending = worker.runOnce();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(timeout).toHaveBeenCalledWith(1_100);
+    expect(store.complete).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1_100);
+    expect(await pending).toBe(true);
+    expect(store.fail).not.toHaveBeenCalled();
+    expect(store.complete).toHaveBeenCalledOnce();
+    const stored = vi.mocked(store.complete).mock.calls[0]![1];
+    expect(stored.status).toBe('partial');
+    expect(stored.result.intake).toEqual(intake);
+    expect(stored.result.interpretation).toMatchObject({
+      status: 'unavailable',
+      scholarlyApproval: false,
+    });
+    expect(stored.result.semanticAssessment).toMatchObject({
+      status: 'unavailable',
+      errorCode: 'cancelled',
+      assessments: [],
+    });
+    expect(stored.evidence).toHaveLength(1);
+    expect(stored.evidence[0]!.originalText).toBe(quote);
+    expect(stored.findings).toHaveLength(1);
+    expect(stored.findings[0]).toMatchObject({
+      claimText: quote,
+      quoteStatus: 'exact',
+      supportStatus: 'not_assessed',
+    });
+    expect(Date.parse(lease.deadlineAt) - Date.now()).toBe(5_000);
+    expect(JSON.stringify(stored)).not.toContain('owned-test-secret');
+    expect((fetch.mock.calls[0]![1]!.signal as AbortSignal).aborted).toBe(true);
+  } finally {
+    await worker.stop();
+    timeout.mockRestore();
     vi.useRealTimers();
   }
 });

@@ -13,7 +13,15 @@ details. [Isolated Neon verification](evidence/2026-10-04-neon-rag.md) passed re
 pgvector and the unchanged migration chain through 0006. Its production read-back
 found only 0001/0005 recorded; the older "through 0005" baseline below must not be
 interpreted as a verified contiguous production chain. Production was unchanged.
-Real hosted corpus ingestion, embeddings and semantic assessment remain pending.
+That earlier verification did not include a real corpus or embeddings.
+
+**Real-writing follow-up, 4 October:** [Passage and report regressions](evidence/2026-10-04-real-writing-regression.md)
+are fixed and migration 0007 preserves all bounded quotation findings. The
+[model and Arabic retrieval pilots](evidence/2026-10-04-model-and-arabic-rag-pilots.md)
+used synthetic claim controls and real embeddings on an isolated 40-passage Neon
+research corpus. Optional provisional semantic assessment is integrated behind a
+default-off local flag. Private-case model permission, permanent hosted corpus
+integration, source approval and broader evaluation remain pending.
 
 The fresh repository baseline contains the completed foundation and architecture work. Current validation is recorded by this repository's GitHub Actions runs. [Issue #27](https://github.com/smaq777/Basira-Hackathon/issues/27) tracks the judge-ready repository and deployment handoff.
 
@@ -42,7 +50,10 @@ Software validation results and GitHub workflow evidence are recorded in the [wo
 
 ## Immediate priorities
 
-1. Configure and verify the separate least-privilege Neon production runtime connection before promotion, then document scheduled cleanup and backup retention.
-2. Approve 30–50 source passages, their rights and reference coverage.
-3. Implement one end-to-end review slice with citation and revision guards.
-4. Add bounded fallback and privacy controls, then independent scientific evaluation.
+1. Pass the real-writing regression gates for complete passage boundaries, source attachment, orthographic comparison and complete report persistence (#11/#12/#14/#18).
+2. Present an actionable integrated report with selected-quotation comparison and collapsed attributable context (#16).
+3. Compare small-model extraction and stronger evidence-bound assessment on frozen controls, including unavailable providers; enable only a labelled local experiment after validation (#11/#13/#17/#18).
+4. Measure a small research corpus on Neon with real embeddings and exact/lexical/dense/hybrid retrieval. Preserve pending approval; complete edition/rights review and least-privilege hosted runtime setup before promotion (#7/#8).
+5. Gate AI-ReWrite on stable claims, evidence citations and repeatable assessment; preserve and recheck quoted text (#38).
+
+These priorities follow the 4 October real-writing review. Passing software tests or a small pilot does not establish scholarly accuracy or production readiness.
