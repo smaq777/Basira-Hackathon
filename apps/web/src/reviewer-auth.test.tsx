@@ -103,7 +103,7 @@ describe('reviewer access boundary', () => {
     );
   });
 
-  it('terminates the Clerk session before returning to the public interface', async () => {
+  it('returns home immediately while Clerk completes session termination', async () => {
     clerkState.isSignedIn = true;
     clerkState.getToken.mockResolvedValue('session-token');
     vi.mocked(fetch).mockResolvedValue(
@@ -111,11 +111,13 @@ describe('reviewer access boundary', () => {
     );
     const onHome = vi.fn();
     let finishSignOut!: () => void;
-    clerkState.signOut.mockReturnValue(
-      new Promise<void>((resolve) => {
+    let signOutFinished = false;
+    clerkState.signOut.mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
         finishSignOut = resolve;
-      }),
-    );
+      });
+      signOutFinished = true;
+    });
 
     render(
       <ReviewerAccessBoundary onHome={onHome}>
@@ -129,10 +131,11 @@ describe('reviewer access boundary', () => {
 
     (await screen.findByRole('button', { name: 'تسجيل الخروج' })).click();
     expect(clerkState.signOut).toHaveBeenCalledOnce();
-    expect(onHome).not.toHaveBeenCalled();
+    expect(onHome).toHaveBeenCalledOnce();
+    expect(signOutFinished).toBe(false);
 
     finishSignOut();
-    await waitFor(() => expect(onHome).toHaveBeenCalledOnce());
+    await waitFor(() => expect(signOutFinished).toBe(true));
   });
 
   it('keeps reviewer content hidden when a successful response has the wrong contract', async () => {

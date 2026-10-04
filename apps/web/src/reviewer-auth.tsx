@@ -70,8 +70,8 @@ export function ReviewerAccessBoundary({
         </button>
       </div>,
       async () => {
-        await signOut();
         onHome();
+        await signOut();
       },
     );
 
