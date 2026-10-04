@@ -46,7 +46,6 @@ import {
   requestDraftPreflight,
   type DraftAnalysisReceipt,
   type PreflightAnnotation,
-  type PreflightContentType,
   type PreflightFinding,
   type PreflightResponse,
 } from './api.js';
@@ -85,22 +84,6 @@ const PREFLIGHT_EXAMPLES = [
     label: 'قول منسوب: دليل غير كافٍ',
     text: 'قال الإمام: «هذه العبارة مثال يحتاج إلى مصدر محدد قبل نشره».',
   },
-];
-
-const SEMANTIC_LEGEND: Array<{
-  type: PreflightContentType;
-  label: string;
-  description: string;
-}> = [
-  { type: 'quran', label: 'آية', description: 'نص قرآني محتمل' },
-  { type: 'hadith_matn', label: 'متن حديث', description: 'نص الحديث المحتمل' },
-  { type: 'isnad', label: 'إسناد / نسبة', description: 'سلسلة النقل أو صيغة النسبة' },
-  {
-    type: 'claimed_source',
-    label: 'مصدر مذكور',
-    description: 'إحالة كتبها صاحب النص ولم تُعتمد بعد',
-  },
-  { type: 'interpretation', label: 'استنتاج', description: 'نتيجة أو تفسير مبني على النص' },
 ];
 
 const SAMPLE_CASES = [
@@ -196,48 +179,35 @@ function Brand({ compact = false }: { compact?: boolean }) {
 }
 
 function PublicHeader({ onReviewer }: { onReviewer: () => void }) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-    setMenuOpen(false);
   };
 
   return (
-    <header className="public-header page-shell">
-      <Brand />
-      <nav aria-label="التنقل الرئيسي" className={menuOpen ? 'nav-open' : ''}>
-        <button type="button" onClick={() => scrollTo('how')}>
-          كيف تعمل
+    <header className="public-header-wrap">
+      <div className="public-header page-shell">
+        <Brand />
+        <button className="button button--outline reviewer-login" onClick={onReviewer}>
+          <User size={21} />
+          دخول المراجع
         </button>
-        <button type="button" onClick={() => scrollTo('sources')}>
-          المصادر والحدود
-        </button>
-        <button
-          type="button"
-          className="reviewer-login-mobile"
-          aria-label="دخول مساحة المراجع من قائمة الهاتف"
-          onClick={() => {
-            setMenuOpen(false);
-            onReviewer();
-          }}
-        >
-          <User size={20} />
-          مساحة المراجع
-        </button>
+      </div>
+      <nav className="public-subnav" aria-label="التنقل الرئيسي">
+        <div className="page-shell">
+          <button type="button" onClick={() => scrollTo('review')}>
+            مراجعة النص
+          </button>
+          <button type="button" onClick={() => scrollTo('how')}>
+            كيف تعمل
+          </button>
+          <button type="button" onClick={() => scrollTo('faq')}>
+            الأسئلة الشائعة
+          </button>
+          <button type="button" onClick={() => scrollTo('trust')}>
+            عن التحدي
+          </button>
+        </div>
       </nav>
-      <button className="button button--outline reviewer-login" onClick={onReviewer}>
-        <User size={21} />
-        دخول المراجع
-      </button>
-      <button
-        className="mobile-menu"
-        type="button"
-        aria-label="فتح القائمة"
-        aria-expanded={menuOpen}
-        onClick={() => setMenuOpen((value) => !value)}
-      >
-        <ListChecks size={25} />
-      </button>
     </header>
   );
 }
@@ -379,11 +349,6 @@ function HomeScreen({
     };
   }, [text]);
 
-  const selectFinding = (finding: PreflightFinding) => {
-    textAreaRef.current?.focus();
-    textAreaRef.current?.setSelectionRange(finding.startOffset, finding.endOffset);
-  };
-
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
     const clean = text.trim();
@@ -417,7 +382,7 @@ function HomeScreen({
       <PublicHeader onReviewer={onReviewer} />
       <main className="home-main page-shell">
         {notice && <Toast message={notice} />}
-        <section className="hero-section page-enter">
+        <section className="hero-section page-enter" id="review">
           <p className="eyebrow">مراجعة موثقة قبل النشر</p>
           <h1>ما النص الذي تريد مراجعته؟</h1>
           <p className="hero-copy">تحقق من دقة الاقتباس، ومن أن الدليل يدعم الاستنتاج قبل النشر.</p>
@@ -440,7 +405,7 @@ function HomeScreen({
                 value={text}
                 maxLength={3000}
                 rows={4}
-                aria-describedby="preflight-status"
+                aria-describedby={preflightStatus !== 'ready' ? 'preflight-status' : undefined}
                 onScroll={(event) => {
                   if (!highlightRef.current) return;
                   highlightRef.current.scrollTop = event.currentTarget.scrollTop;
@@ -456,15 +421,20 @@ function HomeScreen({
             {preflightStatus === 'ready' && preflight && preflight.annotations.length > 0 && (
               <div className="annotation-guide">
                 <div className="annotation-legend" aria-label="دليل ألوان تصنيف أجزاء النص">
-                  {SEMANTIC_LEGEND.filter((item) =>
-                    preflight.annotations.some(
-                      (annotation) => annotation.contentType === item.type,
-                    ),
+                  {Array.from(
+                    new Map(
+                      preflight.annotations.map((annotation) => [
+                        annotation.contentType,
+                        {
+                          type: annotation.contentType,
+                          label: annotation.contentTypeLabel,
+                        },
+                      ]),
+                    ).values(),
                   ).map((item) => (
                     <span
                       key={item.type}
                       className={`annotation-chip annotation-chip--${item.type}`}
-                      title={item.description}
                     >
                       <span aria-hidden="true" />
                       {item.label}
@@ -488,49 +458,22 @@ function HomeScreen({
                 </div>
               </div>
             )}
-            <div
-              id="preflight-status"
-              className="preflight-status"
-              role="status"
-              aria-live="polite"
-            >
-              <span
-                className={`preflight-dot preflight-dot--${preflightStatus}`}
-                aria-hidden="true"
-              />
-              {preflightStatus === 'idle' && 'الصق نصًا من 20 حرفًا لبدء الرصد الأولي.'}
-              {preflightStatus === 'checking' && 'نصنّف العبارات ونبحث في المرجع المحلي التجريبي…'}
-              {preflightStatus === 'ready' &&
-                `رصد أولي محلي: ${preflight?.findings.length ?? 0} عبارة. النتائج ليست اعتمادًا للنشر.`}
-              {preflightStatus === 'unavailable' &&
-                'تعذر الرصد الأولي الآن. يمكنك الاستمرار وبدء المراجعة الكاملة.'}
-            </div>
-            {preflightStatus === 'ready' && preflight && preflight.findings.length > 0 && (
-              <div className="preflight-findings" aria-label="نتائج الرصد الأولي">
-                {preflight.findings.map((finding) => (
-                  <button
-                    key={finding.id}
-                    type="button"
-                    className={`preflight-finding preflight-finding--${finding.severity}`}
-                    onClick={() => selectFinding(finding)}
-                  >
-                    <span className="preflight-type">{finding.contentTypeLabel}</span>
-                    <span className="preflight-finding-copy">
-                      <strong>{finding.text}</strong>
-                      <span className={`finding-status finding-status--${finding.severity}`}>
-                        {finding.severity === 'warning'
-                          ? 'يحتاج مراجعة'
-                          : finding.severity === 'neutral'
-                            ? 'غير محسوم'
-                            : 'تطابق أولي'}
-                      </span>
-                      <small>{finding.message}</small>
-                      {finding.evidence && (
-                        <small>المرجع التجريبي: {finding.evidence.reference}</small>
-                      )}
-                    </span>
-                  </button>
-                ))}
+            {preflightStatus !== 'ready' && (
+              <div
+                id="preflight-status"
+                className="preflight-status"
+                role="status"
+                aria-live="polite"
+              >
+                <span
+                  className={`preflight-dot preflight-dot--${preflightStatus}`}
+                  aria-hidden="true"
+                />
+                {preflightStatus === 'idle' && 'الصق نصًا من 20 حرفًا لبدء الرصد الأولي.'}
+                {preflightStatus === 'checking' &&
+                  'نصنّف العبارات ونبحث في المرجع المحلي التجريبي…'}
+                {preflightStatus === 'unavailable' &&
+                  'تعذر الرصد الأولي الآن. يمكنك الاستمرار وبدء المراجعة الكاملة.'}
               </div>
             )}
             <div className="composer-actions">
@@ -588,53 +531,198 @@ function HomeScreen({
           )}
         </section>
 
-        <section className="capabilities" id="how" aria-label="ما الذي تراجعه بصيرة">
-          <article>
-            <span className="icon-disc">
-              <Quotes size={30} />
-            </span>
-            <h2>دقة الاقتباس</h2>
-            <p>مطابقة النص ونسبته</p>
-          </article>
-          <article>
-            <span className="icon-disc">
-              <FileText size={30} />
-            </span>
-            <h2>دعم الاستنتاج</h2>
-            <p>هل يدعم الدليل النتيجة؟</p>
-          </article>
-          <article>
-            <span className="icon-disc">
-              <BookOpen size={30} />
-            </span>
-            <h2>مصادر قابلة للتتبع</h2>
-            <p>عرض المرجع بوضوح</p>
-          </article>
+        <div className="insight-marquee" aria-label="أهم ما تقدمه بصيرة">
+          <div>
+            <span>دقة الاقتباس</span>
+            <span>كفاية الاستدلال</span>
+            <span>مصدر قابل للتتبع</span>
+            <span>صياغة تحتاج مراجعتك</span>
+            <span aria-hidden="true">دقة الاقتباس</span>
+            <span aria-hidden="true">كفاية الاستدلال</span>
+            <span aria-hidden="true">مصدر قابل للتتبع</span>
+            <span aria-hidden="true">صياغة تحتاج مراجعتك</span>
+          </div>
+        </div>
+
+        <section className="section-block" id="how" aria-labelledby="benefits-heading">
+          <div className="section-intro">
+            <p className="eyebrow">لماذا بصيرة؟</p>
+            <h2 id="benefits-heading">مراجعة تشرح لك ما وجدته، ولا تخفي حدودها</h2>
+            <p>ست إشارات مركزة تساعد الكاتب والمراجع على اتخاذ قرار واعٍ قبل النشر.</p>
+          </div>
+          <div className="capabilities" aria-label="ما الذي تراجعه بصيرة">
+            <article>
+              <span className="icon-disc">
+                <Quotes size={30} />
+              </span>
+              <h2>دقة الاقتباس</h2>
+              <p>مطابقة النص ونسبته</p>
+            </article>
+            <article>
+              <span className="icon-disc">
+                <FileText size={30} />
+              </span>
+              <h2>دعم الاستنتاج</h2>
+              <p>هل يدعم الدليل النتيجة؟</p>
+            </article>
+            <article>
+              <span className="icon-disc">
+                <BookOpen size={30} />
+              </span>
+              <h2>مصادر قابلة للتتبع</h2>
+              <p>عرض المرجع بوضوح</p>
+            </article>
+            <article>
+              <span className="icon-disc">
+                <Sparkle size={30} />
+              </span>
+              <h2>رصد أولي مباشر</h2>
+              <p>تحديد مواضع تحتاج انتباهك</p>
+            </article>
+            <article>
+              <span className="icon-disc">
+                <PencilSimple size={30} />
+              </span>
+              <h2>صياغة قابلة للتحرير</h2>
+              <p>اقتراح لا يُعتمد تلقائيًا</p>
+            </article>
+            <article>
+              <span className="icon-disc">
+                <UsersThree size={30} />
+              </span>
+              <h2>مراجعة بشرية عند الحاجة</h2>
+              <p>تصعيد اختياري عندما لا تكفي النتيجة</p>
+            </article>
+          </div>
         </section>
 
-        <section className="example-panel" id="sources">
-          <div className="example-copy">
-            <span className="soft-label">مثال توضيحي</span>
-            <h2>مثال سريع</h2>
-            <p>«إن القرآن الكريم يدعو إلى التيسير ورفع الحرج في العبادات والمعاملات».</p>
+        <section className="faq-section" id="faq">
+          <div className="section-intro">
+            <p className="eyebrow">الأسئلة الشائعة</p>
+            <h2>تعرّف على بصيرة</h2>
           </div>
-          <div className="example-results">
-            <span className="result-strip result-strip--success">
-              <CheckCircle size={20} /> دقة الاقتباس: مطابق
-            </span>
-            <span className="result-strip result-strip--warning">
-              <WarningCircle size={20} /> دعم الاستنتاج: يحتاج إلى تقييد
-            </span>
-            <button className="text-action" type="button" onClick={() => setText(DEMO_TEXT)}>
-              شاهد كيف تعمل المراجعة <ArrowLeft size={17} />
-            </button>
+          <div className="faq-list">
+            <details>
+              <summary>ماذا تفعل بصيرة؟</summary>
+              <p>
+                تراجع دقة النقل، وتفحص ما إذا كان الدليل يدعم الاستنتاج، ثم تعرض المصدر والنتيجة
+                وحدودها بوضوح قبل النشر.
+              </p>
+            </details>
+            <details>
+              <summary>ما الذي لا تفعله بصيرة؟</summary>
+              <p>
+                لا تصدر فتوى أو حكمًا شرعيًا، ولا تعتمد النص أو الصياغة المقترحة تلقائيًا، ولا
+                تستبدل قرار المختص أو المراجع البشري.
+              </p>
+            </details>
+            <details>
+              <summary>ما المصادر التي تعتمد عليها بصيرة؟</summary>
+              <p>
+                تستخدم بصيرة المصادر الأصيلة والموثوقة المعتمدة فقط، وتعرض المرجع المستخدم وحدود ما
+                يدعمه بدل تقديم نتيجة بلا مصدر.
+              </p>
+            </details>
+            <details>
+              <summary>ماذا يحدث عندما لا تكون النتيجة مؤكدة؟</summary>
+              <p>
+                توضّح بصيرة موضع عدم اليقين، وتمنحك خيار إرسال الحالة إلى مراجع بشري بدل عرض نتيجة
+                قاطعة غير مدعومة.
+              </p>
+            </details>
+            <details>
+              <summary>كيف تعمل المراجعة البشرية؟</summary>
+              <p>
+                يراجع المختص النص والسياق والمصدر، ثم يسجل نتيجة المراجعة على التذكرة المرتبطة
+                بطلبك.
+              </p>
+            </details>
+            <details>
+              <summary>هل يمكنني استلام نتيجة التذكرة بعد المراجعة؟</summary>
+              <p>
+                نعم. عند إرسال الحالة للمراجعة البشرية يمكنك اختيار متابعة التذكرة واستلام النتيجة
+                بعد اكتمال المراجعة.
+              </p>
+            </details>
+            <details>
+              <summary>كيف تساعد مشاركتي في تطوير بصيرة؟</summary>
+              <p>
+                شكرًا لمساهمتك. الحالات التي تحتاج مراجعة تساعدنا، بعد التحقق البشري، على تنمية
+                قاعدة المعرفة وتحسين التعامل مع حالات مشابهة لاحقًا؛ ولا تُضاف إجابة غير مراجعة
+                تلقائيًا.
+              </p>
+            </details>
           </div>
         </section>
-        <p className="scope-note">
+        <p className="scope-note" id="sources">
           <Info size={19} /> بصيرة أداة مساعدة للمراجعة، وليست فتوى أو اعتمادًا للنشر.
         </p>
       </main>
+      <PublicFooter />
     </div>
+  );
+}
+
+const CHALLENGE_MARKS = [
+  {
+    src: '/brand/challenge/challenge-lockup.svg',
+    alt: 'تحدي الذكاء الاصطناعي في خدمة المحتوى الإسلامي',
+    className: 'challenge-mark--challenge',
+  },
+  {
+    src: '/brand/challenge/year-of-ai-2026.svg',
+    alt: 'عام الذكاء الاصطناعي 2026',
+    className: 'challenge-mark--year',
+  },
+  {
+    src: '/brand/challenge/bathel-wordmark.svg',
+    alt: 'باذل',
+    className: 'challenge-mark--bathel',
+  },
+];
+
+function PublicFooter() {
+  return (
+    <footer className="public-footer" id="trust">
+      <section className="trust-strip">
+        <a
+          className="challenge-marks page-shell"
+          href="https://islamicaich.org/"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="الموقع الرسمي لتحدي الذكاء الاصطناعي في خدمة المحتوى الإسلامي"
+        >
+          {CHALLENGE_MARKS.map((mark) => (
+            <img key={mark.src} src={mark.src} alt={mark.alt} className={mark.className} />
+          ))}
+        </a>
+      </section>
+      <div className="footer-main page-shell">
+        <div className="footer-brand">
+          <Brand compact />
+          <p>أداة عربية لمراجعة دقة النقل وكفاية الاستدلال قبل النشر.</p>
+        </div>
+        <div>
+          <h3>بصيرة</h3>
+          <button type="button" onClick={() => document.getElementById('how')?.scrollIntoView()}>
+            كيف تعمل
+          </button>
+          <button type="button" onClick={() => document.getElementById('faq')?.scrollIntoView()}>
+            الأسئلة الشائعة
+          </button>
+        </div>
+        <div>
+          <h3>حدود الاستخدام</h3>
+          <p>ليست فتوى</p>
+          <p>لا اعتماد تلقائيًا للنشر</p>
+          <p>المراجعة البشرية مطلوبة</p>
+        </div>
+      </div>
+      <div className="footer-bottom page-shell">
+        <span>© 2026 بصيرة</span>
+        <span>صُممت لتوضيح الدليل والحدود قبل القرار.</span>
+      </div>
+    </footer>
   );
 }
 
