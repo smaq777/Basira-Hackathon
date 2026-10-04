@@ -115,10 +115,10 @@ A faithfully copied contiguous excerpt retains full fidelity; its extent is
 `excerpt`. An internal gap is `gapped`, independently of lexical changes. Older
 immutable findings without this optional field remain readable.
 
-`quotation-fidelity-2.0` may use a separately attributed, SHA-256-pinned
+`quotation-fidelity-3.0` may use a separately attributed, SHA-256-pinned
 `publisher imlai original` auxiliary view already present in the index metadata.
-It first requires equal token counts and verifies every canonical/auxiliary token
-pair under limited Uthmani presentation rules: vowel/tatweel/recitation signs,
+It verifies every canonical/auxiliary token pair, grouping a declared vocative
+spacing variant when needed, under limited Uthmani presentation rules: vowel/tatweel/recitation signs,
 optional dagger alef, wasla and the explicitly supplied maqsurah spelling.
 Hamza stays significant; only its seat may vary in the explicitly pinned
 auxiliary spelling. The lexical letter آ and its decomposed form stay significant. Arbitrary letter folding,
@@ -126,6 +126,17 @@ token deletion, negation changes and unverified auxiliary editions never become
 orthographic fidelity. Excerpt offsets always refer to the unchanged canonical
 source, and auxiliary hashes, attribution and version remain in its provenance.
 If an edition cannot be aligned under these rules, comparison stays conservative.
+Canonical self-comparison emits no edits. Source-edge alignment separates a changed
+last quoted word from the unquoted source suffix; internal omissions remain visible.
+
+`source-first-intake-1.8` preserves complete declared quote wrappers and splits
+inline verse markers only when an attached unique surah binds every marker to
+an available verse, with no unmarked trailing wording. Other nested numbers
+remain inside the whole quotation. It attaches references to their own passage and recognizes
+number-first named references. Numeric footnotes and ordinary unframed formulae
+are not standalone quotation findings. Search presentation aliases never change
+originals and are applied to already-normalized index views to avoid reprocessing
+the corpus for each passage.
 
 Stored and in-memory Tafsir replays report `delivery: snapshot`; only a fresh
 acquisition reports `live`. Their original acquisition transport remains separate

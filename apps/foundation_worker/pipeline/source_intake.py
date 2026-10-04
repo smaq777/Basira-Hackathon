@@ -15,20 +15,22 @@ from pathlib import Path
 from .evidence import EvidenceStore, canonical, normalize, normalized_with_offsets, sha
 from .tafsir_adapter import PROVIDER, WORKS, TafsirAdapter, verify_snapshot
 from review_flow.quotation import compare_quotation, VERSION as COMPARATOR_VERSION
-from .quote_discovery import QUOTES, ordered_omission
+from .quote_discovery import ordered_omission
 
-VERSION = 'source-first-intake-1.6/' + COMPARATOR_VERSION
+VERSION = 'source-first-intake-1.8/' + COMPARATOR_VERSION
 SCHEMA_PIN = 'c492c3d0c73919981e4518a483750eae90b025559985c3fe286681e16765c332'
 FORMULAE = {normalize(x) for x in ('بسم الله', 'بسم الله الرحمن الرحيم', 'الحمد لله',
-    'الحمد لله رب العالمين', 'إن شاء الله', 'إنا لله وإنا إليه راجعون')}
+    'الحمد لله رب العالمين', 'إن شاء الله', 'إنا لله وإنا إليه راجعون',
+    'لا إله إلا الله', 'أن لا إله إلا الله')}
 NUMERIC = re.compile(r'(?<![\w:：])(\d{1,3})\s*[:：]\s*(\d{1,3})(?:\s*[-–]\s*(\d{1,3}))?(?!\d)')
 Q_FRAME = re.compile(r'(?:قال\s+الله|قوله\s+تعالى|قال\s+تعالى|الآية|الاية|القرآن|القران)')
-H_FRAME = re.compile(r'(?:قال\s+رسول\s+الله|قال\s+النبي|حديث|عن\s+النبي)')
+H_FRAME = re.compile(r'(?:قال\s+رسول\s+الله|قال\s+النبي|حديث|عن\s+النبي|في\s+الصحيحين|قال\s*[-–]?\s*صلى\s+الله\s+عليه\s+وسلم)')
 MAX_EVIDENCE_ROWS = 80
 MAX_CONTEXT_ROWS = 30
 MAX_OPTIONAL_EVIDENCE_BYTES = 200_000
 NEGATIVE_CONTEXT_CACHE_SECONDS = 30.0
 NON_SOURCE_NUMERIC = re.compile(r'الساعة|ساعه|الوقت|التوقيت|موعد|الاجتماع|نتيجة|المباراة|النقاط|الاهداف|clock|time|score|\bam\b|\bpm\b', re.I)
+JOINED_VOCATIVE = re.compile(r'(?<!\w)ياايها(?!\w)')
 
 
 def utf16_length(text):
@@ -36,7 +38,7 @@ def utf16_length(text):
 
 
 def _framing(text, start):
-    before = re.split(r'[.؛!؟\n]', text[max(0, start - 100):start])[-1]
+    before = re.split(r'[.؛!؟\n]', text[max(0, start - 220):start])[-1]
     q = list(Q_FRAME.finditer(before))
     h = list(H_FRAME.finditer(before))
     frames = [(m, 'ayah') for m in q] + [(m, 'matn') for m in h]
@@ -58,6 +60,96 @@ def _token_contains(container, needle):
     return bool(needle) and (' ' + needle + ' ') in (' ' + container + ' ')
 
 
+def _quran_search_key(text):
+    # Search presentation alias only. Original text and literal comparison are
+    # untouched; the comparator independently assesses the pinned edition.
+    return JOINED_VOCATIVE.sub('يا ايها', normalize(text))
+
+
+def _quote_units(text, surah_names=None, reference=None):
+    """Keep wrappers whole unless every verse boundary has a bound identity.
+
+    Balanced inner parentheses (including numbered markers) do not terminate
+    the outer passage. A mismatched outer closing wrapper is a bounded recovery
+    cue. Quran framing alone cannot distinguish a footnote from a verse number.
+    Originals remain slices, including altered words at either boundary.
+    """
+    pairs = {'﴿': '﴾', '«': '»', '“': '”', '"': '"', '(': ')',
+             '[': ']', '{': '}', '‹': '›', '<': '>'}
+    closers = set(pairs.values())
+    units = []
+    i = 0
+    while i < len(text):
+        if text[i] not in pairs:
+            i += 1
+            continue
+        opening = i
+        stack = [pairs[text[i]]]
+        i += 1
+        a = i
+        line_end = text.find('\n', a)
+        if line_end < 0:
+            line_end = len(text)
+        if text[opening:opening+2] == '<<':
+            i += 1
+            a = i
+            stack.append('>')
+        while i < len(text):
+            char = text[i]
+            if char == '\n':
+                break
+            if char == stack[-1]:
+                stack.pop()
+                if not stack:
+                    break
+            elif char in pairs:
+                stack.append(pairs[char])
+            elif char in closers:
+                # Recover a malformed outer brace ending in a parenthesis.
+                if len(stack) == 1:
+                    break
+                stack.pop()
+            # An unmatched container ends at a sentence boundary; ellipses
+            # within a hadith quote are retained rather than discarding suffixes.
+            elif char in '.!?؟؛' and text.find(stack[0], i, line_end) < 0 and not (char == '.' and
+                    ((i and text[i-1] == '.') or (i+1 < len(text) and text[i+1] == '.'))):
+                break
+            i += 1
+        b = i
+        outer_end = min(len(text), i+1)
+        if text[opening:opening+2] == '<<' and text[i-1:i+1] == '>>':
+            b -= 1
+        tail = normalize(text[outer_end:outer_end+65])
+        surahs = {surah for name, surah in (surah_names or {}).items()
+                  if re.match(r'(?:(?:سورة|سوره)\s+)?' + re.escape(name) + r'(?:\s|$)', tail)}
+        markers = list(re.finditer(r'\(\s*(\d{1,3})\s*\)|(?<=[\u0621-\u065f\u066e-\u06d3])([0-9٠-٩]{1,3})(?=\s*$)', text[a:b]))
+        # Only an immediately attached, unique surah plus available verse rows
+        # binds these numbers. A trailing unmarked clause remains part of the
+        # declared quotation rather than being detached from literal review.
+        if markers and (len(surahs) != 1 or not reference or
+                text[a+markers[-1].end():b].strip() or
+                any(len(reference(next(iter(surahs)), int(m[1] or m[2]))) != 1 for m in markers)):
+            markers = []
+        cursor = a
+        for marker in markers:
+            end = a + marker.start()
+            units.append((cursor, end, text[opening] in '{﴿',
+                          int(marker[1] or marker[2]), outer_end))
+            cursor = a + marker.end()
+        if cursor < b:
+            units.append((cursor, b, text[opening] in '{﴿', None, outer_end))
+        i = max(i+1, opening+1)
+    result = []
+    for a, b, hinted, marker, outer_end in units:
+        while a < b and text[a].isspace():
+            a += 1
+        while b > a and text[b-1].isspace():
+            b -= 1
+        if a < b:
+            result.append((a, b, hinted, marker, outer_end))
+    return result
+
+
 class SourceIntake:
     def __init__(self, database, snapshot_directory=None, *, research_preview=False):
         if type(research_preview) is not bool:
@@ -70,7 +162,10 @@ class SourceIntake:
         self.context_cache = {}
         self.context_negative_cache_until = {}
         self.context_attempted = set()
-        self.verse_views = self.store.verse_search_views
+        # EvidenceStore already normalized these views; normalize only new
+        # input quotations, rather than rescanning the entire corpus per run.
+        self.verse_views = [(record, JOINED_VOCATIVE.sub('يا ايها', view))
+                            for record, view in self.store.verse_search_views]
         # Source-derived four-token anchors permit a short embedded excerpt
         # without trusting an LLM role label. Ambiguous anchors remain visible.
         self.fragment_index = {}
@@ -231,6 +326,7 @@ class SourceIntake:
         self.live_context_deadline = time.monotonic() + 12.0
         self.context_attempted = set()
         spans, references, warnings = [], [], related_warnings
+        quote_units = _quote_units(text, self.store.names, self.store.reference)
 
         def add(start, end, role, status, method, records=(), proposal=None, conflict=False):
             if start >= end:
@@ -274,6 +370,42 @@ class SourceIntake:
                 add(a, b, 'claimed_source', 'source_matched' if records else 'unresolved',
                     'range_requires_confirmation' if tail else 'explicit_named_reference', records)
                 references.append((a, b, records))
+            # Editors also write "21 البقرة". Keep this identity as a mention,
+            # without treating a nearby verse marker as a new quotation.
+            reverse = re.compile(r'(?<!\w)(\d{1,3})\s+' + re.escape(name) + r'(?!\w)')
+            for m in reverse.finditer(normalized):
+                a, b = offsets[m.start()], offsets[m.end()-1]+1
+                if any(a < y and x < b for x, y, _ in references):
+                    continue
+                records = self.store.reference(surah, int(m[1]))
+                add(a, b, 'claimed_source', 'source_matched' if records else 'unresolved',
+                    'explicit_number_first_named_reference', records)
+                references.append((a, b, records))
+
+        def attached_references(a, b):
+            after = [(x, rows) for x, y, rows in references if 0 <= x-b <= 45
+                     and not any(b <= u < x for u, v, _, _, _ in quote_units)]
+            if after:
+                return next(rows for _, rows in sorted(after))
+            before = []
+            for x, y, rows in references:
+                if not 0 <= a-y <= 45:
+                    continue
+                # A citation immediately following the previous quotation
+                # belongs to it even when the next quotation starts nearby.
+                if any(v <= x and 0 <= x-v <= 45 for u, v, _, _, _ in quote_units):
+                    continue
+                if not any(y <= u < a for u, v, _, _, _ in quote_units):
+                    before.append((y, rows))
+            return max(before, default=(0, []), key=lambda row: row[0])[1]
+
+        def marker_references(marker, outer_end):
+            if marker is None:
+                return []
+            tail = normalize(text[outer_end:outer_end+65])
+            surahs = {surah for name, surah in self.store.names.items()
+                      if re.match(r'(?:(?:سورة|سوره)\s+)?' + re.escape(name) + r'(?:\s|$)', tail)}
+            return self.store.reference(next(iter(surahs)), marker) if len(surahs) == 1 else []
 
         # Full verse matches remain source-owned regardless of an incompatible
         # preceding attribution. Short complete verses require visible framing.
@@ -304,10 +436,11 @@ class SourceIntake:
             elif not any(a < s['b'] and s['a'] < b for s in spans):
                 add(a, b, 'ayah', 'source_matched', 'complete_verse_search_match', [record], proposal, proposal=='matn')
 
-        for m in QUOTES.finditer(text):
-            group = next(i for i in range(1, QUOTES.groups+1) if m[i] is not None)
-            a, b = m.start(group), m.end(group)
-            proposal = _framing(text, a) or ('ayah' if group == 1 else None)
+        for a, b, hinted, marker, outer_end in quote_units:
+            # A verse/footnote number is metadata, never quoted source wording.
+            if not any(char.isalpha() for char in text[a:b]):
+                continue
+            proposal = _framing(text, a) or ('ayah' if hinted else None)
             if any(a<s['b'] and s['a']<b and s['role']=='claimed_source' for s in spans):
                 # A reference embedded inside quotation marks remains a
                 # separate source mention. Do not create a second overlapping
@@ -322,16 +455,20 @@ class SourceIntake:
                 warnings.append('Quotation contains a source reference; confirm its passage boundaries before literal comparison.')
                 continue
             contained = [s for s in spans if a <= s['a'] and s['b'] <= b and s['role']=='ayah']
-            nearby = [r for x, y, rows in references if 0 <= x-b <= 45 or 0 <= a-y <= 45 for r in rows]
+            nearby = marker_references(marker, outer_end) or attached_references(a, b)
             if contained:
                 # A quote with extra/spliced words must be reviewed as a whole,
                 # rather than hiding extra words behind a complete sub-verse.
                 if len(contained)==1 and normalize(text[a:b]) == normalize(text[contained[0]['a']:contained[0]['b']]):
-                    if nearby and all(r['id'] not in {v['id'] for v in contained[0]['records']} for r in nearby):
+                    matched = [r for r in contained[0]['records'] if any(r['id'] == n['id'] for n in nearby)]
+                    if matched:
+                        contained[0]['records'] = matched
+                        contained[0]['roleStatus'] = 'source_matched' if len(matched) == 1 else 'candidate'
+                    elif nearby:
                         contained[0]['conflict'] = True
                     continue
                 spans[:] = [s for s in spans if s not in contained]
-            key = normalize(text[a:b])
+            key = _quran_search_key(text[a:b])
             if key in FORMULAE and proposal != 'ayah' and not nearby:
                 continue
             q = {}
@@ -344,9 +481,15 @@ class SourceIntake:
                 for record, view in self.verse_views:
                     if ordered_omission(text[a:b], view):
                         omitted[record['id']] = record
+                narrowed = {r['id']: omitted[r['id']] for r in nearby if r['id'] in omitted}
+                if narrowed:
+                    omitted = narrowed
             h = self.store.search(text[a:b], 'hadith_matn', 5) if not q and not omitted else []
             literal_h = [r for r in h if len(key.split()) >= 3 and _token_contains(r['search_key'], key)]
             if q:
+                narrowed = {r['id']: q[r['id']] for r in nearby if r['id'] in q}
+                if narrowed:
+                    q = narrowed
                 records = list(q.values())[:10]
                 conflict = proposal == 'matn' or bool(nearby and all(r['id'] not in q for r in nearby))
                 add(a, b, 'ayah', 'source_matched' if len(q)==1 else 'candidate', 'contiguous_quran_excerpt_search_match', records, proposal, conflict)
@@ -356,6 +499,13 @@ class SourceIntake:
                 add(a, b, 'ayah', 'source_matched', 'unique_ordered_quran_candidate', [record], proposal, conflict)
             elif omitted:
                 add(a, b, 'ayah', 'candidate', 'ambiguous_ordered_quran_candidates', list(omitted.values())[:10], proposal)
+            elif len(nearby) == 1:
+                # The exact identity of an explicitly cited Quran original
+                # outranks a hadith field embedding that Quran wording. Unmatched
+                # wording remains a candidate, with an explicit comparison to
+                # the cited original rather than fabricated discovery certainty.
+                add(a, b, 'ayah', 'candidate', 'explicit_quran_reference_comparison', nearby, proposal, proposal=='matn')
+                spans[-1]['explicitComparator'] = True
             elif literal_h:
                 add(a, b, 'matn', 'source_matched' if len(literal_h)==1 else 'candidate', 'hadith_matching_field_excerpt', literal_h, proposal, proposal=='ayah')
             else:
@@ -480,8 +630,14 @@ class SourceIntake:
             record = span['records'][0] if resolved else None
             auxiliary = next((view for view in record['metadata'].get('auxiliary_search_views', [])
                 if view.get('field') == 'publisher imlai original'), None) if record and record['role'] == 'quran_text' else None
+            comparator_metadata = {'comparator_version': COMPARATOR_VERSION,
+                'original_sha256': record['text_sha256']} if record else None
+            if record and record['role'] == 'quran_text' and (
+                    re.search(r'\buthmani\b', str(record['metadata'].get('edition', '')), re.I)
+                    or re.fullmatch(r'tanzil-uthmani-v[0-9.]+', str(record['metadata'].get('source_id', '')))):
+                comparator_metadata['canonical_orthography'] = 'uthmani'
             comparison = compare_quotation(text[a:b], record['original_text'] if record else None,
-                {'comparator_version': COMPARATOR_VERSION, 'original_sha256': record['text_sha256']} if record else None,
+                comparator_metadata,
                 auxiliary_imlai=auxiliary)
             quote_status = 'unresolved'
             matched = []

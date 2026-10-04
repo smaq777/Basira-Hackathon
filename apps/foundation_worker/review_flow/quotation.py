@@ -6,7 +6,8 @@ import unicodedata as ud
 
 REMOVED_MARKS = frozenset(map(chr, range(0x064B, 0x0653))) | frozenset(map(chr, range(0x06D6, 0x06DC)))
 NEGATION = frozenset({'لا', 'لم', 'لن', 'ليس', 'ليست', 'ما', 'ولا', 'فلا', 'ولم', 'فلم', 'ولن', 'فلن'})
-VERSION = 'quotation-fidelity-2.0'
+VERSION = 'quotation-fidelity-3.0'
+QURAN_PRESENTATION_MARKS = frozenset(map(chr, range(0x06D6, 0x06EE)))
 NORMALIZATION = {
     'removed_mark_codepoints': [f'U+{ord(c):04X}' for c in sorted(REMOVED_MARKS)],
     'tatweel': 'ignored in typography comparison only',
@@ -18,38 +19,85 @@ NORMALIZATION = {
 }
 
 
-def _script_pattern(token, *, verify_auxiliary=False):
+def _presentation_token(token, *, uthmani=False):
+    """A declared edition view; lexical hamza/madda are never search-folded.
+
+    U+0653 is an elongation annotation in declared Uthmani text. Preserve an
+    initial/prefixed decomposed lexical madda before a consonant, and preserve
+    the precomposed letter آ in every edition. Undeclared texts keep the old
+    narrow elongation rules. Original strings and offsets are untouched.
+    """
+    chars = []
+    # A floating hamza on tatweel is a consonant, not a mark on the
+    # preceding ya. Preserve it before removing its presentation carrier.
+    token = re.sub('\u0640[\u0654\u0655]', 'ء', token)
+    bare = ''.join(c for c in token if c not in REMOVED_MARKS and c != '\u0640')
+    for index, char in enumerate(bare):
+        if char in QURAN_PRESENTATION_MARKS and uthmani:
+            continue
+        if char in '\u06e2\u06e3\u06e6\u06e7\u06e8':
+            continue
+        if char == '\u0653':
+            prefix = ''.join(chars)
+            following = bare[index + 1:index + 2]
+            lexical = prefix in {'ا', 'وا', 'فا', 'با'} and following and following not in 'أإؤئءآ'
+            recitation = bare == 'لا\u0653' or bare[index - 1:index] in '\u06e5\u06e6'
+            if (uthmani and not lexical) or recitation:
+                continue
+        chars.append(char)
+    return ud.normalize('NFC', ''.join(chars))
+
+
+def _hamza_key(token):
+    # Madda represents hamza plus alef, never bare alef. Existing seated
+    # hamza is retained: أن and إن cannot verify each other as script variants.
+    return ''.join('ءا' if c == 'آ' else c for c in token)
+
+
+def _script_pattern(token, *, verify_auxiliary=False, uthmani=False):
     """Limited Uthmani presentation rules, never the lossy search normalizer.
 
     Hamza, precomposed madda and lexical letters remain significant. Maqsurah
     substitution is allowed only when checking the independently pinned edition;
     user text may then use that exact auxiliary spelling, not arbitrary folding.
     """
-    result, previous = [], ''
-    elongated_negation = ''.join(c for c in token if c not in REMOVED_MARKS and c != '\u0640') == 'لا\u0653'
+    token = _presentation_token(token, uthmani=uthmani)
+    if verify_auxiliary:
+        token = _hamza_key(token)
+    result = []
     for char in token:
-        if char in REMOVED_MARKS or char == '\u0640':
-            continue
         if char == '\u0670':
-            result.append('ا?')
+            result.append('(?:ا|\u0670)?')
         elif char == '\u0671':
-            result.append('ا')
-        elif char == '\u0653' and (elongated_negation or previous in '\u06e5\u06e6'):
-            pass  # Quranic elongation sign, not the lexical letter آ.
-        elif char in '\u06e2\u06e3\u06e6\u06e7\u06e8':
-            pass  # Explicitly listed Quranic recitation signs.
+            result.append('[اٱ]')
         elif char == 'ى' and verify_auxiliary:
             result.append('[ىي]')
-        elif char in 'أإؤئء' and verify_auxiliary:
-            result.append('[أإؤئء]')  # Hamza is retained; only its seat may differ.
+        elif char == 'ء' and verify_auxiliary:
+            result.append('[ءأإؤئ]')  # An unseated hamza may acquire a carrier.
         else:
             result.append(re.escape(char))
-        if not ud.combining(char):
-            previous = char
     return ''.join(result)
 
 
-def _verified_auxiliary(source_tokens, auxiliary):
+def _vocative_units(tokens, text, *, uthmani=False):
+    """Only a verified edition's vocative spacing may join adjacent tokens."""
+    result, index = [], 0
+    while index < len(tokens):
+        first = tokens[index]
+        if index + 1 < len(tokens):
+            second = tokens[index + 1]
+            if (re.fullmatch(_script_pattern(first['original'], uthmani=uthmani), 'يا')
+                    and _presentation_token(second['original'], uthmani=uthmani).startswith(('أ', 'إ', 'آ'))):
+                result.append(dict(token=first['token'] + second['token'], start=first['start'],
+                    end=second['end'], original=text[first['start']:second['end']]))
+                index += 2
+                continue
+        result.append(first)
+        index += 1
+    return result
+
+
+def _verified_auxiliary(source_tokens, auxiliary, source_text='', *, uthmani=False):
     if auxiliary is None:
         return None
     required = ('text', 'sha256', 'source_id', 'source_version', 'field')
@@ -59,13 +107,39 @@ def _verified_auxiliary(source_tokens, auxiliary):
         raise ValueError('Auxiliary comparator hash mismatch')
     if auxiliary['field'] != 'publisher imlai original':
         return None
-    tokens = _tokens(auxiliary['text'])
+    source_tokens = _vocative_units(source_tokens, source_text, uthmani=uthmani)
+    tokens = _vocative_units(_tokens(auxiliary['text']), auxiliary['text'], uthmani=uthmani)
     if len(tokens) != len(source_tokens) or not tokens:
         return None
-    if not all(re.fullmatch(_script_pattern(s['original'], verify_auxiliary=True), a['token'])
+    if not all(re.fullmatch(_script_pattern(s['original'].replace(' ', ''), verify_auxiliary=True, uthmani=uthmani),
+                           _hamza_key(_presentation_token(a['original'].replace(' ', ''), uthmani=uthmani)))
                for s, a in zip(source_tokens, tokens)):
         return None
-    return tokens
+    return source_tokens, tokens
+
+
+def _bounded_edit_ops(source_words, quote_words):
+    """Keep unmatched source edges separate from edits to the submitted quote.
+
+    A terminal replace block must not absorb unquoted context after the changed
+    last word. Bound it by the number of submitted words, preserving any extra
+    source words as a descriptive edge omission. Do the symmetric operation at
+    the leading edge only when an equal anchor follows. No lexical word is folded.
+    """
+    ops = difflib.SequenceMatcher(a=source_words, b=quote_words, autojunk=False).get_opcodes()
+    result = []
+    anchored = any(op == 'equal' for op, *_ in ops)
+    for op, a, b, c, d in ops:
+        if anchored and op == 'replace' and b - a > d - c:
+            amount = d - c
+            if d == len(quote_words):
+                result.extend([('replace', a, a + amount, c, d), ('delete', a + amount, b, d, d)])
+                continue
+            if c == 0:
+                result.extend([('delete', a, b - amount, 0, 0), ('replace', b - amount, b, c, d)])
+                continue
+        result.append((op, a, b, c, d))
+    return result
 
 
 def _public_comparison(result, source_tokens, quote_tokens, auxiliary_used=False, source_text=''):
@@ -81,7 +155,7 @@ def _public_comparison(result, source_tokens, quote_tokens, auxiliary_used=False
     if not faithful and extent == 'unknown' and any(op['operation'] == 'equal' for op in result['token_diff']):
         extent = 'excerpt' if result['omissions']['leading'] or result['omissions']['trailing'] else 'full'
     differences = []
-    for op in result['token_diff']:
+    for op in ([] if faithful else result['token_diff']):
         kind = {'replace': 'replace', 'delete': 'omit', 'insert': 'insert'}.get(op['operation'])
         if kind is None or (kind == 'omit' and op.get('omission_location') != 'internal'):
             continue
@@ -110,6 +184,12 @@ def _occurrences(text, needle):
 def _tokens(text):
     chars, offsets = [], []
     for offset, char in enumerate(text):
+        if char == '\u0640' and text[offset + 1:offset + 2] in {'\u0654', '\u0655'}:
+            chars.append('ء')
+            offsets.append(offset)
+            continue
+        if char in {'\u0654', '\u0655'} and text[offset - 1:offset] == '\u0640':
+            continue
         if char in REMOVED_MARKS or char == '\u0640':
             continue
         chars.append(' ' if char.isspace() or ud.category(char).startswith('P') else char)
@@ -172,15 +252,21 @@ def compare_quotation(quote, source_text, comparator_metadata=None, *, auxiliary
     nfc_spans = _canonical_spans(quote, source_text) if quote else []
     st, qt = _tokens(source_text), _tokens(quote)
     sw, qw = [t['token'] for t in st], [t['token'] for t in qt]
-    auxiliary = _verified_auxiliary(st, auxiliary_imlai)
+    uthmani = result['comparator_metadata'].get('canonical_orthography') == 'uthmani'
+    auxiliary = _verified_auxiliary(st, auxiliary_imlai, source_text, uthmani=uthmani)
     if auxiliary:
+        st, auxiliary = auxiliary
+        qt = _vocative_units(qt, quote, uthmani=uthmani)
         sw = [t['token'] for t in auxiliary]
         # Token spelling variants can be aliased only to a unique aligned word.
         # This preserves token count, negation and every substantive letter.
         qw = []
         for token in qt:
+            presented = _presentation_token(token['original'].replace(' ', ''), uthmani=uthmani)
             candidates = {a['token'] for s, a in zip(st, auxiliary)
-                          if token['token'] == a['token'] or re.fullmatch(_script_pattern(s['original']), token['token'])}
+                          if token['token'] in {s['token'], a['token']}
+                          or presented == _presentation_token(a['original'].replace(' ', ''), uthmani=uthmani)
+                          or re.fullmatch(_script_pattern(s['original'].replace(' ', ''), uthmani=uthmani), presented)}
             qw.append(next(iter(candidates)) if len(candidates) == 1 else token['token'])
         result['comparator_metadata']['auxiliary_imlai'] = {k: auxiliary_imlai[k] for k in ('sha256', 'source_id', 'source_version', 'field')}
         result['comparator_metadata']['auxiliary_rules_version'] = VERSION
@@ -192,7 +278,7 @@ def compare_quotation(quote, source_text, comparator_metadata=None, *, auxiliary
         i, j = matches[0], matches[0] + len(qw)
         ops = ([('delete', 0, i, 0, 0)] if i else []) + [('equal', i, j, 0, len(qw))] + ([('delete', j, len(sw), len(qw), len(qw))] if j < len(sw) else [])
     else:
-        ops = difflib.SequenceMatcher(a=sw, b=qw, autojunk=False).get_opcodes()
+        ops = _bounded_edit_ops(sw, qw)
     for op, a, b, c, d in ops:
         entry = {'operation': op, 'source_token_range': [a, b], 'quote_token_range': [c, d], 'source_tokens': st[a:b], 'quote_tokens': qt[c:d]}
         if op == 'delete':
@@ -241,6 +327,6 @@ def compare_quotation(quote, source_text, comparator_metadata=None, *, auxiliary
         result['flags'].append('negation_token_changed')
     if max(len(raw_spans), len(nfc_spans), len(spans)) > 1:
         result['flags'].append('repeated_excerpt_ambiguous')
-    result['diff_alignment'] = 'First contiguous token candidate when available, otherwise deterministic SequenceMatcher; repeated candidates remain ambiguous'
+    result['diff_alignment'] = 'First contiguous token candidate when available, otherwise deterministic SequenceMatcher with bounded source-edge edits; repeated candidates remain ambiguous'
     result['comparison'] = _public_comparison(result, st, qt, bool(auxiliary), source_text)
     return result

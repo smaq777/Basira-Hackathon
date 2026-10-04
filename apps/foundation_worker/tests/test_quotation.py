@@ -16,6 +16,59 @@ def auxiliary(text):
 
 
 class QuotationTests(unittest.TestCase):
+    def test_declared_uthmani_presentation_families_full_and_excerpt(self):
+        # Small synthetic passages exercise the writing's script families without
+        # publishing its prose or distributing a source edition/corpus.
+        families = [
+            ('وَمَا\u0653 نُوحِى\u0653 أَنَّهُ\u06e5 إِلَّا\u0653 أَنَا\u06e0 نَصٌّ', 'وما نوحي أنه إلا أنا نص'),
+            ('فِى \u0671عْبُدُوا\u06df وَ\u0671جْتَنِبُوا\u06df نَصٌّ', 'في اعبدوا واجتنبوا نص'),
+            ('تَعْبُدُو\u0653ا\u06df أَحَدُهُمَا\u0653 لَّهُمَا\u0653 نَصٌّ', 'تعبدوا أحدهما لهما نص'),
+            ('وَ\u0671عْبُدُوا\u06df بِهِ\u06e6 شَيْـ\u0654ًا نَصٌّ', 'واعبدوا به شيئا نص'),
+        ]
+        for source, imlai in families:
+            words = imlai.split()
+            for quote, extent in ((imlai, 'full'), (' '.join(words[:-1]), 'excerpt'),
+                                  (' '.join(words[1:]), 'excerpt')):
+                with self.subTest(source=source, quote=quote):
+                    result = compare_quotation(quote, source,
+                        {'canonical_orthography': 'uthmani'}, auxiliary_imlai=auxiliary(imlai))
+                    self.assertEqual(result['comparison']['fidelity'], 'orthographic')
+                    self.assertEqual(result['comparison']['extent'], extent)
+                    self.assertEqual(result['comparison']['differences'], [])
+                    self.assertEqual(result['source_sha256'], sha(source))
+
+    def test_canonical_self_comparison_with_auxiliary_has_no_edits(self):
+        source = 'لَا\u0653 إِكْرَاهَ فِى \u0671لدِّينِ قَدْ تَبَيَّنَ'
+        view = auxiliary('لا إكراه في الدين قد تبين')
+        result = compare_quotation(source, source, auxiliary_imlai=view)
+        self.assertEqual(result['comparison'], dict(fidelity='exact', extent='full', differences=[], basis='canonical'))
+        self.assertNotIn('lexical_difference', result['flags'])
+        excerpt = source[:source.index(' قَدْ')]
+        result = compare_quotation(excerpt, source, auxiliary_imlai=view)
+        self.assertEqual(result['comparison'], dict(fidelity='exact', extent='excerpt', differences=[], basis='canonical'))
+
+    def test_verified_vocative_spacing_preserves_original_source_offsets(self):
+        source = 'يَـ\u0670\u0653أَيُّهَا نَصٌّ وَاضِحٌ'
+        result = compare_quotation('يا أيها نص واضح', source,
+            {'canonical_orthography': 'uthmani'}, auxiliary_imlai=auxiliary('ياأيها نص واضح'))
+        self.assertEqual(result['comparison']['fidelity'], 'orthographic')
+        self.assertEqual(result['comparison']['extent'], 'full')
+        self.assertEqual(result['comparison']['differences'], [])
+        self.assertEqual(result['contiguous_source_spans'][0]['original'], source)
+
+    def test_lexical_change_at_excerpt_end_does_not_absorb_unquoted_context(self):
+        result = compare_quotation('نص واحد متغير', 'نص واحد أصيل ثم سياق أطول محفوظ')
+        self.assertEqual(result['comparison']['extent'], 'excerpt')
+        self.assertEqual(result['comparison']['differences'], [dict(kind='replace', quotedText='متغير', sourceText='أصيل')])
+
+    def test_extra_final_alef_remains_a_lexical_difference(self):
+        source = 'مَـ\u0670\u0653 أُرِيدُ أَنْ يُطْعِمُونِ'
+        result = compare_quotation('ما أريد أن يطعمونا', source,
+            {'canonical_orthography': 'uthmani'}, auxiliary_imlai=auxiliary('ما أريد أن يطعمون'))
+        self.assertEqual(result['comparison']['fidelity'], 'different')
+        self.assertEqual(result['comparison']['extent'], 'full')
+        self.assertEqual(result['comparison']['differences'], [dict(kind='replace', quotedText='يطعمونا', sourceText='يُطْعِمُونِ')])
+
     def test_full_and_contiguous_prefix_middle_suffix_have_independent_extent(self):
         source = 'نص واحد واضح ثم مقصد أصيل'
         for quote, extent in ((source, 'full'), ('نص واحد واضح', 'excerpt'),
@@ -50,8 +103,13 @@ class QuotationTests(unittest.TestCase):
     def test_hamza_and_lexical_madda_are_not_folded(self):
         for quote, source in (('ان مقصد واضح', 'إن مقصد واضح'), ('امن مقصد واضح', 'آمن مقصد واضح'),
                               ('امن مقصد واضح', 'ا\u0653من مقصد واضح')):
-            result = compare_quotation(quote, source, auxiliary_imlai=auxiliary(source))
-            self.assertEqual(result['comparison']['fidelity'], 'different')
+            for metadata in (None, {'canonical_orthography': 'uthmani'}):
+                result = compare_quotation(quote, source, metadata, auxiliary_imlai=auxiliary(source))
+                self.assertEqual(result['comparison']['fidelity'], 'different')
+        altered = compare_quotation('أن مقصد واضح', 'إن مقصد واضح',
+            {'canonical_orthography': 'uthmani'}, auxiliary_imlai=auxiliary('أن مقصد واضح'))
+        self.assertEqual(altered['comparison']['fidelity'], 'different')
+        self.assertNotEqual(altered['comparison']['basis'], 'auxiliary_imlai')
 
     def test_script_bridge_requires_hashed_attributed_token_aligned_auxiliary(self):
         source = 'لَآ إِكْرَاهَ فِى ٱلدِّينِ قَدْ تَبَيَّنَ'
