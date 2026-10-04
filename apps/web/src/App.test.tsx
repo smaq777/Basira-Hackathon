@@ -43,6 +43,34 @@ describe('Basirah web flow', () => {
     expect(screen.queryByRole('combobox')).toBeNull();
   });
 
+  it('keeps one analysis request alive across a parent rerender and opens the result', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ documentId: 'doc', revisionId: 'rev' }), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ extraction: { candidates: [], warnings: [] } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    const user = userEvent.setup();
+    const view = render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /جرّب مثالًا/ }));
+    await user.click(screen.getByRole('button', { name: 'ابدأ المراجعة' }));
+    view.rerender(<App />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'راجع النتيجة قبل اعتماد التعديل' }),
+    ).not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('preserves the submitted draft when returning from analysis', async () => {
     const user = userEvent.setup();
     render(<App />);
