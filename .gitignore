@@ -40,3 +40,5 @@ data/licensed/
 *.p12
 *.pfx
 *.jks
+__pycache__/
+*.py[cod]

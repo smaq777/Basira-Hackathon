@@ -3,8 +3,8 @@ info:
   title: Basirah MVP Backend API
   version: 0.1.0
   description: >-
-    Implemented infrastructure and guest-document endpoints. Evidence review remains
-    deliberately unavailable until its source, model and evaluation dependencies are accepted.
+    Guest-document endpoints and an optional source-review bridge. The bridge defaults off;
+    semantic verification remains unavailable pending model and evaluation acceptance.
 servers:
   - url: http://localhost:3000
     description: Local development only
@@ -63,6 +63,11 @@ paths:
                   reviewerAuthentication: { type: boolean }
                   reviewerAuthorization: { type: boolean }
                   preflightDemo: { const: true }
+                  foundationReview: { type: boolean }
+                  researchPreview: { type: boolean }
+                  maximumTextLength: { enum: [3000, 12000] }
+                  draftRewrite: { const: false }
+                  reviewOrchestration: { type: boolean }
   /api/v1/reviewer/session:
     get:
       summary: Verify the signed-in user against the server-side reviewer allowlist
@@ -276,6 +281,38 @@ paths:
           description: Guest session is missing, invalid or expired
         '404':
           description: Owned review not found
+  /api/v1/reviews/{reviewId}/report:
+    parameters:
+      - in: path
+        name: reviewId
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Read a persisted source report owned by the guest cookie
+      description: >-
+        Returns the strict FoundationReport contract in packages/contracts/src/foundation.ts.
+        Original text, revision and evidence hashes, source provenance, quotation findings and
+        excerpt extent are preserved. Interpretation is explicitly not assessed; this is not
+        religious verification. When enabled, intake and review submissions are limited to
+        3000 UTF-16 code units. Original whitespace is preserved; whitespace-only text is rejected.
+      responses:
+        '200':
+          description: Immutable report bound to this review and revision
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report]
+                properties:
+                  report: { type: object }
+        '202':
+          description: No report is persisted; body contains report null and current lifecycle status
+        '401':
+          description: Guest session is missing, invalid or expired
+        '404':
+          description: Owned review not found
+        '503':
+          description: Source bridge unavailable or stored report failed validation
 components:
   securitySchemes:
     clerkSession:

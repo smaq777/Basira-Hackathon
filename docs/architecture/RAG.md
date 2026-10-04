@@ -2,6 +2,11 @@
 
 **Stage:** deterministic retrieval core implemented; database/provider integration and reviewer-labelled evaluation remain pending. RAG supplies attributable evidence; it does not train the model or guarantee correctness.
 
+**4 October decision:** the deployment target is hosted Neon PostgreSQL with
+pgvector; local PostgreSQL/SQLite are development fixtures. See
+[issue #8](https://github.com/smaq777/Basira-Hackathon/issues/8) and the
+[integration/source dependency record](FOUNDATION_INTEGRATION.md).
+
 ## Corpus preparation
 
 1. A content reviewer approves the work, edition, permitted use and intended claim coverage.

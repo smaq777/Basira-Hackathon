@@ -27,4 +27,12 @@ retention and deletion policy.
 
 ## Forward-fix policy
 
+Migration `0006` adds immutable source reports and bounded worker leases. Configure
+`REVIEW_WORKER_DATABASE_URL` with a separate login inheriting `basirah_worker`;
+keep report reads on the ordinary `basirah_runtime` connection. The worker role
+receives only scoped function execution, not table ownership. Review the
+[integration guide](../docs/architecture/FOUNDATION_INTEGRATION.md) before enabling.
+Local workflow tests on PostgreSQL without pgvector are not full migration validation;
+fresh and production-shaped isolated Neon validation remains required under #6.
+
 Do not edit an applied migration. Add a numbered migration, test it against a fresh database and a production-shaped copy, and prefer expand-and-contract changes. Do not put destructive migrations in application startup. Production data deletion, restore, reset or project removal requires separate owner approval.

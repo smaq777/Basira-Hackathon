@@ -2,6 +2,11 @@
 
 Baseline date: **3 October 2026**. See live issues and PR checks for subsequent progress.
 
+**Local implementation update, 4 October:** Issue #14 adds a default-off source-review
+bridge to the current UI. See the [integration decisions and ordered tasks](architecture/FOUNDATION_INTEGRATION.md)
+and [local evidence](evidence/2026-10-04-foundation-integration.md). This does not change
+the deployed baseline below or establish semantic accuracy, approved sources or acceptance.
+
 The fresh repository baseline contains the completed foundation and architecture work. Current validation is recorded by this repository's GitHub Actions runs. [Issue #27](https://github.com/smaq777/Basira-Hackathon/issues/27) tracks the judge-ready repository and deployment handoff.
 
 | Area                           | Actual state                                                                                                                                                                                                                                                                               |

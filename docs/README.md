@@ -4,6 +4,9 @@ Basirah documentation is **English-first**. The product interface is Arabic-firs
 
 Read [current status](STATUS.md) before interpreting any diagram as implemented behavior.
 
+The [AI foundation integration](architecture/FOUNDATION_INTEGRATION.md) records the
+current-UI bridge, indicator decisions, source dependencies and prioritized agent work.
+
 ## Reading paths
 
 - **Developer:** [setup](operations/SETUP.md) → [credentials](operations/CREDENTIALS.md) → [requirements](product/REQUIREMENTS.md) → [complete system blueprint](architecture/SYSTEM_BLUEPRINT.md) → [architecture summary](architecture/ARCHITECTURE.md) → [tests](testing/STRATEGY.md).

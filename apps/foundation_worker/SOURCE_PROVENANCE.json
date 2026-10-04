@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "integration_issue": 14,
+  "copied_on": "2026-10-04",
+  "purpose": "Source-first runtime dependency closure only; no corpora or historical research outputs included.",
+  "origin": "Owner-requested portability integration of sibling AI_Foundation working source files.",
+  "code_notice": "Existing module docstrings/comments retained. These modules contained no separate copyright or licensing headers; no new license or source-content redistribution rights are asserted.",
+  "files": [
+    {
+      "source": "AI_Foundation/pipeline/source_intake.py",
+      "packaged": "pipeline/source_intake.py",
+      "original_sha256": "fb7300609c402c649e5e2972322487f1d019c08dba345aa88bfb979026ffb23e",
+      "packaged_sha256": "fb7300609c402c649e5e2972322487f1d019c08dba345aa88bfb979026ffb23e",
+      "changes": "None; original module and existing comments retained byte-for-byte."
+    },
+    {
+      "source": "AI_Foundation/pipeline/evidence.py",
+      "packaged": "pipeline/evidence.py",
+      "original_sha256": "d356cfd725d691bcac3883a47e557081b0f364c5929838b039e590420e733d77",
+      "packaged_sha256": "d356cfd725d691bcac3883a47e557081b0f364c5929838b039e590420e733d77",
+      "changes": "None; original module and existing comments retained byte-for-byte."
+    },
+    {
+      "source": "AI_Foundation/pipeline/quote_discovery.py",
+      "packaged": "pipeline/quote_discovery.py",
+      "original_sha256": "682f7cc24676fcf4ac11eb8cb85ef9d4fbabecc887439839af006bff894cbb86",
+      "packaged_sha256": "682f7cc24676fcf4ac11eb8cb85ef9d4fbabecc887439839af006bff894cbb86",
+      "changes": "None; original module and existing comments retained byte-for-byte."
+    },
+    {
+      "source": "AI_Foundation/pipeline/tafsir_adapter.py",
+      "packaged": "pipeline/tafsir_adapter.py",
+      "original_sha256": "d0a26e26df1210ae30bd99a1ec37217f9dea6a9bded7a3406e60d7d93bd6ec1b",
+      "packaged_sha256": "d0a26e26df1210ae30bd99a1ec37217f9dea6a9bded7a3406e60d7d93bd6ec1b",
+      "changes": "None; original module and existing comments retained byte-for-byte."
+    },
+    {
+      "source": "AI_Foundation/pipeline/live_tafsir.py",
+      "packaged": "pipeline/live_tafsir.py",
+      "original_sha256": "9c69e87dffe3914603991dbd8c46ebf5aebd4c3d139607683d67b2c9ed0fd898",
+      "packaged_sha256": "9c69e87dffe3914603991dbd8c46ebf5aebd4c3d139607683d67b2c9ed0fd898",
+      "changes": "None; original module and existing comments retained byte-for-byte."
+    },
+    {
+      "source": "AI_Foundation/review_flow/quotation.py",
+      "packaged": "review_flow/quotation.py",
+      "original_sha256": "d3f418fd1ea7fe4e286c384ace50dda825f56cc223dcb13fb05efeeed2c518ff",
+      "packaged_sha256": "d3f418fd1ea7fe4e286c384ace50dda825f56cc223dcb13fb05efeeed2c518ff",
+      "changes": "None; original module and existing comments retained byte-for-byte."
+    }
+  ],
+  "bridge_origin": {
+    "source": "AI_Foundation/experiments/theme-assistance-v1/intake_bridge.py",
+    "original_sha256": "b5c8a7e9f6783450983c696eb568e486cd07d5a1b193c23259922cec69154fb2",
+    "changes": "Worker-local import root; sanitized startup/source-integrity failures; otherwise same bounded JSONL request/response protocol."
+  }
+}

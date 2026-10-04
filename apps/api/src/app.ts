@@ -16,8 +16,18 @@ import {
   type ReviewerAuthGateway,
 } from './reviewer-auth.js';
 import { buildDemoPreflight, PreflightInputSchema } from './preflight.js';
+import { FoundationReportSchema } from '../../../packages/contracts/src/foundation.js';
+import type { ReviewStore } from './review-store.js';
 
-const TextInput = z.object({ text: z.string().trim().min(1).max(12_000) }).strict();
+const TextInput = z
+  .object({
+    text: z
+      .string()
+      .min(1)
+      .max(12_000)
+      .refine((text) => text.trim().length > 0),
+  })
+  .strict();
 const DocumentParams = z.object({ documentId: z.uuid() }).strict();
 const ReviewInput = z.object({ revisionId: z.uuid() }).strict();
 const ReviewParams = z.object({ reviewId: z.uuid() }).strict();
@@ -71,6 +81,11 @@ function setGuestCookie(
 }
 
 type AppOptions = {
+  foundation?: {
+    worker: { notify(): void };
+    reports: Pick<ReviewStore, 'ownedReport'>;
+    researchPreview: boolean;
+  };
   database?: BackendDatabase;
   production?: boolean;
   reviewerAuth?: ReviewerAuthGateway;
@@ -169,6 +184,13 @@ export function createApp(options: AppOptions = {}) {
       reviewerAuthentication: reviewerAuth.configured,
       reviewerAuthorization: reviewerAuth.authorizationConfigured,
       preflightDemo: true,
+      foundationReview:
+        Boolean(options.foundation) &&
+        state.ready &&
+        Number(state.migrationVersion?.slice(0, 4)) >= 6,
+      researchPreview: options.foundation?.researchPreview ?? false,
+      maximumTextLength: options.foundation ? 3_000 : 12_000,
+      draftRewrite: false,
     });
   });
   app.post('/api/v1/preflight', guestMutationRateLimit, (req, res, next) => {
@@ -228,6 +250,8 @@ export function createApp(options: AppOptions = {}) {
       const credentials = guestCredentials(req);
       if (!credentials) return res.status(401).json({ code: 'INVALID_OR_EXPIRED_SESSION' });
       const { text } = TextInput.parse(req.body);
+      if (options.foundation && text.length > 3_000)
+        return res.status(400).json({ code: 'TEXT_TOO_LONG', maximumTextLength: 3_000 });
       const created = await database.createDocument(
         credentials.publicId,
         credentials.ownershipSecret,
@@ -247,6 +271,8 @@ export function createApp(options: AppOptions = {}) {
         if (!credentials) return res.status(401).json({ code: 'INVALID_OR_EXPIRED_SESSION' });
         const { documentId } = DocumentParams.parse(req.params);
         const { text } = TextInput.parse(req.body);
+        if (options.foundation && text.length > 3_000)
+          return res.status(400).json({ code: 'TEXT_TOO_LONG', maximumTextLength: 3_000 });
         const created = await database.createRevision(
           credentials.publicId,
           credentials.ownershipSecret,
@@ -299,6 +325,16 @@ export function createApp(options: AppOptions = {}) {
       if (corpusVersion.length > 120) throw new Error('INVALID_CORPUS_VERSION_CONFIGURATION');
       const idempotencyKey = IdempotencyKey.parse(req.header('Idempotency-Key'));
       const { revisionId } = ReviewInput.parse(req.body);
+      if (options.foundation) {
+        const revision = await database.getRevision(
+          credentials.publicId,
+          credentials.ownershipSecret,
+          revisionId,
+        );
+        if (!revision) return res.status(404).json({ code: 'REVISION_NOT_FOUND' });
+        if (revision.text.length > 3_000)
+          return res.status(400).json({ code: 'TEXT_TOO_LONG', maximumTextLength: 3_000 });
+      }
       const created = await database.createReviewRun(
         credentials.publicId,
         credentials.ownershipSecret,
@@ -309,6 +345,7 @@ export function createApp(options: AppOptions = {}) {
       );
       if (!created) return res.status(404).json({ code: 'REVISION_NOT_FOUND' });
       if (created.replayed) res.setHeader('Idempotent-Replayed', 'true');
+      options.foundation?.worker.notify();
       return res.status(created.replayed ? 200 : 202).json({
         reviewId: created.reviewId,
         revisionId: created.revisionId,
@@ -335,6 +372,39 @@ export function createApp(options: AppOptions = {}) {
       );
       if (!run) return res.status(404).json({ code: 'REVIEW_NOT_FOUND' });
       return res.json(run);
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.get('/api/v1/reviews/:reviewId/report', async (req, res, next) => {
+    try {
+      const credentials = guestCredentials(req);
+      if (!credentials) return res.status(401).json({ code: 'INVALID_OR_EXPIRED_SESSION' });
+      const { reviewId } = ReviewParams.parse(req.params);
+      const run = await database.getReviewRun(
+        credentials.publicId,
+        credentials.ownershipSecret,
+        reviewId,
+      );
+      if (!run) return res.status(404).json({ code: 'REVIEW_NOT_FOUND' });
+      if (!options.foundation) return res.status(503).json({ code: 'EVIDENCE_REVIEW_UNAVAILABLE' });
+      const stored = await options.foundation.reports.ownedReport(
+        credentials.publicId,
+        credentials.ownershipSecret,
+        reviewId,
+      );
+      if (!stored)
+        return res
+          .status(202)
+          .json({ report: null, reviewId, revisionId: run.revisionId, status: run.status });
+      const parsed = FoundationReportSchema.safeParse(stored);
+      if (
+        !parsed.success ||
+        parsed.data.reviewId !== reviewId ||
+        parsed.data.revisionId !== run.revisionId
+      )
+        throw new Error('INVALID_STORED_REPORT');
+      return res.json({ report: parsed.data });
     } catch (error) {
       return next(error);
     }
