@@ -7,6 +7,6 @@
 - Preserved Arabic Islamic terminology and Arabic-first product examples.
 - Added a minimal React/Node foundation and evidence/revision contract tests; no completed verification engine.
 - Added collaboration templates, desired branch-protection configuration and CI/dependency review configuration.
-- Recorded API access limits, provider connection blockers and the pre-hackathon baseline.
+- Recorded API access limits, provider connection blockers and the initial engineering baseline.
 
 No production release, complete scholarly evaluation or final submission is implied.

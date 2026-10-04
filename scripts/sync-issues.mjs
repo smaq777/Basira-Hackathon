@@ -1,8 +1,9 @@
-// Explicit maintenance command: creates or updates Basirah issues. Never run in CI.
+// Read-only maintenance command: verifies that the planning catalogue matches live issues.
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-if (!process.argv.includes('--apply')) throw new Error('External write requires explicit --apply');
+if (process.argv.includes('--apply'))
+  throw new Error('Bulk issue writes are disabled; update issues through reviewed GitHub changes');
 const repository = 'smaq777/Basira-Hackathon';
 const entries = JSON.parse(readFileSync('docs/planning/issues.json', 'utf8'));
 const api = (path, method = 'GET', input) =>
@@ -16,34 +17,22 @@ const api = (path, method = 'GET', input) =>
 const current = api(`repos/${repository}/issues?state=all&per_page=100`).filter(
   (item) => !item.pull_request,
 );
+const errors = [];
 for (const entry of entries) {
-  const existing = current.find(
-    (item) => item.number === entry.number || item.title === entry.title,
-  );
-  if (existing && existing.number !== entry.number)
-    throw new Error(`Unexpected issue mapping for ${entry.title}; inspect before writing`);
-  if (existing && entry.number > 9 && existing.title !== entry.title)
-    throw new Error(`Issue #${entry.number} is occupied; do not overwrite`);
-  const body = `## Scope\n${entry.scope}\n\n## Acceptance criteria\n${entry.acceptance.map((value) => `- [ ] ${value}`).join('\n')}\n\n## Tests and evidence\n${entry.tests}\n\n## Dependencies\n${entry.dependencies.map((number) => `- #${number}`).join('\n')}\n\n## Risk and rollback / forward-fix\n${entry.risk}\n\n## Documentation and delivery policy\nEnglish-first documentation; preserve Arabic Islamic terms and examples. Use an issue-linked role-scoped branch, PR, checks and owner acceptance. Planned work is not completed work.\n`;
-  const desired = {
-    title: entry.title,
-    body,
-    milestone: entry.milestone ?? null,
-    labels: [
-      `priority:${entry.priority}`,
-      `area:${entry.area}`,
-      `type:${entry.type}`,
-      entry.number > 21 ? 'phase:later' : 'phase:mvp',
-      ...([2, 9, 19].includes(entry.number) ? ['status:blocked'] : []),
-    ],
-  };
-  const result = api(
-    `repos/${repository}/issues${existing ? `/${existing.number}` : ''}`,
-    existing ? 'PATCH' : 'POST',
-    desired,
-  );
-  console.log(`${existing ? 'Updated' : 'Created'} #${result.number} ${result.title}`);
-  if (result.number !== entry.number)
-    throw new Error('Unexpected assigned issue number; stop and reconcile');
-  if (!existing) current.push(result);
+  const byNumber = current.find((item) => item.number === entry.number);
+  const byTitle = current.find((item) => item.title === entry.title);
+  if (!byNumber) errors.push(`Missing live issue #${entry.number}: ${entry.title}`);
+  else if (byNumber.title !== entry.title)
+    errors.push(
+      `Issue #${entry.number} title mismatch: expected "${entry.title}", found "${byNumber.title}"`,
+    );
+  if (byTitle && byTitle.number !== entry.number)
+    errors.push(`Title mapped to #${byTitle.number}, not #${entry.number}: ${entry.title}`);
 }
+if (errors.length) {
+  console.error(errors.join('\n'));
+  process.exit(1);
+}
+console.log(
+  `Verified ${entries.length} issue catalogue entries against ${repository}; no writes made.`,
+);

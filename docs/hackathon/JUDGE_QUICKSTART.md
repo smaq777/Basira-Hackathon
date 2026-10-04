@@ -18,7 +18,7 @@ npm run check
 npm run dev:api
 ```
 
-In a second terminal, run `npm run dev:web`. Open `http://localhost:5173`. With a configured migrated database, `/ready` returns `200` and guest document/revision endpoints work. Review creation deliberately returns `501` until the evidence pipeline exists.
+In a second terminal, run `npm run dev:web`. Open `http://localhost:5173`. With a configured migrated database, `/ready` returns `200`; guest document/revision endpoints and the recoverable review-run lifecycle work. Review runs do not execute a live evidence-verification worker yet, so no scholarly result is claimed.
 
 ## 3. Configure only delivered integrations
 

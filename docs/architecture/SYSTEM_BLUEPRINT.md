@@ -2,7 +2,7 @@
 
 **Purpose:** give a developer one implementation map for the complete Basirah system: what exists, what is planned, how parts connect, when each part is called, and which work must happen first.
 
-**Last reconciled:** 1 October 2026 against the foundation and architecture baseline and delivery issues through [#27](https://github.com/smaq777/Basira-Hackathon/issues/27).
+**Last reconciled:** 4 October 2026 against the current implementation and delivery issues through [#63](https://github.com/smaq777/Basira-Hackathon/issues/63).
 
 > This is a **target architecture**, not evidence that the target system is already working. The status labels below are part of the design. Passing software tests cannot establish religious correctness or scholarly approval.
 
@@ -27,17 +27,17 @@ Basirah is not an unrestricted religious chatbot, a personal fatwa (فتوى ش�
 
 | Area                                 | Current merged state                                                                                                                                                | Target MVP owner                                                                                                                                                                                                              |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Web                                  | **Implemented:** honest Arabic foundation shell only                                                                                                                | [#14](https://github.com/smaq777/Basira-Hackathon/issues/15), [#15](https://github.com/smaq777/Basira-Hackathon/issues/16), and the scoped visual delivery issue [#25](https://github.com/smaq777/Basira-Hackathon/issues/25) |
-| API                                  | **Implemented:** liveness, unavailable readiness, capabilities, and deliberate `501` review response                                                                | [#13](https://github.com/smaq777/Basira-Hackathon/issues/14)                                                                                                                                                                  |
-| Contracts                            | **Implemented and unit-tested:** evidence/finding structure, revision/citation guards, bounded search key, provider failure classification, embedding compatibility | Extended across [#5](https://github.com/smaq777/Basira-Hackathon/issues/6)–[#13](https://github.com/smaq777/Basira-Hackathon/issues/14)                                                                                       |
-| Database                             | **Planned; not migrated**                                                                                                                                           | [#5](https://github.com/smaq777/Basira-Hackathon/issues/6)                                                                                                                                                                    |
-| Approved corpus                      | **Planned; rights and selection pending**                                                                                                                           | [#3](https://github.com/smaq777/Basira-Hackathon/issues/4), [#4](https://github.com/smaq777/Basira-Hackathon/issues/5)                                                                                                        |
-| Retrieval / RAG                      | **Planned**                                                                                                                                                         | [#6](https://github.com/smaq777/Basira-Hackathon/issues/7), [#7](https://github.com/smaq777/Basira-Hackathon/issues/8)                                                                                                        |
-| Tafsir MCP                           | **Planned; live contract not verified in Basirah**                                                                                                                  | [#8](https://github.com/smaq777/Basira-Hackathon/issues/9)                                                                                                                                                                    |
-| Dorar                                | **Blocked:** sampled access returned `403`                                                                                                                          | [#9](https://github.com/smaq777/Basira-Hackathon/issues/10)                                                                                                                                                                   |
-| AI extraction and support assessment | **Planned; provider/model not selected by benchmark**                                                                                                               | [#10](https://github.com/smaq777/Basira-Hackathon/issues/11), [#12](https://github.com/smaq777/Basira-Hackathon/issues/13)                                                                                                    |
-| Scientific evaluation                | **Planned; no accuracy or impact result exists**                                                                                                                    | [#17](https://github.com/smaq777/Basira-Hackathon/issues/18)                                                                                                                                                                  |
-| Deployment                           | **Templates only; no verified live Basirah product**                                                                                                                | [#19](https://github.com/smaq777/Basira-Hackathon/issues/20)                                                                                                                                                                  |
+| Web                                  | **Implemented:** Arabic guest intake, provisional inline preflight, illustrative result/edit journey and Clerk-protected reviewer workspace                         | [#15](https://github.com/smaq777/Basira-Hackathon/issues/15), [#16](https://github.com/smaq777/Basira-Hackathon/issues/16), and the scoped visual delivery issue [#25](https://github.com/smaq777/Basira-Hackathon/issues/25) |
+| API                                  | **Implemented:** health/readiness/capabilities, guest sessions/documents/revisions/deletion, automatic extraction and recoverable review-run lifecycle              | [#14](https://github.com/smaq777/Basira-Hackathon/issues/14)                                                                                                                                                                  |
+| Contracts                            | **Implemented and unit-tested:** evidence/finding structure, revision/citation guards, bounded search key, provider failure classification, embedding compatibility | Extended across [#6](https://github.com/smaq777/Basira-Hackathon/issues/6)–[#14](https://github.com/smaq777/Basira-Hackathon/issues/14)                                                                                       |
+| Database                             | **Implemented and verified:** PostgreSQL persistence and migrations through `0005`; the separate production runtime connection remains gated                        | [#6](https://github.com/smaq777/Basira-Hackathon/issues/6)                                                                                                                                                                    |
+| Approved corpus                      | **Planned; rights and selection pending**                                                                                                                           | [#4](https://github.com/smaq777/Basira-Hackathon/issues/4), [#5](https://github.com/smaq777/Basira-Hackathon/issues/5)                                                                                                        |
+| Retrieval / RAG                      | **Partially implemented:** deterministic approved-only hybrid ranking with synthetic tests; real ingestion, embeddings and reviewer-labelled evaluation are pending | [#7](https://github.com/smaq777/Basira-Hackathon/issues/7), [#8](https://github.com/smaq777/Basira-Hackathon/issues/8)                                                                                                        |
+| Tafsir MCP                           | **Planned; live contract not verified in Basirah**                                                                                                                  | [#9](https://github.com/smaq777/Basira-Hackathon/issues/9)                                                                                                                                                                    |
+| Dorar                                | **Blocked:** sampled access returned `403`                                                                                                                          | [#10](https://github.com/smaq777/Basira-Hackathon/issues/10)                                                                                                                                                                  |
+| AI extraction and support assessment | **Partial:** bounded automatic extraction is implemented; evidence-bounded model assessment and provider selection remain pending                                   | [#11](https://github.com/smaq777/Basira-Hackathon/issues/11), [#13](https://github.com/smaq777/Basira-Hackathon/issues/13)                                                                                                    |
+| Scientific evaluation                | **Planned; no accuracy or impact result exists**                                                                                                                    | [#18](https://github.com/smaq777/Basira-Hackathon/issues/18)                                                                                                                                                                  |
+| Deployment                           | **Verified staging:** Railway same-origin app/database flow and public Vercel previews are live; committee production promotion remains gated                       | [#20](https://github.com/smaq777/Basira-Hackathon/issues/20), [#61](https://github.com/smaq777/Basira-Hackathon/issues/61)                                                                                                    |
 
 ## 3. Non-negotiable system invariants
 
@@ -323,7 +323,7 @@ sequenceDiagram
 
 ## 9. When to call each part
 
-The names in this table are logical application operations. The implemented public API remains the small contract in [`OPENAPI.yaml`](../api/OPENAPI.yaml); [#13](https://github.com/smaq777/Basira-Hackathon/issues/14) must finalize any new HTTP routes before frontend integration.
+The names in this table are logical application operations. The implemented public API remains the small contract in [`OPENAPI.yaml`](../api/OPENAPI.yaml); [#14](https://github.com/smaq777/Basira-Hackathon/issues/14) must finalize any new HTTP routes before frontend integration.
 
 | Order | Caller → callee                    | Call when                                                      | Required input                                                                 | Successful output                                                                      | Do not call / fallback                                                                           |
 | ----: | ---------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -346,7 +346,7 @@ The names in this table are logical application operations. The implemented publ
 |    12 | UI → export service                | User requests escalation or download                           | Owned run ID and export format/version                                         | Packet with original/revised text, claims, evidence, limitations, unresolved questions | Do not imply a reviewer received it; packet generation is not submission                         |
 |    13 | UI → delete service                | User explicitly deletes or session retention expires           | Ownership proof and session/document scope                                     | Inaccessible guest content and deletion record                                         | Verify caches, exports, and dependent rows; do not claim third-party deletion without evidence   |
 
-### Target API surface to finalize in Issue #13
+### Target API surface to finalize in Issue #14
 
 These routes are a proposed handoff shape, not implemented endpoints. The backend owner must update `OPENAPI.yaml`, shared schemas, tests, and frontend fixtures together before the frontend calls them.
 
@@ -676,61 +676,61 @@ The system should be built in vertical slices, but dependencies still matter. Th
 
 ```mermaid
 flowchart TD
-  F[Foundation merged - PR 24] --> G[Stage 1A: governance and collaborator - Issue 2]
-  F --> S[Stage 1B: source and rights registry - Issue 3]
-  S --> C[Stage 2A: curate 30-50 passages - Issue 4]
-  G --> D[Stage 2B: schema, migrations, guest ownership - Issue 5]
+  F[Current repository baseline] --> G[Stage 1A: governance and collaborator - Issue 3]
+  F --> S[Stage 1B: source and rights registry - Issue 4]
+  S --> C[Stage 2A: curate 30-50 passages - Issue 5]
+  G --> D[Stage 2B: schema, migrations, guest ownership - Issue 6]
 
-  C --> E[Stage 3A: versioned embeddings - Issue 6]
+  C --> E[Stage 3A: versioned embeddings - Issue 7]
   D --> E
-  C --> T[Stage 3B: Tafsir MCP and snapshot - Issue 8]
-  S --> H[Stage 3C: authorized Dorar assessment - Issue 9]
-  D --> X[Stage 3D: extraction and confirmation core - Issue 10]
+  C --> T[Stage 3B: Tafsir MCP and snapshot - Issue 9]
+  S --> H[Stage 3C: authorized Dorar assessment - Issue 10]
+  D --> X[Stage 3D: extraction and confirmation core - Issue 11]
 
-  E --> R[Stage 4A: hybrid retrieval - Issue 7]
+  E --> R[Stage 4A: hybrid retrieval - Issue 8]
   C --> R
   D --> R
-  R --> Q[Stage 4B: deterministic quotation checks - Issue 11]
+  R --> Q[Stage 4B: deterministic quotation checks - Issue 12]
   C --> Q
-  R --> A[Stage 4C: evidence-bounded support assessment - Issue 12]
+  R --> A[Stage 4C: evidence-bounded support assessment - Issue 13]
   X --> A
   Q --> A
 
-  T --> O[Stage 5: review orchestration - Issue 13]
+  T --> O[Stage 5: review orchestration - Issue 14]
   X --> O
   Q --> O
   A --> O
   D --> O
 
-  X --> U1[Stage 6A: intake and confirmation UX - Issue 14]
-  O --> U2[Stage 6B: report, revision, export - Issue 15]
+  X --> U1[Stage 6A: intake and confirmation UX - Issue 15]
+  O --> U2[Stage 6B: report, revision, export - Issue 16]
   U1 --> U2
   U1 -.->|visual implementation| U25[Scoped Arabic editorial UI - Issue 25]
   U2 -.->|visual implementation| U25
 
-  O --> Rel[Stage 7A: retries, cache, fallback - Issue 16]
+  O --> Rel[Stage 7A: retries, cache, fallback - Issue 17]
   T --> Rel
-  O --> Sec[Stage 7B: privacy and security - Issue 18]
+  O --> Sec[Stage 7B: privacy and security - Issue 19]
   U2 --> Sec
 
-  C --> Eval[Stage 8A: scientific evaluation - Issue 17]
+  C --> Eval[Stage 8A: scientific evaluation - Issue 18]
   A --> Eval
   U2 --> Eval
-  G --> Deploy[Stage 8B: staging and recovery - Issue 19]
+  G --> Deploy[Stage 8B: staging and recovery - Issue 20]
   D --> Deploy
   O --> Deploy
   Sec --> Deploy
 
-  U1 --> QA[Stage 8C: end-to-end and accessibility QA - Issue 20]
+  U1 --> QA[Stage 8C: end-to-end and accessibility QA - Issue 21]
   U2 --> QA
   Rel --> QA
   Sec --> QA
   Deploy --> QA
 
-  Eval --> Release[Stage 9: public handoff and submission package - Issue 21]
+  Eval --> Release[Stage 9: public handoff and submission package - Issue 22]
   Deploy --> Release
   QA --> Release
-  Release --> Later[Later: discussions, accounts, history, OCR - Issues 22 and 23]
+  Release --> Later[Later: discussions, accounts, history, OCR - Issues 23 and 24]
 ```
 
 ### Recommended execution sequence
@@ -738,14 +738,14 @@ flowchart TD
 | Stage                       | Finish condition before depending work proceeds                                                                      | Parallel work allowed                                                               |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | 0. Foundation               | Merged scaffold, contracts, checks, and honest unavailable endpoints                                                 | Complete                                                                            |
-| 1. Governance and sources   | Enforceable workflow or recorded exception; works/editions/rights decision                                           | #2 and #3 can run in parallel                                                       |
-| 2. Content and data         | Approved passages plus reviewed schema/migrations/session ownership                                                  | #4 and #5 can run in parallel after their own dependencies                          |
-| 3. Integration primitives   | Embedding ingestion, source adapters, and claim extraction have real contract tests                                  | #6, #8, #9, and #10 are independent lanes after prerequisites                       |
-| 4. Review intelligence      | Retrieval recall path, deterministic quote checks, and bounded support assessment work on one approved example       | #11 and extraction/UI contract work may overlap after #7                            |
+| 1. Governance and sources   | Enforceable workflow or recorded exception; works/editions/rights decision                                           | #3 and #4 can run in parallel                                                       |
+| 2. Content and data         | Approved passages plus reviewed schema/migrations/session ownership                                                  | #5 and #6 can run in parallel after their own dependencies                          |
+| 3. Integration primitives   | Embedding ingestion, source adapters, and claim extraction have real contract tests                                  | #7, #9, #10, and #11 are independent lanes after prerequisites                      |
+| 4. Review intelligence      | Retrieval recall path, deterministic quote checks, and bounded support assessment work on one approved example       | #12 and extraction/UI contract work may overlap after #8                            |
 | 5. Orchestration            | One idempotent persisted run reaches a valid or explicit abstention outcome                                          | This is the backend integration point; avoid parallel edits to shared run contracts |
 | 6. Product journey          | Intake → confirmation → progress → report → new revision → export works without fabricated live results              | UI visuals can be built against versioned fixtures before live hookup               |
-| 7. Reliability and security | Failure injection and negative security cases pass for the working slice                                             | #16 and #18 can proceed in parallel with agreed contracts                           |
-| 8. Evidence and operations  | Held-out evaluation, staging/recovery, and complete accessibility/E2E evidence exist                                 | #17, #19, and some #20 preparation can overlap                                      |
+| 7. Reliability and security | Failure injection and negative security cases pass for the working slice                                             | #17 and #19 can proceed in parallel with agreed contracts                           |
+| 8. Evidence and operations  | Held-out evaluation, staging/recovery, and complete accessibility/E2E evidence exist                                 | #18, #20, and some #21 preparation can overlap                                      |
 | 9. Handoff                  | Owner-accepted revision, public/rights review, reproducible demo, presentation, video, and actual submission receipt | Do not begin public claims before evidence is accepted                              |
 
 ### First vertical slice

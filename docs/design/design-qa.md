@@ -34,7 +34,7 @@ No open P0, P1 or P2 findings remain.
 
 ---
 
-# Design QA — Issue #49
+# Design QA — Issue #36
 
 Date: 3 October 2026
 
@@ -55,7 +55,7 @@ No open P0, P1 or P2 interface finding remains. Premium-provider quality and a r
 
 ---
 
-# Design QA — Issue #46
+# Design QA — Issue #35
 
 Date: 3 October 2026
 

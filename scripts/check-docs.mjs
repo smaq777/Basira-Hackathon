@@ -21,6 +21,24 @@ for (const file of files.filter((name) => name.endsWith('.md'))) {
     if (local.startsWith('/') || !existsSync(resolve(dirname(file), local)))
       errors.push(`${file}: unresolved/non-portable link ${target}`);
   }
+  for (const match of text.matchAll(
+    /\[(?:(?:GitHub )?Issues? )?#(\d+)\]\(https:\/\/github\.com\/smaq777\/Basira-Hackathon\/issues\/(\d+)\)/gu,
+  )) {
+    if (match[1] !== match[2])
+      errors.push(`${file}: displayed issue #${match[1]} links to issue #${match[2]}`);
+  }
+  for (const match of text.matchAll(
+    /\[#(\d+)\]\(https:\/\/github\.com\/smaq777\/Basira-Hackathon\/issues\/(\d+)\)/gu,
+  )) {
+    if (match[1] !== match[2])
+      errors.push(`${file}: displayed issue #${match[1]} links to issue #${match[2]}`);
+  }
+  if (/github\.com\/smaq777\/basirah(?:\/|\b)/iu.test(text))
+    errors.push(`${file}: stale repository URL`);
+  if (/\b(?:fresh|standalone) repository\b|\bbootstrap main commit\b/iu.test(text))
+    errors.push(
+      `${file}: repository-transition wording should not appear in current documentation`,
+    );
 }
 for (const path of [
   'docs/README.md',
