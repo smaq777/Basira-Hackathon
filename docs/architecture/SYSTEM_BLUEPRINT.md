@@ -805,6 +805,6 @@ Hard gates before release: no unresolved invented citations, no accepted stale-r
 | Which providers/sources are allowed or blocked? | [`PROVIDERS.md`](../api/PROVIDERS.md) and [`RIGHTS.md`](../governance/RIGHTS.md)                                                                |
 | What does the current HTTP API actually expose? | [`OPENAPI.yaml`](../api/OPENAPI.yaml) and merged server code                                                                                    |
 | How is correctness evaluated?                   | [`STRATEGY.md`](../testing/STRATEGY.md) and [`CASES.md`](../testing/CASES.md)                                                                   |
-| What work is next and what blocks it?           | Live [GitHub Issues](https://github.com/smaq777/Basira-Hackathon/issues) and the [delivery board](https://github.com/users/smaq777/projects/13) |
+| What work is next and what blocks it?           | Live [GitHub Issues](https://github.com/smaq777/Basira-Hackathon/issues) and the [delivery board](https://github.com/users/smaq777/projects/14) |
 
 If a diagram conflicts with merged code about current behavior, merged code and its verified tests win. If a static plan conflicts with a newly accepted GitHub issue, update both this blueprint and the relevant contract document in the implementation PR.
