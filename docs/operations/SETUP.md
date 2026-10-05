@@ -1,5 +1,19 @@
 # Local development setup
 
+## Optional citation/layout candidate
+
+Set `FOUNDATION_REWRITE_ENABLED=true` only in an already configured loopback
+foundation research preview with `FOUNDATION_RESEARCH_PREVIEW=true`,
+`FOUNDATION_ENABLED=true`, and the owning `OPENROUTER_API_KEY`. It defaults off;
+production startup rejects activation. The result page reads server capabilities
+before showing «تنسيق النص وإضافة التوثيق». It provides separate, automatically
+validated citation/paragraph candidates with a fresh owned copy check. Every
+original character remains unchanged, so this slice cannot strengthen an argument
+or correct a quotation. Pending source status is retained. Candidate storage is
+session-bound process memory with a ten-minute TTL; no durable recovery is claimed.
+See [architecture](../architecture/AI_REWRITE.md) and
+[software evidence](../evidence/2026-10-05-citation-layout-candidate.md).
+
 ## Prerequisites
 
 - Node.js 24 LTS and npm 11. The root `.nvmrc` and `package.json` declare this version range.

@@ -1,5 +1,7 @@
 import { semanticBudgetConfiguration } from './semantic-budget.js';
 import { createApp } from './app.js';
+import { createRewriteService } from './rewrite.js';
+import { createRewriteGenerator } from './rewrite-provider.js';
 import { createDatabase, databaseTls, DatabaseUnavailable } from './database.js';
 import { Pool } from 'pg';
 import { createClerkReviewerAuth } from './reviewer-auth.js';
@@ -247,7 +249,19 @@ const foundation = await initializeFoundation().catch(async (error: unknown) => 
   await database.close();
   throw error;
 });
+const rewriteEnabled = process.env.FOUNDATION_REWRITE_ENABLED === 'true';
+if (
+  rewriteEnabled &&
+  (!foundation?.researchPreview ||
+    process.env.NODE_ENV === 'production' ||
+    !['127.0.0.1', '::1'].includes(host))
+)
+  throw new Error('REWRITE_REQUIRES_LOCAL_RESEARCH_PREVIEW');
+const rewrite = rewriteEnabled
+  ? createRewriteService(createRewriteGenerator(process.env.OPENROUTER_API_KEY ?? ''))
+  : undefined;
 const server = createApp({
+  rewrite,
   database,
   reviewerAuth,
   clerkFrontendApiOrigin,
@@ -259,6 +273,7 @@ const server = createApp({
   );
 });
 async function closeResources() {
+  rewrite?.close();
   await Promise.allSettled([
     foundation?.worker.stop(),
     foundation?.reports.close(),

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { RewritePanel } from './rewrite.js';
 import { ArrowLeft } from '@phosphor-icons/react/ArrowLeft';
 import type {
   FoundationReport,
@@ -795,6 +796,10 @@ export function FoundationResultScreen({
         {report && !loading && !error && (
           <>
             <FoundationReportContent report={report} />
+            <RewritePanel
+              key={`${report.reviewId}:${report.inputSha256}:${report.evidenceStateSha256}`}
+              report={report}
+            />
             <button
               className="button button--outline foundation-refresh"
               disabled={rerunning}
