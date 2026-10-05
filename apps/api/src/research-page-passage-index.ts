@@ -19,11 +19,15 @@ const validVector = (v: number[]) =>
   v.length === QUERY_EMBEDDING_DIMENSIONS && v.every(Number.isFinite) && v.some((n) => n !== 0);
 export function createResearchPagePassageIndex(options: {
   readerPool: Pool;
+  statementTimeoutMs?: number;
   writerPool?: Pool;
   policy: LoadedSourcePolicy;
   embed?: (text: string, signal?: AbortSignal) => Promise<number[]>;
 }) {
   const policy = structuredClone(options.policy);
+  const statementTimeoutMs = options.statementTimeoutMs ?? 1000;
+  if (!Number.isInteger(statementTimeoutMs) || statementTimeoutMs < 1 || statementTimeoutMs > 5000)
+    throw Error('CACHE_SQL_BUDGET_INVALID');
   async function tx<T>(
     write: boolean,
     operation: (c: PoolClient) => Promise<T>,
@@ -39,7 +43,9 @@ export function createResearchPagePassageIndex(options: {
       await c.query(
         'set local role ' + (write ? 'basirah_cache_writer' : 'basirah_research_runtime'),
       );
-      await c.query("set local statement_timeout='" + (write ? '5000' : '1000') + "ms'");
+      await c.query(
+        "set local statement_timeout='" + (write ? '5000' : String(statementTimeoutMs)) + "ms'",
+      );
       const result = await operation(c);
       signal?.throwIfAborted();
       await c.query('commit');

@@ -5,6 +5,8 @@ import type {
 import type {
   SemanticClaim,
   CachePassagePreference,
+  CacheSearchDiagnostics,
+  CacheRestoreDiagnostics,
 } from '../../../packages/contracts/src/semantic-assessment.js';
 import { SourceEvidenceSchema } from '../../../packages/contracts/src/foundation.js';
 import { canonical, sha256 } from './foundation.js';
@@ -20,11 +22,14 @@ export interface ClaimRetrievalTrace {
   corpusVersion: string;
   mode: 'approved' | 'local_research';
   passagePreferences?: CachePassagePreference[];
+  cacheRestore?: CacheRestoreDiagnostics;
   queries: Array<{
     claimId: string;
     querySha256: string;
     modes: Array<'exact' | 'lexical' | 'semantic'>;
     candidateKeys: string[];
+    selectedCandidateKeys?: string[];
+    cache?: CacheSearchDiagnostics;
   }>;
 }
 export interface ClaimRetrievalAdapter {
@@ -42,11 +47,20 @@ export interface ClaimGapDiscovery {
   ): Promise<{ evidence: SourceEvidence[]; failureCodes: string[] }>;
 }
 export interface ClaimCorpusSearch {
+  searchWithDiagnostics?(
+    query: string,
+    references: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<{ evidence: SourceEvidence[]; cache?: CacheSearchDiagnostics }>;
   search(
     query: string,
     references: readonly string[],
     signal?: AbortSignal,
   ): Promise<SourceEvidence[]>;
+  restoreWithDiagnostics?(
+    keys: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<{ evidence: SourceEvidence[]; cacheRestore?: CacheRestoreDiagnostics }>;
   restore(keys: readonly string[], signal?: AbortSignal): Promise<SourceEvidence[]>;
 }
 
@@ -121,6 +135,9 @@ export function createClaimRetrievalAdapter(options: {
         return claimQueries(claim.originalText).map((query) => ({ claim, query, references }));
       });
       const searchRows: SourceEvidence[][] = new Array(searchPlans.length);
+      const cacheDiagnostics: Array<CacheSearchDiagnostics | undefined> = new Array(
+        searchPlans.length,
+      );
       let cursor = 0;
       // At most three provider/SQL searches are active. Results merge by plan order,
       // never completion order, preserving deterministic packets and identities.
@@ -131,7 +148,20 @@ export function createClaimRetrievalAdapter(options: {
               signal?.throwIfAborted();
               const index = cursor++;
               const plan = searchPlans[index]!;
-              searchRows[index] = await options.corpus.search(plan.query, plan.references, signal);
+              if (options.corpus.searchWithDiagnostics) {
+                const result = await options.corpus.searchWithDiagnostics(
+                  plan.query,
+                  plan.references,
+                  signal,
+                );
+                searchRows[index] = result.evidence;
+                cacheDiagnostics[index] = result.cache;
+              } else
+                searchRows[index] = await options.corpus.search(
+                  plan.query,
+                  plan.references,
+                  signal,
+                );
             }
           }),
         );
@@ -161,6 +191,7 @@ export function createClaimRetrievalAdapter(options: {
             querySha256: sha256(plan.query),
             modes: [...new Set(accepted.flatMap((row) => row.retrievalModes))],
             candidateKeys: accepted.map((row) => row.snapshotKey).slice(0, 12),
+            ...(cacheDiagnostics[index] ? { cache: cacheDiagnostics[index] } : {}),
           });
         });
         return candidates;
@@ -173,7 +204,12 @@ export function createClaimRetrievalAdapter(options: {
           ]),
         ),
       ];
-      const restored = await options.corpus.restore(restoreKeys, signal);
+      const restoreResult = options.corpus.restoreWithDiagnostics
+        ? await options.corpus.restoreWithDiagnostics(restoreKeys, signal)
+        : { evidence: await options.corpus.restore(restoreKeys, signal) };
+      const restored = restoreResult.evidence;
+      if ('cacheRestore' in restoreResult && restoreResult.cacheRestore)
+        trace.cacheRestore = restoreResult.cacheRestore;
       signal?.throwIfAborted();
       const boundClaims: SemanticClaim[] = [];
       const preferences: CachePassagePreference[] = [];
@@ -251,6 +287,9 @@ export function createClaimRetrievalAdapter(options: {
           }
         }
         const boundClaim = { ...claim, evidenceKeys: [...keys] };
+        for (const query of trace.queries)
+          if (query.claimId === claim.id)
+            query.selectedCandidateKeys = query.candidateKeys.filter((key) => keys.has(key));
         for (const key of keys) {
           const row = available.get(key);
           if (row) {

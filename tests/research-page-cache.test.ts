@@ -421,3 +421,68 @@ describe('public research page cache', () => {
     expect(f.query).not.toHaveBeenCalled();
   });
 });
+
+it('surfaces embedding, passage and content failures even with zero matching parents', async () => {
+  const f = fixture();
+  const embed = vi.fn(async () => {
+    throw new Error('private provider payload');
+  });
+  const cache = createResearchPageCache({
+    readerPool: f.readerPool,
+    writerPool: f.readerPool,
+    policy,
+    classify: f.classify,
+    embeddingSpace: { modelId: 'pinned', embed },
+    passageIndex: {
+      search: async () => {
+        throw new Error('private SQL detail');
+      },
+    },
+    contentViews: {
+      store: async () => {},
+      enrich: async () => {
+        throw new Error('private content detail');
+      },
+    },
+  });
+  const result = await cache.searchWithDiagnostics!('family duties');
+  expect(result.evidence).toEqual([]);
+  expect(result.diagnostics).toMatchObject({
+    outcome: 'partial',
+    parentCandidateCount: 0,
+    failureCodes: ['embedding_unavailable', 'passages_unavailable', 'content_unavailable'],
+  });
+  expect(JSON.stringify(result.diagnostics)).not.toContain('private');
+  expect(embed).toHaveBeenCalledTimes(1);
+});
+it('bounds an uncooperative embedding and retains eligible lexical parents', async () => {
+  const f = fixture();
+  await f.cache.store([evidence()]);
+  const cache = createResearchPageCache({
+    readerPool: f.readerPool,
+    writerPool: f.readerPool,
+    policy,
+    classify: f.classify,
+    queryEmbeddingTimeoutMs: 10,
+    embeddingSpace: { modelId: 'pinned', embed: async () => new Promise(() => {}) },
+  });
+  const result = await cache.searchWithDiagnostics!('family duties');
+  expect(result.evidence).toHaveLength(1);
+  expect(result.diagnostics).toMatchObject({
+    outcome: 'partial',
+    failureCodes: ['embedding_timeout'],
+    stages: { embedding: 'timeout', pages: 'success' },
+  });
+});
+it('treats expired cached parents as successful empty retrieval rather than an outage', async () => {
+  const f = fixture();
+  await f.cache.store([evidence()]);
+  for (const row of f.rows.values()) row.expired = true;
+  const result = await f.cache.searchWithDiagnostics!('family duties');
+  expect(result.evidence).toEqual([]);
+  expect(result.diagnostics).toMatchObject({
+    outcome: 'success',
+    parentCandidateCount: 0,
+    failureCodes: [],
+  });
+});

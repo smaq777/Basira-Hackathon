@@ -8,6 +8,26 @@ import { assessClaimApplicability } from '../../../packages/contracts/src/claim-
 import type { ImprovementCard } from '../../../packages/contracts/src/themes.js';
 
 type EditorialOccurrence = { id: string; text: string; hasAssessment: boolean };
+export function retrievalLimitation(report: FoundationReport): string | null {
+  const trace = report.semanticAssessment?.trace;
+  if (
+    (trace?.retrievalBudget && trace.retrievalBudget.outcome !== 'completed') ||
+    (trace?.retrieval?.cacheRestore && trace.retrieval.cacheRestore.outcome !== 'success') ||
+    trace?.retrieval?.queries.some((query) => query.cache && query.cache.outcome !== 'success')
+  )
+    return 'لم يكتمل بعض البحث عن الأدلة؛ يقتصر التقييم على المصادر المعروضة، ولا يعني غياب نتيجة البحث عدم وجود دليل.';
+  if (
+    trace?.retrieval?.queries.some(
+      (query) =>
+        query.selectedCandidateKeys &&
+        query.candidateKeys.some(
+          (key) => key.startsWith('web-cache:') && !query.selectedCandidateKeys!.includes(key),
+        ),
+    )
+  )
+    return 'لم تُدرج بعض المصادر المرشحة ضمن الأدلة المعروضة؛ يقتصر التقييم على المصادر التي وصلت إلى التقرير.';
+  return null;
+}
 export type EditorialNote = {
   id: string;
   title: string;

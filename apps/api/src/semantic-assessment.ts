@@ -61,6 +61,8 @@ export interface SemanticAssessmentOptions {
   requestTimeoutMs?: number;
   assessmentTimeoutMs?: number;
   extractionTimeoutMs?: number;
+  retrievalTimeoutMs?: number;
+  retrievalAssessmentReserveMs?: number;
   fetch?: typeof globalThis.fetch;
   now?: () => number;
   claimRetrieval?: ClaimRetrievalAdapter;
@@ -213,6 +215,7 @@ export function createSemanticAssessmentAdapter(
     async assessWithEvidence(original, externalSignal) {
       let finalIntake = structuredClone(original);
       let retrievalTrace: ClaimRetrievalTrace | undefined;
+      let retrievalBudget: SemanticAssessmentReport['trace']['retrievalBudget'];
       let finalEvidenceSha256: string | undefined;
       let initialAssessmentInputSha256: string | undefined;
       let discovery: SemanticAssessmentReport['trace']['discovery'];
@@ -273,11 +276,19 @@ export function createSemanticAssessmentAdapter(
             ...(passageViews.length ? { passageViews } : {}),
             ...(finalEvidenceSha256 ? { finalEvidenceSha256 } : {}),
             ...(retrievalTrace ? { retrieval: retrievalTrace } : {}),
+            ...(retrievalBudget ? { retrievalBudget } : {}),
             ...(discovery ? { discovery } : {}),
             ...(initialAssessmentInputSha256 ? { initialAssessmentInputSha256 } : {}),
           },
           limitations: [
             'تقييم آلي أولي غير محكّم علميًا؛ لا يثبت حكمًا شرعيًا أو صحة الحديث أو اعتماد النشر.',
+            ...((retrievalBudget && retrievalBudget.outcome !== 'completed') ||
+            (retrievalTrace?.cacheRestore && retrievalTrace.cacheRestore.outcome !== 'success') ||
+            retrievalTrace?.queries.some((q) => q.cache && q.cache.outcome !== 'success')
+              ? [
+                  'لم يكتمل بعض البحث عن الأدلة؛ يقتصر التقييم على المصادر المعروضة، ولا يعني غياب نتيجة البحث عدم وجود دليل.',
+                ]
+              : []),
             'ربط الادعاء بالدليل مقترح آلي؛ غياب الشروط أو السياق يستلزم الامتناع عن إثبات الاستدلال.',
             ...(inventory &&
             (inventory.candidates.length > claims.length ||
@@ -332,6 +343,17 @@ export function createSemanticAssessmentAdapter(
         !Number.isInteger(assessmentMs) ||
         assessmentMs < 1 ||
         assessmentMs > (options.researchPreview ? 90000 : ASSESSMENT_TIMEOUT_MS)
+      )
+        return report('unavailable', 'configuration_invalid');
+      const retrievalMs = options.retrievalTimeoutMs ?? 12000;
+      const assessmentReserveMs = options.retrievalAssessmentReserveMs ?? 0;
+      if (
+        !Number.isInteger(retrievalMs) ||
+        retrievalMs < 1 ||
+        retrievalMs > (options.researchPreview ? 90000 : 12000) ||
+        !Number.isInteger(assessmentReserveMs) ||
+        assessmentReserveMs < 0 ||
+        assessmentReserveMs > (options.researchPreview ? assessmentMs : 0)
       )
         return report('unavailable', 'configuration_invalid');
       const overallMs = options.overallTimeoutMs ?? SEMANTIC_PHASE_TIMEOUT_MS;
@@ -628,78 +650,93 @@ export function createSemanticAssessmentAdapter(
         if (options.claimRetrieval) {
           const remaining = deadline - now();
           if (remaining <= 0) throw new PhaseError('deadline_exceeded');
-          const controller = new AbortController();
-          const abort = () => controller.abort();
-          externalSignal?.addEventListener('abort', abort, { once: true });
-          let timer: ReturnType<typeof setTimeout> | undefined;
-          try {
-            const retrieved = await Promise.race([
-              options.claimRetrieval.retrieve(intake, structuredClone(claims), controller.signal),
-              new Promise<never>((_resolve, reject) => {
-                controller.signal.addEventListener(
-                  'abort',
-                  () => reject(new PhaseError(externalSignal?.aborted ? 'cancelled' : 'timeout')),
-                  { once: true },
-                );
-                timer = setTimeout(abort, Math.min(remaining, 12000));
-                if (externalSignal?.aborted) abort();
-              }),
-            ]);
-            if (
-              intake.evidence.some(
-                (row) =>
-                  !retrieved.evidence.some(
-                    (candidate) =>
-                      candidate.snapshotKey === row.snapshotKey &&
-                      canonical(candidate) === canonical(row),
-                  ),
+          const appliedMs = Math.max(0, Math.min(retrievalMs, remaining - assessmentReserveMs));
+          const retrievalStarted = now();
+          retrievalBudget = {
+            outcome: 'budget_skipped',
+            configuredMs: retrievalMs,
+            appliedMs,
+            assessmentReserveMs,
+            elapsedMs: 0,
+          };
+          if (appliedMs > 0) {
+            const controller = new AbortController();
+            const abort = () => controller.abort();
+            externalSignal?.addEventListener('abort', abort, { once: true });
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            try {
+              const retrieved = await Promise.race([
+                options.claimRetrieval.retrieve(intake, structuredClone(claims), controller.signal),
+                new Promise<never>((_resolve, reject) => {
+                  controller.signal.addEventListener(
+                    'abort',
+                    () => reject(new PhaseError(externalSignal?.aborted ? 'cancelled' : 'timeout')),
+                    { once: true },
+                  );
+                  timer = setTimeout(abort, appliedMs);
+                  if (externalSignal?.aborted) abort();
+                }),
+              ]);
+              if (
+                intake.evidence.some(
+                  (row) =>
+                    !retrieved.evidence.some(
+                      (candidate) =>
+                        candidate.snapshotKey === row.snapshotKey &&
+                        canonical(candidate) === canonical(row),
+                    ),
+                )
               )
-            )
-              throw new PhaseError('invalid_intake');
-            const next = validateIntake(
-              {
-                ...intake,
-                evidence: retrieved.evidence,
-                researchOnly:
-                  intake.researchOnly || retrieved.evidence.some((row) => row.researchOnly),
-              },
-              intake.originalText,
-              intake.revisionId,
-              options.researchPreview ?? false,
-            );
-            if (
-              retrieved.claims.length !== claims.length ||
-              retrieved.claims.some(
-                (claim, index) =>
-                  canonical({ ...claim, evidenceKeys: [] }) !==
-                    canonical({ ...claims[index], evidenceKeys: [] }) ||
-                  claim.evidenceKeys.some(
-                    (key) => !next.evidence.some((row) => row.snapshotKey === key),
-                  ),
-              )
-            )
-              throw new PhaseError('invalid_claims');
-            intake = structuredClone(next);
-            finalIntake = intake;
-            claims = retrieved.claims.map((row) => SemanticClaimSchema.parse(row));
-            if (retrieved.trace.passagePreferences)
-              validateCachePassagePreferences(
-                retrieved.trace.passagePreferences,
-                claims,
-                intake.evidence,
+                throw new PhaseError('invalid_intake');
+              const next = validateIntake(
+                {
+                  ...intake,
+                  evidence: retrieved.evidence,
+                  researchOnly:
+                    intake.researchOnly || retrieved.evidence.some((row) => row.researchOnly),
+                },
+                intake.originalText,
+                intake.revisionId,
+                options.researchPreview ?? false,
               );
-            retrievalTrace = retrieved.trace;
-          } catch (error) {
-            const code =
-              error instanceof Error && /^RETRIEVAL_[A-Z_]{1,60}$/u.test(error.message)
-                ? error.message
-                : 'RETRIEVAL_UNAVAILABLE';
-            console.error(JSON.stringify({ event: 'semantic_retrieval_failed', code }));
-            if (error instanceof PhaseError) throw error;
-            throw new PhaseError(externalSignal?.aborted ? 'cancelled' : 'upstream_unavailable');
-          } finally {
-            if (timer) clearTimeout(timer);
-            externalSignal?.removeEventListener('abort', abort);
+              if (
+                retrieved.claims.length !== claims.length ||
+                retrieved.claims.some(
+                  (claim, index) =>
+                    canonical({ ...claim, evidenceKeys: [] }) !==
+                      canonical({ ...claims[index], evidenceKeys: [] }) ||
+                    claim.evidenceKeys.some(
+                      (key) => !next.evidence.some((row) => row.snapshotKey === key),
+                    ),
+                )
+              )
+                throw new PhaseError('invalid_claims');
+              intake = structuredClone(next);
+              finalIntake = intake;
+              claims = retrieved.claims.map((row) => SemanticClaimSchema.parse(row));
+              if (retrieved.trace.passagePreferences)
+                validateCachePassagePreferences(
+                  retrieved.trace.passagePreferences,
+                  claims,
+                  intake.evidence,
+                );
+              retrievalTrace = retrieved.trace;
+              retrievalBudget.outcome = 'completed';
+            } catch (error) {
+              retrievalBudget.outcome =
+                error instanceof PhaseError && error.code === 'timeout' ? 'timeout' : 'unavailable';
+              const code =
+                error instanceof Error && /^RETRIEVAL_[A-Z_]{1,60}$/u.test(error.message)
+                  ? error.message
+                  : 'RETRIEVAL_UNAVAILABLE';
+              console.error(JSON.stringify({ event: 'semantic_retrieval_failed', code }));
+              if (error instanceof PhaseError) throw error;
+              throw new PhaseError(externalSignal?.aborted ? 'cancelled' : 'upstream_unavailable');
+            } finally {
+              if (timer) clearTimeout(timer);
+              externalSignal?.removeEventListener('abort', abort);
+              retrievalBudget.elapsedMs = Math.min(240000, Math.max(0, now() - retrievalStarted));
+            }
           }
         }
         finalIntake = structuredClone(intake);

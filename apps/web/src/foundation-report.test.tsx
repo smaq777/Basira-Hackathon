@@ -13,6 +13,7 @@ import {
   editorialNotes,
   interpretationPresentation,
   reportFindings,
+  retrievalLimitation,
 } from './foundation-report-presentation.js';
 import {
   foundationReportFixture,
@@ -973,3 +974,49 @@ function differenceFixture(
   finding.comparison = { fidelity: 'different', extent: 'gapped', basis: 'canonical', differences };
   return report;
 }
+
+it('shows limited retrieval separately from an unchanged semantic finding and hides diagnostic codes', () => {
+  const report = semanticBindingFixture();
+  report.semanticAssessment!.trace.retrieval = {
+    corpusVersion: 'owned',
+    mode: 'local_research',
+    queries: [
+      {
+        claimId: report.semanticAssessment!.claims[0]!.id,
+        querySha256: 'a'.repeat(64),
+        modes: [],
+        candidateKeys: [],
+        selectedCandidateKeys: [],
+        cache: {
+          outcome: 'partial',
+          elapsedMs: 1,
+          parentCandidateCount: 0,
+          failureCodes: ['embedding_unavailable'],
+        },
+      },
+    ],
+  };
+  const before = report.semanticAssessment!.assessments[0]!.status;
+  render(<FoundationReportContent report={report} />);
+  expect(screen.getByRole('note').textContent).toBe(retrievalLimitation(report));
+  expect(screen.queryByText(/embedding_unavailable/)).toBeNull();
+  expect(report.semanticAssessment!.assessments[0]!.status).toBe(before);
+});
+it('does not describe a successful empty cache query as unavailable', () => {
+  const report = semanticBindingFixture();
+  report.semanticAssessment!.trace.retrieval = {
+    corpusVersion: 'owned',
+    mode: 'local_research',
+    queries: [
+      {
+        claimId: report.semanticAssessment!.claims[0]!.id,
+        querySha256: 'a'.repeat(64),
+        modes: [],
+        candidateKeys: [],
+        selectedCandidateKeys: [],
+        cache: { outcome: 'success', elapsedMs: 1, parentCandidateCount: 0, failureCodes: [] },
+      },
+    ],
+  };
+  expect(retrievalLimitation(report)).toBeNull();
+});

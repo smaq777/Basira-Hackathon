@@ -2,7 +2,9 @@
 
 ## Latest development evidence — 5 October
 
-**Conservative source cleaning (#8):** Default-off joint classification labels exact original blocks and derives lexical content views only when model labels and narrow structural rules agree. Originals and v1 vectors remain unchanged. Offline checks pass. Actual isolated view-binding probes passed, but first content-window insertion failed with SQL `42702`; the failed child and experimental migration remain preserved. Deployment migration `0014` corrects the alias and awaits new-child validation. Paid classifier outcomes remain pending. See [scope and retained failure](evidence/2026-10-05-source-content-views.md).
+**Bounded cache delivery (#17):** Optional report-local diagnostics now distinguish successful empty retrieval, partial stage fallback, timeout and unavailable cache. Search and restore hard-race optional work; research configuration can reserve assessment time and extend coherent phase ceilings while ordinary defaults remain unchanged. Offline validation and review precede any actual UI activation. See [evidence and limitations](evidence/2026-10-05-cache-delivery-budgets.md).
+
+**Conservative source cleaning (#8):** Default-off joint classification labels exact original blocks and derives lexical content views only when model labels and narrow structural rules agree. Originals and v1 vectors remain unchanged. Offline checks and corrected isolated migration/window/role probes pass. The earlier SQL `42702` child and experimental migration remain preserved. Deployment migration `0014` resolves the alias collision. Eight selected joint-classifier outcomes were valid with stable removed IDs but one topic label drifted; four first-repeat views/eight body windows were admitted only on a new isolated child. Original parents and v1 records remain unchanged; no runtime activation is claimed. See [scope and retained failure](evidence/2026-10-05-source-content-views.md).
 
 **Passage index (#8, related #11):** A separate default-off implementation adds
 offline bounded vector backfill and per-claim verified retained-page delivery.

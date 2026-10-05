@@ -1648,3 +1648,119 @@ it('allows measured long first-pass and acquisition stages only under the explic
     vi.useRealTimers();
   }
 });
+
+describe('coherent retrieval phase ceiling and assessment reserve', () => {
+  it('allows explicitly bounded research retrieval beyond the old12second shadow cap', async () => {
+    vi.useFakeTimers();
+    const fetch = successfulFetch();
+    const retrieve = vi.fn(
+      async (
+        intake: FoundationIntake,
+        claims: readonly import('../packages/contracts/src/semantic-assessment.js').SemanticClaim[],
+      ) => {
+        await new Promise((resolve) => setTimeout(resolve, 14000));
+        return {
+          evidence: intake.evidence,
+          claims: [...claims],
+          trace: { corpusVersion: 'owned', mode: 'local_research' as const, queries: [] },
+        };
+      },
+    );
+    const pending = createSemanticAssessmentAdapter(
+      options(fetch, {
+        researchPreview: true,
+        retrievalTimeoutMs: 20000,
+        retrievalAssessmentReserveMs: 1000,
+        claimRetrieval: { retrieve },
+      }),
+    ).assessWithEvidence(fixture());
+    await vi.advanceTimersByTimeAsync(14001);
+    const result = await pending;
+    expect(result.report.status).toBe('completed');
+    expect(result.report.trace.retrievalBudget).toMatchObject({
+      outcome: 'completed',
+      configuredMs: 20000,
+      appliedMs: 20000,
+      assessmentReserveMs: 1000,
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it('visibly skips retrieval when reserved assessment time consumes the remaining phase budget', async () => {
+    let time = 0;
+    const successful = successfulFetch();
+    const fetch = vi.fn<typeof globalThis.fetch>(async (url, init) => {
+      const response = await successful(url, init);
+      if (requestData(init).body.response_format.json_schema.name === 'extraction') time = 59000;
+      return response;
+    });
+    const retrieve = vi.fn();
+    const result = await createSemanticAssessmentAdapter(
+      options(fetch, {
+        researchPreview: true,
+        now: () => time,
+        retrievalAssessmentReserveMs: 1000,
+        claimRetrieval: { retrieve },
+      }),
+    ).assessWithEvidence(fixture());
+    expect(retrieve).not.toHaveBeenCalled();
+    expect(result.report.trace.retrievalBudget).toMatchObject({
+      outcome: 'budget_skipped',
+      appliedMs: 0,
+      assessmentReserveMs: 1000,
+    });
+    expect(result.report.assessments[0]?.status).toBe('supported');
+    expect(result.report.limitations).toContain(
+      'لم يكتمل بعض البحث عن الأدلة؛ يقتصر التقييم على المصادر المعروضة، ولا يعني غياب نتيجة البحث عدم وجود دليل.',
+    );
+  });
+  it('bounds hung retrieval by remaining time minus reserve, aborts it and ignores late results', async () => {
+    vi.useFakeTimers();
+    const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let signal: AbortSignal | undefined, finish!: (value: any) => void;
+    const input = fixture(),
+      fetch = successfulFetch();
+    const retrieve = vi.fn(
+      (
+        intake: FoundationIntake,
+        claims: readonly import('../packages/contracts/src/semantic-assessment.js').SemanticClaim[],
+        s?: AbortSignal,
+      ) => {
+        signal = s;
+        return new Promise<any>((resolve) => {
+          finish = resolve;
+        });
+      },
+    );
+    try {
+      const pending = createSemanticAssessmentAdapter(
+        options(fetch, {
+          researchPreview: true,
+          overallTimeoutMs: 1500,
+          retrievalTimeoutMs: 1000,
+          retrievalAssessmentReserveMs: 900,
+          claimRetrieval: { retrieve },
+        }),
+      ).assessWithEvidence(input);
+      await vi.advanceTimersByTimeAsync(601);
+      const result = await pending;
+      expect(result.report.errorCode).toBe('timeout');
+      expect(result.report.trace.retrievalBudget).toMatchObject({
+        outcome: 'timeout',
+        appliedMs: 600,
+        assessmentReserveMs: 900,
+      });
+      expect(signal?.aborted).toBe(true);
+      expect(result.intake).toEqual(input);
+      finish({
+        evidence: input.evidence,
+        claims: [],
+        trace: { corpusVersion: 'owned', mode: 'local_research', queries: [] },
+      });
+      await vi.advanceTimersByTimeAsync(1);
+      expect(result.report.assessments).toEqual([]);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      diagnostic.mockRestore();
+    }
+  });
+});

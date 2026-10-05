@@ -158,8 +158,8 @@ async function initializeFoundation() {
       corpusPool = new Pool({
         connectionString: corpusUrl.toString(),
         ssl: databaseTls(process.env.FOUNDATION_CORPUS_TLS_MODE || 'verify-full'),
-        max: 3,
-        connectionTimeoutMillis: 5_000,
+        max: semanticBudget.corpusPoolMax,
+        connectionTimeoutMillis: semanticBudget.corpusConnectionTimeoutMs,
         idleTimeoutMillis: 30_000,
       });
       const corpus = createHostedCorpus({
@@ -238,6 +238,8 @@ async function initializeFoundation() {
           readerPool: corpusPool,
           writerPool: webCachePool,
           policy: sourcePolicy,
+          queryEmbeddingTimeoutMs: semanticBudget.cacheEmbeddingTimeoutMs,
+          statementTimeoutMs: semanticBudget.cacheSqlTimeoutMs,
           classify: createPageTopicClassifier({
             apiKey: process.env.OPENROUTER_API_KEY,
             contentViews: contentViewsEnabled,
@@ -245,6 +247,7 @@ async function initializeFoundation() {
           ...(contentViewsEnabled
             ? {
                 contentViews: createSourceContentStore({
+                  statementTimeoutMs: semanticBudget.contentSqlTimeoutMs,
                   readerPool: corpusPool,
                   writerPool: webCachePool,
                   policy: sourcePolicy,
@@ -254,6 +257,7 @@ async function initializeFoundation() {
           ...(cachePassageEnabled
             ? {
                 passageIndex: createResearchPagePassageIndex({
+                  statementTimeoutMs: semanticBudget.passageSqlTimeoutMs,
                   readerPool: corpusPool,
                   policy: sourcePolicy,
                 }),
@@ -268,7 +272,9 @@ async function initializeFoundation() {
           timeoutMs: semanticBudget.gapDiscoveryTimeoutMs,
         });
         claimRetrieval = createClaimRetrievalAdapter({
-          corpus: withResearchPageCorpus(baseCorpus!, cache),
+          corpus: withResearchPageCorpus(baseCorpus!, cache, {
+            timeoutMs: semanticBudget.cacheTimeoutMs,
+          }),
           corpusVersion: selectedCorpusVersion!,
           researchPreview,
           reserveDiscoveryKeys: true,
