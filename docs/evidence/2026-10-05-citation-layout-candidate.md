@@ -44,7 +44,7 @@ budget notice remains within the 85-item candidate schema. Targeted regression
 checks cover each defect, including faithfully quoted partial references.
 An independent Sol Medium pass repaired stale create/cancel response races after
 report replacement or a new generation. Final `npm run check` passed: 37 test
-files / 533 source tests, typechecking, documentation, policy, formatting and build.
+files / 534 source tests, typechecking, documentation, policy, formatting and build.
 The test command excludes compiled `dist` artifacts: the earlier 40-file / 569
 run included 36 duplicate compiled contract tests; the source-only run has 37 files.
 The existing Vite bundle-size warning remains advisory.
@@ -74,6 +74,17 @@ Raw public-text receipts and screenshot are retained locally in the foundation
 experiment `integration-lead-v1`; no credential or ownership cookie is saved.
 The quotation-only assessment classification was separately repaired under #11;
 it must not be reported as model or API failure when no author claim exists.
+
+Final combined validation passed **39 files / 554 source tests** plus required
+checks. The owned quotation-only live retest took 4.667 seconds for review and
+4.810 seconds for generation: interpretation was `not_applicable`, no assessment
+model call was needed, the candidate added the recorded 51:56 citation and its
+pending-source qualifier, unresolved notices were empty, and server copy matched
+deterministic validation. The UI retest of the Amanah report also added its actual
+4:58 citation; the browser clipboard exactly matched the displayed candidate.
+The final screenshot is `NEXT_REWRITE_CITATION_UI.jpg` in the local experiment.
+These are small engineering demonstrations, not adjudicated religious correctness
+or a latency guarantee. The publicly reported Vercel alias remains unmodified.
 
 Durable candidates and substantive wording changes remain gated pending
 independent revalidation and human adjudication. See the
