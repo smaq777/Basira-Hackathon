@@ -52,6 +52,13 @@ database migration or historical report rewrite is required.
 
 ## Validation and limits
 
+Integrated quotation-only follow-up: the Quran delimiters ﴿ and ﴾ are source
+wrappers, so segmented quotation framing without an author assertion returns
+not_applicable without a provider request. Syntactic applicability v1.1 records
+this behavior. Unknown author prose remains undetermined, and an empty model
+selection still returns partial/no_claims_extracted rather than hiding omitted
+claims. Focused regressions cover the exact 46-unit quotation and retained prose.
+
 Node 24 `npm run check` passed in the isolated issue worktree: typecheck,
 35 test files / 523 tests, documentation links, policy checks, formatting and
 production build. The build retains its existing large-client-chunk warning.
