@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { ClaimGapDiscovery } from './claim-retrieval.js';
 import { SourceEvidenceSchema } from '../../../packages/contracts/src/foundation.js';
 import { sha256 } from './foundation.js';
+import { sourceExtractionFailure } from './source-extraction-quality.js';
 import type { LoadedSourcePolicy } from './source-policy.js';
 import { allowedWebUrl, type WebDiscoverySnapshot, type WebSourcePolicy } from './web-discovery.js';
 
@@ -232,6 +233,8 @@ export function createTinyfishWebDiscovery(options: AcquisitionOptions) {
               )
             )
               throw new Error('discovery_source_unavailable');
+            const qualityFailure = sourceExtractionFailure(final.href, page.text);
+            if (qualityFailure) throw new Error(qualityFailure);
             result.snapshots.push({
               requestedUrl: url.href,
               sourceUrl: final.href,
