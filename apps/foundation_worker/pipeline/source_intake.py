@@ -29,7 +29,10 @@ MAX_EVIDENCE_ROWS = 80
 MAX_CONTEXT_ROWS = 30
 MAX_OPTIONAL_EVIDENCE_BYTES = 200_000
 NEGATIVE_CONTEXT_CACHE_SECONDS = 30.0
-NON_SOURCE_NUMERIC = re.compile(r'الساعة|ساعه|الوقت|التوقيت|موعد|الاجتماع|نتيجة|المباراة|النقاط|الاهداف|النسبة|نسبة|نسبه|clock|time|score|ratio|\bam\b|\bpm\b', re.I)
+NON_SOURCE_NUMERIC = re.compile(r'الساعة|ساعه|الوقت|التوقيت|موعد|الاجتماع|نتيجة|المباراة|النقاط|الاهداف|clock|time|score|ratio|\bam\b|\bpm\b', re.I)
+# Ratio wording needs numeric adjacency or an explicit mathematical qualifier.
+# Bare نسبة also means source attribution and must not suppress a locator.
+NON_SOURCE_RATIO = re.compile(r'(?:النسبة|نسبة|نسبه)(?:\s+(?:العددية|العدديه|المئوية|المئويه|بين)(?:\s|$)|\s*[:：]?\s*[\[(]?\s*$)')
 JOINED_VOCATIVE = re.compile(r'(?<!\w)ياايها(?!\w)')
 
 
@@ -379,7 +382,7 @@ class SourceIntake:
             named = bool(named_ids)
             framed = _framing(text,m.start())=='ayah'
             bracketed = bool(re.search(r'[\[(]\s*$',text[max(0,m.start()-5):m.start()]))
-            non_source = NON_SOURCE_NUMERIC.search(before+' '+normalize(text[m.end():m.end()+8]))
+            non_source = NON_SOURCE_NUMERIC.search(before+' '+normalize(text[m.end():m.end()+8])) or NON_SOURCE_RATIO.search(before)
             if non_source and not named:
                 continue
             explicit = bool(locator) or named or framed or bracketed

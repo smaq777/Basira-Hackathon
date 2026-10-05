@@ -105,7 +105,7 @@ class PassageBoundaryTests(unittest.TestCase):
 
     def test_non_source_numeric_context_is_not_resolved_locator_metadata(self):
         intake = self.intake([('quran_text', 31, 15, 'لقمان', 'نص مملوك واضح كامل')])
-        for text in ['نتيجة المباراة [31:15]', 'الوقت (31:15)', 'النسبة [٣١:١٥]', 'ratio (31:15)']:
+        for text in ['نتيجة المباراة [31:15]', 'الوقت (31:15)', 'النسبة [٣١:١٥]', 'نسبة [31:15]', 'نسبة بين العددين (31:15)', 'ratio (31:15)']:
             with self.subTest(text=text):
                 result = intake.analyze(text, REVISION)
                 self.assertFalse(any(s['role'] == 'claimed_source' for s in result['segments']))
@@ -113,6 +113,19 @@ class PassageBoundaryTests(unittest.TestCase):
                 self.assertEqual(result['evidence'], [])
                 self.assertEqual(result['originalText'], text)
                 self.assertTrue(any(text == s['originalText'] for s in result['segments'] if s['role'] == 'author_text'))
+
+    def test_source_attribution_wording_does_not_act_as_a_ratio_cue(self):
+        intake = self.intake([('quran_text', 31, 15, 'لقمان', 'نص مملوك واضح كامل')])
+        for text in ['نسبة النص إلى مصدره [31:15].',
+                     'لا تثبت نسبة هذا النص إلى القرآن (31:15).',
+                     'نسبة النص إلى مصدره [لقمان: 31:15].']:
+            with self.subTest(text=text):
+                result = intake.analyze(text, REVISION)
+                locator = next(s for s in result['segments'] if s['method'] == 'bound_quran_bibliographic_locator')
+                self.assertEqual(locator['sourceKeys'], ['owned-quran_text-31-15'])
+                self.assertEqual(result['quotationFindings'], [])
+                self.assertEqual(result['originalText'], text)
+                self.assertTrue(any('نسبة' in s['originalText'] for s in result['segments'] if s['role'] == 'author_text'))
 
     def test_author_qualifications_and_locator_inside_speech_are_not_suppressed(self):
         intake = self.intake([('quran_text', 31, 15, 'لقمان', 'نص مملوك واضح كامل')])

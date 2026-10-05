@@ -56,6 +56,13 @@ External actual-case evidence:
 This execution made zero model/web/Neon calls, durable report writes or environment
 file writes. Source-index originals and historical report bytes were not changed.
 
+A forward ratio-context refinement preserves ordinary source-attribution wording
+(`نسبة النص إلى مصدره [31:15]`) and negated attribution. Arabic ratio cues
+require numeric adjacency or explicit mathematical wording; score/time controls
+remain authored text. The actual adapter control and source-bound historical
+case parity pass in external `OFFLINE_ATTRIBUTION_CONTROL_V1.json`; earlier
+V1/V2 receipts and their source commits remain unchanged.
+
 ## Limits and rollback
 
 This is selected deterministic boundary evidence, not a paid replay or general
