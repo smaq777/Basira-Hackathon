@@ -93,3 +93,24 @@ variability, source approval and broader language/calibration limitations remain
 No hosting, Rewrite UI, ingestion, schema, environment or deployment changes are
 included. Owner acceptance remains separate; rollback is a source revert with
 historical trace readability retained.
+
+## Implementation checks and inherited gate
+
+The implementation preserves the accepted owner changes with a merge commit from
+`f7c7028cb41508fe42baac74d5d5b01a1412f8f1`; it does not edit hosting files or their
+tests. Focused semantic/contract tests pass (two files / 119 tests), including the
+v1.10 request instruction/version, immutable packet preservation, existing negative
+and malformed-citation guards, all historical v1.1–v1.9 trace pairs and rejection of
+mixed-version pairs. These transport regressions do not independently prove model
+language correctness.
+
+The full aggregate check at integrated `a976bdee285ce64e72264b33458772b3b4f3d0ef`
+ran 808 tests: 807 passed and one inherited hosting test failed at
+`tests/foundation-activation.test.ts:116`. It still expects the hosted demo to reject
+flags that accepted owner hosting changes now permit. The test and hosting source
+match owner development; neither was altered to hide the failure. Full quality is
+therefore **not green**, pending owner reconciliation of that hosting contract.
+TypeScript passes. Independent documentation (95 Markdown files), policy,
+formatting, build and 51 offline Python tests pass. The existing large-bundle build
+warning remains. Initial sandbox Git-subprocess restrictions on docs/policy were
+resolved with scoped local execution; their successful logs remain separate.
