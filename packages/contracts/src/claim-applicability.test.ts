@@ -83,6 +83,31 @@ it('recognizes quotation framing even for an unresolved source', () => {
   });
 });
 
+it.each(['ayah', 'unclassified'] as const)(
+  'recognizes Quran delimiters around a %s quotation without hiding author prose',
+  (role) => {
+    const text = 'قال تعالى: ﴿وما خلقت الجن والإنس إلا ليعبدون﴾.';
+    const quote = 'وما خلقت الجن والإنس إلا ليعبدون';
+    const row = input(text, [
+      { text: 'قال تعالى: ﴿', role: 'author_text' },
+      { text: quote, role },
+      { text: '﴾.', role: 'author_text' },
+    ]);
+    expect(text).toHaveLength(46);
+    expect(row.segments[1]).toMatchObject({ startOffset: 12, endOffset: 44 });
+    expect(assessClaimApplicability(row)).toEqual({
+      status: 'not_applicable',
+      reason: 'quotation_only',
+    });
+    expect(
+      assessClaimApplicability({ ...row, originalText: text + ' كلام المؤلف عن العبادة.' }),
+    ).toEqual({ status: 'undetermined', reason: 'unclear_author_text' });
+    expect(
+      assessClaimApplicability({ ...row, originalText: text + ' لذلك يجب حفظ الحقوق.' }),
+    ).toEqual({ status: 'applicable', reason: 'assertion_present' });
+  },
+);
+
 it('does not hide declarative premises, unknown prose, or uncovered legacy text', () => {
   expect(assessClaimApplicability(input('لماذا الصلاة غير واجبة؟'))).toEqual({
     status: 'applicable',

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.6';
-export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.6';
+export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.7';
+export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.7';
 
 const EvidenceKeys = z.array(z.string().min(1).max(160)).max(20);
 const Details = z.array(z.string().min(1).max(500)).max(6);
@@ -18,6 +18,41 @@ export const ClaimExtractionOutputSchema = z
     claims: z.array(ExtractedClaimProposalSchema).max(5),
   })
   .strict();
+
+/** v1.7 selects server-owned spans; the legacy proposal schema remains readable. */
+export const ClaimSelectionOutputSchema = z
+  .object({
+    claims: z
+      .array(
+        z
+          .object({
+            candidateId: z.string().regex(/^claim-[a-f0-9]{24}$/u),
+            evidenceKeys: EvidenceKeys,
+          })
+          .strict(),
+      )
+      .max(5),
+  })
+  .strict();
+
+const EvidencePassageFieldsSchema = z
+  .object({
+    passageId: z.string().regex(/^passage-[a-f0-9]{24}$/u),
+    evidenceKey: z.string().min(1).max(160),
+    originalSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    startOffset: z.number().int().nonnegative(),
+    endOffset: z.number().int().positive(),
+    offsetUnit: z.literal('utf16_code_unit'),
+    originalText: z.string().min(1).max(4000),
+    contextTruncated: z.boolean(),
+    boundaryTruncated: z.boolean(),
+    relevance: z.number().nonnegative(),
+  })
+  .strict();
+export const EvidencePassageViewSchema = EvidencePassageFieldsSchema.refine(
+  (row) => row.endOffset - row.startOffset === row.originalText.length,
+);
+export type EvidencePassageView = z.infer<typeof EvidencePassageViewSchema>;
 
 export const SemanticClaimSchema = ExtractedClaimProposalSchema.extend({
   id: z.string().regex(/^claim-[a-f0-9]{24}$/u),
@@ -131,6 +166,7 @@ export const SemanticAssessmentReportSchema = z
           'provisional-semantic-v1.3',
           'provisional-semantic-v1.4',
           'provisional-semantic-v1.5',
+          'provisional-semantic-v1.6',
           SEMANTIC_PIPELINE_VERSION,
         ]),
         promptVersion: z.enum([
@@ -139,9 +175,59 @@ export const SemanticAssessmentReportSchema = z
           'evidence-support-v1.3',
           'evidence-support-v1.4',
           'evidence-support-v1.5',
+          'evidence-support-v1.6',
           SEMANTIC_PROMPT_VERSION,
         ]),
         inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+        claimCoverage: z
+          .object({
+            inventoryVersion: z.literal('original-span-v1'),
+            candidates: z
+              .array(
+                z
+                  .object({
+                    candidateId: z.string().regex(/^claim-[a-f0-9]{24}$/u),
+                    segmentId: z.string().min(1).max(160),
+                    startOffset: z.number().int().nonnegative(),
+                    endOffset: z.number().int().positive(),
+                  })
+                  .strict(),
+              )
+              .max(1500),
+            excluded: z
+              .array(
+                z
+                  .object({
+                    startOffset: z.number().int().nonnegative(),
+                    endOffset: z.number().int().positive(),
+                    reason: z.enum(['question', 'quotation', 'framing', 'span_too_long']),
+                  })
+                  .strict(),
+              )
+              .max(3000),
+            selectedIds: z.array(z.string().regex(/^claim-[a-f0-9]{24}$/u)).max(5),
+            unselectedIds: z.array(z.string().regex(/^claim-[a-f0-9]{24}$/u)).max(1500),
+            claimLimitReached: z.boolean(),
+          })
+          .strict()
+          .optional(),
+        passageViews: z
+          .array(
+            z
+              .object({
+                claimId: z.string().min(1).max(160),
+                passages: z
+                  .array(
+                    EvidencePassageFieldsSchema.omit({ originalText: true }).extend({
+                      excerptSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+                    }),
+                  )
+                  .max(60),
+              })
+              .strict(),
+          )
+          .max(6)
+          .optional(),
         evidenceSha256: z.string().regex(/^[a-f0-9]{64}$/u),
         extractionInputSha256: z
           .string()

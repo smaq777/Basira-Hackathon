@@ -1,6 +1,6 @@
 import type { ClaimApplicability, FoundationIntake } from './foundation.js';
 
-export const CLAIM_APPLICABILITY_VERSION = 'claim-applicability-1.0';
+export const CLAIM_APPLICABILITY_VERSION = 'claim-applicability-1.1';
 
 /** Syntactic applicability only: never establishes claim truth or evidence support. */
 export function assessClaimApplicability(
@@ -25,8 +25,8 @@ export function assessClaimApplicability(
     }
     authoredText += intake.originalText.slice(cursor, segment.startOffset);
     const quoted =
-      /[«“"{]\s*$/u.test(intake.originalText.slice(0, segment.startOffset)) &&
-      /^\s*[»”"}]/u.test(intake.originalText.slice(segment.endOffset));
+      /[«“"{﴿]\s*$/u.test(intake.originalText.slice(0, segment.startOffset)) &&
+      /^\s*[»”"}﴾]/u.test(intake.originalText.slice(segment.endOffset));
     if (segment.role === 'unclassified' && !quoted) authoredText += segment.originalText;
     else authoredText += ' ';
     cursor = segment.endOffset;
@@ -40,7 +40,7 @@ export function assessClaimApplicability(
     )
     .replace(/عن [\p{Script=Arabic}\s]{1,100}?(?:رضي الله عنه(?:ما)? )?قال\s*:/gu, '')
     .replace(/(?:صلى الله عليه وسلم|رضي الله عنه(?:ما)?)/gu, '')
-    .replace(/[«»“”"{}()[\]:：،,\t \r]+/gu, ' ')
+    .replace(/[«»“”"﴿﴾{}()[\]:：،,\t \r]+/gu, ' ')
     .trim();
   const clauses = residual
     .split(/[؟?!\n.؛]/u)
