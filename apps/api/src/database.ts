@@ -158,9 +158,11 @@ function securedConnectionString(value: string): string {
 export function databaseTls(
   mode = process.env.DATABASE_TLS_MODE,
   environment: NodeJS.ProcessEnv = process.env,
+  options?: { ca?: string },
 ): false | { rejectUnauthorized: boolean; ca?: string } {
   const selected = mode?.trim() || 'verify-full';
-  const ca = environment.DATABASE_CA_CERT?.replace(/\\n/gu, '\n').trim();
+  const caSource = options ? options.ca : environment.DATABASE_CA_CERT;
+  const ca = caSource?.replace(/\\n/gu, '\n').trim();
   const productionDeployment =
     environment.BASIRAH_DEPLOYMENT_ENVIRONMENT === 'production' ||
     environment.RAILWAY_ENVIRONMENT_NAME === 'production';
