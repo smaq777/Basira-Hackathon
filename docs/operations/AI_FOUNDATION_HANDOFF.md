@@ -6,6 +6,33 @@ here are real, but are not automatically present in a Vercel/Railway deployment.
 
 ## Message to the integration agent
 
+Current review instructions, 5 October 2026, 17:23 UTC: development `845d608`
+includes owner #91 saved-result fallback. Review cleaning #85 (`845ae1a`), then
+cache delivery #92 (tested code `53c757f`, documentation head `79ff315`), capacity
+#95 (`a84ec9c`, preserving #91) and this handoff #87. Preserve owner ticket
+migrations 0013/0014; deployment cleaning is 0015. Acceptance and deployment
+remain Saleh's responsibility. Read the dated evidence and recheck exact-head CI.
+
+For a missing database/RAG configuration, distinguish the report database
+`basirah_integration_20261004` from Neon `basirah_research`. The latter is in
+project `weathered-pond-44811639`; active research parent is
+`br-wandering-unit-b24xqw5d`, and cleaned-cache UI testing uses isolated child
+`br-little-pond-b2y5usie`. Server credentials are outside the repo in the owning
+`Project_Code/AI_Foundation/.env`: `BASIRAH_CORPUS_DATABASE_URL`,
+`BASIRAH_CORPUS_VERSION` and `BASIRAH_WEB_CACHE_DATABASE_URL` are mapped by the
+local launcher to the corresponding `FOUNDATION_*` server variables. Do not
+expect them in the clone, expose them through Vite or paste their values into
+GitHub. Shared staging needs its own authorized server-side configuration and
+Foundation assets; merging code does not provision them.
+
+At 17:03 UTC the actual Vercel capabilities URL still returned 404, while Railway
+was ready at migration 0014 with Foundation, research, semantic and rewrite
+disabled and no live providers. Verify the UI proxy, hosted activation boundary,
+assets and server environment under #69/#14/#20, then a fresh persisted report
+through the shared UI. The current live research gate requires loopback;
+review an explicit hosted profile before deployment. Follow the
+[resumption checklist](../planning/AI_FOUNDATION_RESUME.md) for active #11 work.
+
 Latest checkpoint, 5 October 2026, 16:48 UTC: owner development `661fef89` includes
 #88/#89 direct human-ticket intake and contact validation. Cleaning draft #85 is
 updated at `845ae1a`, preserving owner ticket migrations 0013/0014 and assigning

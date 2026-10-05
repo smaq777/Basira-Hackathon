@@ -1,6 +1,6 @@
 # AI Foundation resumption checklist — 5 October 2026
 
-Checkpoint: 16:48 UTC. Continue local research integration and remaining priorities;
+Checkpoint: 17:23 UTC. Continue local research integration and remaining priorities;
 owner PR acceptance does not prevent isolated implementation. Saleh alone accepts,
 merges and deploys shared releases. This document is a continuation record, not a
 completion or acceptance receipt. Read the [integration handoff](../operations/AI_FOUNDATION_HANDOFF.md).
@@ -41,7 +41,7 @@ completion or acceptance receipt. Read the [integration handoff](../operations/A
 - Actual fresh UI report on 8773: `fed992b6-9e99-49d5-aeb0-bd57b410c9b1` completed
   in 14.081 seconds. Luna extracted, Sol assessed; cache embedding/pages/passages/content
   all succeeded. Two selected/restored cached parents supplied six exact cleaned
-  windows, and a Bin Baz 8881 citation fell inside a delivered window alongsideMuyassar 31:15.
+  windows, and a Bin Baz 8881 citation fell inside a delivered window alongside Muyassar 31:15.
   Independent audit matches first-repeat selections and recomputes every window hash.
   Earlier 8772 zero-cache report and cold-cache failures remain; this does not prove their cause.
 - Port 8771 retains active-parent setup; 8772 older passage child; 8773 new cleaned child.
@@ -60,14 +60,17 @@ Later owner checkpoint: development `845d608` adds #91 saved-result fallback whe
 connected analysis is unavailable. Capacity draft #95 now preserves that owner
 change at `a84ec9c4d1fa457e0e0f1c70621cb4366c420071`. Focused 69 tests and full
 51 files / 684 tests plus all local checks pass. Policy/dependency CI succeeded;
-one duplicate quality run was still running at the last exact-head snapshot.
-Recheck before reporting final CI. Root reviewed both unavailable and capacity
-catch paths. The live quota test remains pending; no new quota/provider test is claimed.
+all exact-head quality, policy and dependency runs succeeded in the agent's retained
+`CI_A84_V2.json` snapshot. Recheck before acceptance. Root reviewed both unavailable
+and capacity catch paths. Providers-disabled UI on localhost:8774 saved synthetic
+drafts and returned their text unchanged; the actual quota-denial screen remains
+unverified. Browser automation timed out on a batched transition. Preserve the
+session and prior reports; resume from observed state rather than reset its quota.
 
 1. **Finish delivery review (#8/#17):** publish selected fresh UI audit in cache PR
    without replacing frozen source 53c757f; inspect exact-head quality/policy/dependency
    checks. Saleh accepts #85 before #92. Source originals and experimental history stay intact.
-2. **Capacity feedback (#79):** active Sol worktree `79-capacity-feedback`, based on53c757f.
+2. **Capacity feedback (#79):** active Sol worktree `79-capacity-feedback`, preserving owner #91.
    Distinguish documents/revisions/reviews 429 capacity from network/burst failures.
    Preserve draft/session/reports, remove fixed-cap retry and keep cancellation safe.
    Draft #95 and local full checks are complete; finish CI and actual UI verification.
@@ -99,6 +102,32 @@ catch paths. The live quota test remains pending; no new quota/provider test is 
    outage/cancellation recovery and source/citation/rewrite narrative. Weights:
    technical 25%, reliability 15%, innovation 15%, UX 10%, impact 20%, operations 10%,
    presentation 5%; these are supplied weights, not awarded scores.
+
+## Active claim-selection checkpoint (#11)
+
+Sol Medium worktree `11-selection-binding` starts at `a84ec9c`. Its frozen baseline
+protocol V2 was independently reviewed before twelve public extraction-only calls
+(six fixtures, two repetitions; no retry, assessment, web, embedding or SQL calls).
+All twelve responses were retained: two invalid bindings, six binding-valid
+selections and four valid empty results. Recorded response cost was $0.001832175;
+there was no unknown billing. These counts describe binding, not religious accuracy.
+
+Both new repetitions of the exact historical request mistyped one character in
+the owned claim ID. The validator correctly rejected that proposal. The original
+historical response is missing, so its exact rejection cause remains unknown.
+The explicit-reference control also selected `لقمان: 31:15]` as an assertion;
+binding-valid output therefore does not imply correct claim extraction.
+
+Next implementation is an exact C/E alias map for model-facing selection and
+fixed-code report-local diagnostics, preserving canonical IDs, original UTF16
+spans and strict unknown/duplicate rejection. Recognized bracketed citation
+framing needs a separate commit with author-condition controls. Freeze changed
+packets and obtain lead review before paid comparison; do not replace baseline
+outcomes. Qualifier calibration and relevance pruning remain separate work.
+
+External continuation evidence is in
+`AI_Foundation/experiments/claim-selection-binding-2026-10-05`: protocol V2,
+`LEAD_BASELINE_RELEASE_V2.json`, all twelve raw cells, results and analysis.
 
 ## Resume procedure
 
