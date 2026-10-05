@@ -1,5 +1,11 @@
 # Rapid, topic-balanced RAG expansion
 
+The next bounded #8 slice is the default-off [retained-page passage index](../evidence/2026-10-05-cache-passage-index.md).
+It indexes four selected retained public originals while keeping the same 16-parent
+legacy comparison universe. Preferred windows are claim-bound; whole-parent report
+storage remains unchanged. SQL/paid checks await a stable isolated protocol and do
+not establish reviewer-labelled recall or complete the 170-passage plan.
+
 Proposal dated 5 October 2026. Related to #8; dependencies #4, #5, #7, #11 and #18. This is an implementation plan, not a completed ingestion or a source-approval receipt. The integration dependency is draft PR #59.
 
 ## Objective and current boundary

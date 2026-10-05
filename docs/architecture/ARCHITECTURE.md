@@ -74,6 +74,14 @@ For the first working slice, bounded processing in the Node service is acceptabl
 
 ## Failure handling
 
+The optional [retained-page passage index](../evidence/2026-10-05-cache-passage-index.md)
+enriches legacy-ranked parents with exact bounded middle-page hits. Passage-only
+parents fill vacancies without displacing existing legacy hits; this conservative
+composition does not claim new-parent discovery.
+Per-claim preferences bind immutable originals and travel in report trace, while
+reusable shared cache admission rejects query-derived hints. Citation validation and
+assessor delivery resolve the same verified windows. Full-parent report budgets remain.
+
 Use the same source edition via a second delivery route or a licensed pinned snapshot whenever possible. Alternative works are different evidence, not invisible substitutes. Rebuild the evidence bundle, display the change and reassess. If no suitable evidence remains, abstain. Model-provider fallback must pass the same contract and evaluation gates; switching models is not a correctness guarantee.
 
 No API/model output alone approves a finding. Schema validation catches malformed structure; citation resolution catches nonexistent references; source/context validation and human evaluation address substantive errors.

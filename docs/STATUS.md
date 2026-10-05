@@ -2,6 +2,14 @@
 
 ## Latest development evidence — 5 October
 
+**Passage index (#8, related #11):** A separate default-off implementation adds
+offline bounded vector backfill and per-claim verified retained-page delivery.
+[Evidence](evidence/2026-10-05-cache-passage-index.md) records actual isolated SQL,
+paid failures and the zero-provider ranking correction replay: 24 paired parent
+rankings preserved, with selected middle-context delivery improved. Final child
+readback retained 86 corpus passages/16 originals/four indexed parents/eight vectors.
+Isolated UI review remains pending; active research cache and production are unchanged.
+
 **Routing evidence and next priorities (#13):** The
 [fixed-evidence comparison](evidence/2026-10-05-fixed-packet-routing.md) held
 claims/sources/prompts constant across Luna low and Sol medium. Both matched

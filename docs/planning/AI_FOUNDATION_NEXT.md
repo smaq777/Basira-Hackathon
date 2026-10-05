@@ -26,20 +26,36 @@ continue isolated implementation and integrated local tests before acceptance.
   retaining absence of obligation and obligation, preserved the Ayah, displayed
   before/after and completed its copy action using a retained supported report.
   This does not establish general reliability or fresh extraction success.
-- PRs #59 and #70–#78 were open/unmerged at this checkpoint. Required CI passed
-  for #76–#78 at their published commits. Local activation is not shared staging
-  deployment, source approval or Saleh acceptance.
+- PRs #59 and #70–#78 are merged into `development`; passage PR #80 remains a
+  draft. Required checks passed for the merged dependency queue. Local activation
+  is not shared staging, source approval or acceptance.
+- The default-off [passage index](../evidence/2026-10-05-cache-passage-index.md)
+  passed selected isolated SQL/least-privilege tests after forward migration
+  `0012`. A frozen comparison retained the same 16 parents, indexed four with
+  eight windows, and made 20 paid attempts (19 validated responses). Unconditional
+  passage-first composition demoted an unindexed rank-1 source in all four
+  controls. The correction preserves legacy ranks and enriches matching parents;
+  the zero-provider replay preserved all 24 parent ranking pairs and delivered the
+  selected qualified middle paragraph in four of four arms. Isolated UI review
+  remains pending. This does not establish new-parent discovery.
+- Three composed-corpus diagnostic arms delivered no cached parents despite valid direct rankings; the
+  bounded cache budget and surfaced outcome follow-up belongs to #17. Navigation
+  fragments remain in some exact windows, so byte integrity is not content quality.
+- Existing document capacity needs distinct UI feedback (#79). Fresh databases
+  on copied Neon branches fail historical role creation (#81); applied historical
+  checksums and the failed isolated database remain retained.
 
 ## Ordered implementation and evaluation
 
-| Order | Task                                                | Current evidence and next requirement                                                                                                                                                                                                                                                         | Issue              |
-| ----- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| 1     | Claim-selection consistency                         | Bounded empty-selection recovery is implemented and one source-free UI case now reaches evidence. Malformed selections can still fail; retain these outcomes, test representative mixed writing and add the still-pending editor confirmation.                                                | #11                |
-| 2     | Rewrite modality preservation                       | Version-2 guard and selected controls are implemented; integrated before/after and copy UI preserve explicit modality on an existing supported report. Broader independently reviewed preservation and ambiguity controls remain pending.                                                     | #38                |
-| 3     | Relevant passage retrieval and topic coverage       | Grow contextual sources across the nine labels, with independent works and exact parent bindings. Implement compact retained-parent passage storage/vector retrieval before claiming full-page packet headroom is solved. The 170-passage plan and underrepresented labels remain unfinished. | #5/#7/#8           |
-| 4     | Semantic calibration and Arabic explanation quality | Evaluate qualifier-to-proposition attachment separately from relation labels. Include unrelated/insufficient evidence and unresolved multi-clause writing, retain failures, compare fixed packets, then test the whole pipeline. No empirical religious accuracy claim without adjudication.  | #13/#18            |
-| 5     | Shared staging integration                          | Accept the dependency PRs into development, configure the explicitly selected staging API/proxy and provider readiness, then verify the same public UI end to end. Current local loopback research gates need a separately reviewed hosted staging configuration.                             | #14/#20/#69        |
-| 6     | Committee and beneficiary evidence                  | Produce a reproducible working demo, traceable original/citation examples, failure recovery, editor observations and honest judging-criteria mapping. Qualified source/rights review remains distinct from software acceptance.                                                               | #4/#18/#21/#22/#27 |
+| Order | Task                                                   | Current evidence and next requirement                                                                                                                                                                    | Issue              |
+| ----- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| 1     | Passage correction and replay                          | Rank correction and zero-provider replay passed; verify isolated UI context delivery next. Partial 4/16 indexing does not establish improved discovery.                                                  | #8                 |
+| 2     | Capacity feedback                                      | Distinguish the existing 20-document capacity response in the UI.                                                                                                                                        | #79                |
+| 3     | Remaining claim consistency                            | Bounded empty-selection recovery reaches evidence in one source-free UI case; malformed mixed selections still fail. Preserve those outcomes and add representative coverage/editor confirmation.        | #11                |
+| 4     | Bounded cache delivery, compaction and source coverage | Surface cache-budget failures and evaluate a bounded operator budget separately. Durable report compaction, unified parent ranking, body cleaning, 170 passages and underrepresented topics remain open. | #17/#5/#7/#8       |
+| 5     | Calibration and broader rewrite preservation           | Detailed qualifier fields vary despite coarse fixed-packet agreement; stronger reasoning benefit is unproven. Expand independent semantic/modality/ambiguity review beyond selected controls.            | #13/#18/#38        |
+| 6     | Shared staging and bootstrap                           | Saleh accepts and merges dependency PRs before shared staging. Verify API/proxy/provider readiness and fix copied-role fresh-database bootstrap additively.                                              | #14/#20/#69/#81    |
+| 7     | Committee and beneficiary evidence                     | Produce the working demo, reproducible failures and editor observations; measure real beneficiary benefit. Source/rights/scholarly review is separate from software acceptance.                          | #4/#18/#21/#22/#27 |
 
 The JSON source policy controls discovery; newly acquired pages may be classified
 and retained in the separate pending research cache after admission checks. A
@@ -49,13 +65,13 @@ retrieval remains a separate acceptance requirement.
 
 ## Merge and testing order
 
-PR #59 supplies the foundation. Review the bounded follow-ups in dependency order:
-#70 expansion plan, #71 staging routing, #72 original-span claims/passages, #73
-layout/citation action, #74 batch compiler/corpus pilot, #75 source-quality guard
-and #76 substantive rewrite including its modality follow-up, then #77 claim
-recovery and #78 routing evidence/priority plan. New passage indexing is being
-implemented independently under #8; it needs its own review and isolated
-migration/retrieval evidence. Preserve merge commits; no squash, rebase or force-push.
+PR #59 supplies the foundation. The bounded follow-ups were merged in dependency
+order: #70 expansion plan, #71 staging routing, #72 original-span claims/passages,
+#73 layout/citation action, #74 batch compiler/corpus pilot, #75 source-quality
+guard, #76 substantive rewrite and modality follow-up, #77 claim recovery and #78
+routing evidence/priority plan. Passage PR #80 is independently implemented under
+#8 and remains draft pending isolated UI evidence and acceptance. Preserve merge
+commits; no squash, rebase or force-push.
 PRs and issue acceptance remain open until Saleh acts. CI success does not imply
 deployment or scientific acceptance.
 

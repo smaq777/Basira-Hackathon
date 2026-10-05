@@ -53,6 +53,41 @@ export const EvidencePassageViewSchema = EvidencePassageFieldsSchema.refine(
   (row) => row.endOffset - row.startOffset === row.originalText.length,
 );
 export type EvidencePassageView = z.infer<typeof EvidencePassageViewSchema>;
+export const CachePassagePreferenceSchema = z
+  .object({
+    claimId: z.string().regex(/^claim-[a-f0-9]{24}$/u),
+    evidenceKey: z.string().min(1).max(160),
+    originalSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    querySha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    chunkerVersion: z.literal('cache-sentence-context-v1'),
+    hits: z
+      .array(
+        z
+          .object({
+            passageId: z.string().regex(/^cache-passage:[a-f0-9]{48}$/u),
+            originalSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+            passageSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+            chunkerVersion: z.literal('cache-sentence-context-v1'),
+            startOffset: z.number().int().nonnegative(),
+            endOffset: z.number().int().positive(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(3),
+    coverage: z
+      .object({
+        chunkerVersion: z.literal('cache-sentence-context-v1'),
+        passageCount: z.number().int().positive().max(32),
+        coveredUtf16Units: z.number().int().positive().max(30000),
+        totalUtf16Units: z.number().int().positive().max(30000),
+        fullTextIndexed: z.boolean(),
+        boundaryTruncatedCount: z.number().int().nonnegative().max(32),
+      })
+      .strict(),
+  })
+  .strict();
+export type CachePassagePreference = z.infer<typeof CachePassagePreferenceSchema>;
 
 export const SemanticClaimSchema = ExtractedClaimProposalSchema.extend({
   id: z.string().regex(/^claim-[a-f0-9]{24}$/u),
@@ -258,6 +293,7 @@ export const SemanticAssessmentReportSchema = z
           .object({
             corpusVersion: z.string().min(1).max(120),
             mode: z.enum(['approved', 'local_research']),
+            passagePreferences: z.array(CachePassagePreferenceSchema).max(40).optional(),
             queries: z
               .array(
                 z

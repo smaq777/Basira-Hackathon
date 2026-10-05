@@ -39,6 +39,20 @@ export type ResearchPageCache = {
   search(query: string, signal?: AbortSignal): Promise<SourceEvidence[]>;
   restore(keys: readonly string[], signal?: AbortSignal): Promise<SourceEvidence[]>;
 };
+export function eligibleResearchPage(e: SourceEvidence, policy: LoadedSourcePolicy) {
+  const url = e.sourceUrl && allowedWebUrl(e.sourceUrl, policy.policies);
+  const rule = url && policy.enabled.find((r) => r.domain === url.hostname);
+  return (
+    !!rule &&
+    sourceExtractionFailure(e.sourceUrl!, e.originalText) === null &&
+    e.sourceRole === rule.sourceRole &&
+    e.sourceId === 'web-' + rule.id &&
+    e.provenance.sourcePolicySha256 === policy.sha256 &&
+    e.provenance.sourcePolicyVersion === policy.policy.policyVersion &&
+    e.approvalStatus === 'pending' &&
+    e.researchOnly
+  );
+}
 export function createResearchPageCache(options: {
   readerPool: Pool;
   writerPool: Pool;
@@ -51,6 +65,9 @@ export function createResearchPageCache(options: {
     modelId: string;
     embed: (text: string, signal?: AbortSignal) => Promise<number[]>;
   };
+  passageIndex?: {
+    search(query: string, vector: number[] | null, signal?: AbortSignal): Promise<SourceEvidence[]>;
+  };
   ttlMs?: number;
   now?: () => number;
 }): ResearchPageCache {
@@ -60,18 +77,7 @@ export function createResearchPageCache(options: {
   if (!Number.isFinite(ttl) || ttl < 60000 || ttl > 30 * 24 * 60 * 60 * 1000)
     throw Error('CACHE_TTL_INVALID');
   function eligible(e: SourceEvidence) {
-    const url = e.sourceUrl && allowedWebUrl(e.sourceUrl, policy.policies);
-    const rule = url && policy.enabled.find((r) => r.domain === url.hostname);
-    return (
-      !!rule &&
-      sourceExtractionFailure(e.sourceUrl!, e.originalText) === null &&
-      e.sourceRole === rule.sourceRole &&
-      e.sourceId === 'web-' + rule.id &&
-      e.provenance.sourcePolicySha256 === policy.sha256 &&
-      e.provenance.sourcePolicyVersion === policy.policy.policyVersion &&
-      e.approvalStatus === 'pending' &&
-      e.researchOnly
-    );
+    return eligibleResearchPage(e, policy);
   }
   function decode(row: Record<string, unknown>) {
     const e = SourceEvidenceSchema.parse(row.evidence);
@@ -109,6 +115,16 @@ export function createResearchPageCache(options: {
       for (const input of inputs) {
         signal?.throwIfAborted();
         const e = SourceEvidenceSchema.parse(input);
+        if (
+          [
+            'cachePassageHits',
+            'cachePassageQuerySha256',
+            'cachePassageHitsByQuery',
+            'passageIndexCoverage',
+            'passageIndexStatus',
+          ].some((k) => Object.hasOwn(e.provenance, k))
+        )
+          throw Error('CACHE_TRANSIENT_PROVENANCE_FORBIDDEN');
         if (
           !eligible(e) ||
           !e.snapshotKey.startsWith('web:') ||
@@ -316,35 +332,83 @@ export function createResearchPageCache(options: {
       }
       if (vector && (vector.length !== 1536 || vector.some((v) => !Number.isFinite(v))))
         throw Error('CACHE_EMBEDDING_INVALID');
-      return tx(
-        options.readerPool,
-        'basirah_research_runtime',
-        true,
-        async (c) => {
-          const rows = (
-            await c.query(
-              `select evidence,word_similarity($2,search_text)>0.05 lexical_hit,($3::vector is not null and embedding_model=$4 and embedding is not null and 1-(embedding<=>$3::vector)>0.2) semantic_hit from basirah.research_page_cache where policy_sha256=$1 and expires_at>clock_timestamp() and revoked_at is null and (word_similarity($2,search_text)>0.05 or ($3::vector is not null and embedding_model=$4 and embedding is not null and 1-(embedding<=>$3::vector)>0.2)) order by greatest(word_similarity($2,search_text),case when embedding_model=$4 then 1-(embedding<=>$3::vector) else 0 end) desc,snapshot_key limit 8`,
-              [
-                policy.sha256,
-                text,
-                vector ? '[' + vector.join(',') + ']' : null,
-                options.embeddingSpace?.modelId ?? null,
-              ],
-            )
-          ).rows;
-          return rows
-            .map((r) => ({ e: decode(r), r }))
-            .filter(({ e }) => eligible(e))
-            .map(({ e, r }) => ({
-              ...e,
-              delivery: 'snapshot' as const,
-              retrievalModes: [
-                ...(r.lexical_hit ? ['lexical' as const] : []),
-                ...(r.semantic_hit ? ['semantic' as const] : []),
-              ],
-            }));
-        },
-        signal,
+      const [pages, passages] = await Promise.allSettled([
+        tx(
+          options.readerPool,
+          'basirah_research_runtime',
+          true,
+          async (c) => {
+            const rows = (
+              await c.query(
+                `select evidence,word_similarity($2,search_text)>0.05 lexical_hit,($3::vector is not null and embedding_model=$4 and embedding is not null and 1-(embedding<=>$3::vector)>0.2) semantic_hit from basirah.research_page_cache where policy_sha256=$1 and expires_at>clock_timestamp() and revoked_at is null and (word_similarity($2,search_text)>0.05 or ($3::vector is not null and embedding_model=$4 and embedding is not null and 1-(embedding<=>$3::vector)>0.2)) order by greatest(word_similarity($2,search_text),case when embedding_model=$4 then 1-(embedding<=>$3::vector) else 0 end) desc,snapshot_key limit 8`,
+                [
+                  policy.sha256,
+                  text,
+                  vector ? '[' + vector.join(',') + ']' : null,
+                  options.embeddingSpace?.modelId ?? null,
+                ],
+              )
+            ).rows;
+            return rows
+              .map((r) => ({ e: decode(r), r }))
+              .filter(({ e }) => eligible(e))
+              .map(({ e, r }) => ({
+                ...e,
+                delivery: 'snapshot' as const,
+                retrievalModes: [
+                  ...(r.lexical_hit ? ['lexical' as const] : []),
+                  ...(r.semantic_hit ? ['semantic' as const] : []),
+                ],
+              }));
+          },
+          signal,
+        ),
+        options.passageIndex
+          ? options.passageIndex.search(query, vector, signal)
+          : Promise.resolve([]),
+      ]);
+      signal?.throwIfAborted();
+      if (pages.status === 'rejected') throw pages.reason;
+      const rows = passages.status === 'fulfilled' ? passages.value : [];
+      const merged = new Map<string, SourceEvidence>();
+      // A partially populated passage index enriches context, but cannot displace
+      // the established parent ranking. Passage-only parents fill vacancies only.
+      for (const row of [...pages.value, ...rows]) {
+        const prior = merged.get(row.snapshotKey);
+        if (!prior) {
+          if (merged.size < 8) merged.set(row.snapshotKey, row);
+        } else if (
+          prior.originalSha256 === row.originalSha256 &&
+          prior.originalText === row.originalText &&
+          prior.sourceUrl === row.sourceUrl &&
+          prior.sourceId === row.sourceId &&
+          prior.sourceVersion === row.sourceVersion
+        )
+          merged.set(row.snapshotKey, {
+            ...prior,
+            retrievalModes: [...new Set([...prior.retrievalModes, ...row.retrievalModes])],
+            provenance: {
+              ...prior.provenance,
+              ...Object.fromEntries(
+                Object.entries(row.provenance).filter(([key]) =>
+                  ['cachePassageHits', 'cachePassageQuerySha256', 'passageIndexCoverage'].includes(
+                    key,
+                  ),
+                ),
+              ),
+            },
+          });
+      }
+      return [...merged.values()].slice(0, 8).map((row) =>
+        passages.status === 'rejected'
+          ? {
+              ...row,
+              provenance: {
+                ...row.provenance,
+                passageIndexStatus: 'unavailable_legacy_fallback',
+              },
+            }
+          : row,
       );
     },
     async restore(keys, signal) {

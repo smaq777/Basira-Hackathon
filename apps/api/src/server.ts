@@ -16,6 +16,7 @@ import { createClaimRetrievalAdapter } from './claim-retrieval.js';
 import { loadSourcePolicy } from './source-policy.js';
 import { createWebGapDiscovery } from './web-gap-discovery.js';
 import { createResearchPageCache } from './research-page-cache.js';
+import { createResearchPagePassageIndex } from './research-page-passage-index.js';
 import { createPageTopicClassifier } from './page-topic-classifier.js';
 import { withResearchPageCache } from './cached-gap-discovery.js';
 import { withResearchPageCorpus } from './cached-corpus.js';
@@ -92,6 +93,8 @@ async function initializeFoundation() {
   const retrievalEnabled = process.env.FOUNDATION_CLAIM_RETRIEVAL_ENABLED === 'true';
   const webDiscoveryEnabled = process.env.FOUNDATION_WEB_DISCOVERY_ENABLED === 'true';
   const webCacheEnabled = process.env.FOUNDATION_WEB_CACHE_ENABLED === 'true';
+  const cachePassageEnabled = process.env.FOUNDATION_WEB_CACHE_PASSAGES_ENABLED === 'true';
+  if (cachePassageEnabled && !webCacheEnabled) throw Error('CACHE_PASSAGES_REQUIRE_WEB_CACHE');
   const webProvider = process.env.FOUNDATION_WEB_PROVIDER ?? 'firecrawl';
   if (!['firecrawl', 'tinyfish_first'].includes(webProvider))
     throw new Error('WEB_DISCOVERY_PROVIDER_INVALID');
@@ -220,6 +223,14 @@ async function initializeFoundation() {
           writerPool: webCachePool,
           policy: sourcePolicy,
           classify: createPageTopicClassifier({ apiKey: process.env.OPENROUTER_API_KEY }),
+          ...(cachePassageEnabled
+            ? {
+                passageIndex: createResearchPagePassageIndex({
+                  readerPool: corpusPool,
+                  policy: sourcePolicy,
+                }),
+              }
+            : {}),
           embeddingSpace: {
             modelId: QUERY_EMBEDDING_MODEL,
             embed: createOpenRouterQueryEmbedding({ apiKey: process.env.OPENROUTER_API_KEY }),
