@@ -13,6 +13,12 @@ pgvector; local PostgreSQL/SQLite are development fixtures. See
 
 ## Corpus preparation
 
+The [6 October collected-batch ingestion](../evidence/2026-10-06-collected-corpus-ingestion.md)
+stores 175 pending research passages with compatible vectors in the existing
+Neon research branch. The historical 86-passage version remains available.
+Corpus storage, runtime version selection and approved production visibility
+are separate operations. Further acquisition is stopped.
+
 1. A content reviewer approves the work, edition, permitted use and intended claim coverage.
 2. Record source URL, license/permission evidence, attribution, edition/version and retrieval date.
 3. Preserve the original Arabic unchanged. Store a separate limited search-normalized representation.

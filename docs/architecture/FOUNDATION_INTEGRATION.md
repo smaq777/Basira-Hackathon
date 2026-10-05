@@ -152,3 +152,12 @@ offsets. Unique quotations keep original UTF-16 spans and the established
 full/excerpt and exact/orthographic distinctions. This does not expand the
 normalization policy or source approval. See the
 [offline boundary evidence](../evidence/2026-10-05-hosted-quotation-boundaries.md).
+
+## Self-contained semantic qualifier fields
+
+Semantic prompt v1.10 asks each scope item to state the bounded assessed proposition
+with its polarity, modality and material conditions, rather than a bare subject
+label. Contradicted/unestablished and unavailable/ambiguous cases retain their
+explicit limitations. Citation and span validators are unchanged; no keyword rule
+forces a verdict or rewrites returned findings. Historical matching trace versions
+remain readable. See the [selected comparison and limits](../evidence/2026-10-05-qualifier-field-consistency.md).
