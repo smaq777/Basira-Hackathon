@@ -2,6 +2,13 @@
 
 ## Latest development evidence — 5 October
 
+**Optional citation/layout candidate (#38):** A default-off local research action
+now creates a separate candidate from the owned persisted report, preserves every
+original character, and adds only validated paragraph breaks and recorded
+citations. Copy reloads ownership/report/attempt binding and revalidates
+insertions. Storage is explicitly session-bound memory; source approval and
+substantive prose changes remain gated. See [evidence](evidence/2026-10-05-citation-layout-candidate.md).
+
 **Claim and passage follow-up (#11):** Semantic v1.7 binds model selections to a
 deterministic inventory of original author spans and sends bounded exact source
 passages with immutable hashes and UTF16 offsets, including late-page context.

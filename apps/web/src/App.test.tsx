@@ -261,6 +261,7 @@ describe('Basirah web flow', () => {
       `/api/v1/revisions/${REVISION_ID}/extractions`,
       '/api/v1/reviews',
       `/api/v1/reviews/${REVIEW_ID}/report`,
+      '/api/v1/capabilities',
     ]);
   });
 
