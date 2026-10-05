@@ -1114,6 +1114,22 @@ describe('material report reasons and ticket availability', () => {
     report.intake.quotationFindings = [];
     expect(codes(report)).toEqual(['legacy_partial']);
   });
+  it('does not mislabel approved research context as pending source approval', () => {
+    const report = supported();
+    report.intake.evidence[0]!.approvalStatus = 'approved';
+    expect(codes(report)).toEqual(['source_research_context']);
+    expect(materialReviewReasons(report)[0]!.message).not.toContain('لم يُؤكد');
+    report.intake.evidence[0]!.researchOnly = false;
+    expect(codes(report)).toEqual([]);
+    report.intake.evidence[0]!.approvalStatus = 'pending';
+    expect(codes(report)).toEqual(['source_approval_pending']);
+    report.intake.evidence[0]!.researchOnly = true;
+    expect(codes(report)).toEqual(['source_approval_pending']);
+    report.intake.evidence[0]!.approvalStatus = 'rejected';
+    expect(codes(report)).toEqual(['source_approval_rejected']);
+    report.intake.evidence[0]!.approvalStatus = 'revoked';
+    expect(codes(report)).toEqual(['source_approval_revoked']);
+  });
   it('preserves coexisting unresolved quotation, lack of support, and distinct approval reasons', () => {
     const report = supported();
     report.intake.quotationFindings[0]!.status = 'unresolved';

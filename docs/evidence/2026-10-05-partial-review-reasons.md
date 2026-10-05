@@ -13,7 +13,8 @@ reasons from existing typed findings: unresolved/different quotation wording,
 partial source transport, bounded retrieval limitations, unsupported/contradicted
 claim determinations, unreviewed author coverage, incomplete assessment, proposed
 inference mapping and source approval state. Pending, rejected and revoked sources
-have distinct wording. A fully explained faithful excerpt with no applicable
+have distinct wording. An explicitly approved research-only source receives a
+separate research-context limitation, without claiming its approval is pending. A fully explained faithful excerpt with no applicable
 inference does not become incomplete solely from overall partial status. Legacy
 partial reports lacking a specific explanation retain an honest general fallback.
 

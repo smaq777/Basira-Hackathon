@@ -97,25 +97,38 @@ export function materialReviewReasons(report: FoundationReport): MaterialReviewR
       'source_approval_revoked',
       'سُحب اعتماد بعض المصادر المعروضة. راجع حالة المصدر والتقرير المحفوظ قبل الاعتماد عليه.',
     );
-  if (
-    report.intake.evidence.some(
-      (source) =>
-        source.approvalStatus === 'pending' ||
-        (source.researchOnly && !['rejected', 'revoked'].includes(source.approvalStatus)),
-    )
-  )
+  if (report.intake.evidence.some((source) => source.approvalStatus === 'pending'))
     add(
       'source_approval_pending',
       'اعتماد بعض المصادر لم يُؤكد بعد؛ النتيجة أولية وتحتاج مراجعة. راجع حالة المصدر وسياقه.',
+    );
+  if (
+    report.intake.evidence.some(
+      (source) => source.approvalStatus === 'approved' && source.researchOnly,
+    )
+  )
+    add(
+      'source_research_context',
+      'بعض المصادر المعروضة مخصصة للسياق البحثي؛ تبقى النتائج أولية وتحتاج مراجعة. راجع حالة المصدر وحدود استخدامه.',
     );
   if (!report.intake.evidence.length && (findings.length > 0 || (semantic?.claims.length ?? 0) > 0))
     add(
       'source_not_identified',
       'لم يُحدد مصدر للمقارنة ضمن المصادر المتاحة. راجع النسبة أو المرجع المذكور.',
     );
+  const inferenceResolved =
+    notApplicable ||
+    (semantic?.status === 'completed' &&
+      semantic.claims.length > 0 &&
+      semantic.claims.every((claim) =>
+        semantic.assessments.some((finding) => finding.claimId === claim.id),
+      ) &&
+      semantic.assessments.every((finding) =>
+        ['supported', 'not_applicable'].includes(finding.status),
+      ));
   const explainedExcerptOnly =
     report.status === 'partial' &&
-    notApplicable &&
+    inferenceResolved &&
     findings.length > 0 &&
     findings.every((row) => row.group === 'faithful') &&
     findings.some((row) => row.presentation.extentKind === 'excerpt');
