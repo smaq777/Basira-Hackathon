@@ -8,6 +8,7 @@ import { sha256 } from './foundation.js';
 import { normalizeCorpusSearch } from './hosted-corpus.js';
 import type { LoadedSourcePolicy } from './source-policy.js';
 import { allowedWebUrl } from './web-discovery.js';
+import { sourceExtractionFailure } from './source-extraction-quality.js';
 
 export const ResearchTopicSchema = z.enum([
   'aqidah',
@@ -63,6 +64,7 @@ export function createResearchPageCache(options: {
     const rule = url && policy.enabled.find((r) => r.domain === url.hostname);
     return (
       !!rule &&
+      sourceExtractionFailure(e.sourceUrl!, e.originalText) === null &&
       e.sourceRole === rule.sourceRole &&
       e.sourceId === 'web-' + rule.id &&
       e.provenance.sourcePolicySha256 === policy.sha256 &&
