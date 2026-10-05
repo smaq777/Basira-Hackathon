@@ -19,6 +19,12 @@ DATABASE_URL='postgresql://...' npm run db:verify
 
 The migration runner records a SHA-256 checksum and refuses to accept a changed migration that is already applied. The verification script uses synthetic data inside a rolled-back serializable transaction to check schema version, RLS coverage, absence of `PUBLIC` table grants, required indexes, cross-session isolation, signed-session anti-forgery and immutable revisions.
 
+New migrations execute and record their checksum with canonical LF line endings.
+Existing recorded checksums are accepted only when they match the same exact SQL
+in deterministic LF or CRLF form, supporting Windows checkout conversion without
+rewriting historical SQL or database metadata. SQL edits, whitespace changes,
+mixed-ending historical hashes and local extension substitutions remain rejected.
+
 Migration `0005` grants the runtime role one bounded cleanup function, not direct delete access.
 The API calls it opportunistically in batches of 100 after confirming that `0005` is active. This
 keeps normal traffic from accumulating expired primary rows, but a production scheduler is still

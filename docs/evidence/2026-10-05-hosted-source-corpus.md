@@ -38,6 +38,26 @@ committed. External artifacts are under
 `RUNTIME_REPORT.json`. The official Neon CLI refreshed the existing authenticated
 session. No replacement account or project was created.
 
+## Migration checksum portability
+
+A read-only comparison of all nine Neon recorded checksums with Git HEAD and
+staged SQL found one checkout conversion: `0008` had been applied with CRLF
+bytes, while its Git object uses LF. The SQL content after deterministic
+CRLF-to-LF conversion is identical. All other recorded checksums exactly match
+Git HEAD. Historical migration files and database checksum metadata were left
+unchanged.
+
+The official migrator now writes canonical LF checksums for new migrations and
+accepts an existing checksum only for that exact SQL's LF or all-CRLF form.
+Regression tests reject real SQL edits, trailing whitespace/newline changes,
+mixed-ending historical hashes and the deliberately substituted local vector
+extension. Actual official-migrator replay on the existing isolated database
+reported all nine migrations already applied for both the worktree and a
+temporary copy containing exact Git HEAD LF SQL. Before/after metadata was
+identical; no paid provider call was needed. External receipts are
+`CHECKSUM_AUDIT.json`, `CHECKSUM_REPLAY_REPORT.json`, `MIGRATOR_REPLAY.txt` and
+`GIT_HEAD_LF_MIGRATOR_REPLAY.txt` in the same owning experiment directory.
+
 ## Runtime and persistence checks
 
 The dedicated `basirah_corpus_reader` login has no inherited administrative role,
