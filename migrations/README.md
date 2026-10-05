@@ -1,5 +1,9 @@
 # Database migrations
 
+An explicit [copied-role bootstrap](../docs/operations/COPIED_ROLE_BOOTSTRAP.md)
+addresses existing cluster roles under #81 without editing historical SQL or
+checksums. Its separate atomic receipt records the compatibility execution path.
+
 Migration `0015` adds separate insert-only source-content views and contiguous body
 windows after owner ticket migrations `0013`/`0014`; original/v1 records remain unchanged.
 It adds no vectors or roles. The content-view flag defaults off and requires isolated validation.
