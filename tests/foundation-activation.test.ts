@@ -108,14 +108,19 @@ describe('explicit foundation research activation', () => {
       FOUNDATION_CLAIM_RETRIEVAL_ENABLED: 'true',
     };
     expect(foundationRuntimeMode(demo, '0.0.0.0')).toBe('hosted_demo');
-    for (const key of [
-      'FOUNDATION_TAFSIR_LIVE',
-      'FOUNDATION_WEB_DISCOVERY_ENABLED',
-      'FOUNDATION_REWRITE_ENABLED',
-    ])
-      expect(() => foundationRuntimeMode({ ...demo, [key]: 'true' }, '0.0.0.0')).toThrow(
-        'HOSTED_DEMO_REQUIRES_READ_ONLY_RETRIEVAL',
-      );
+    expect(
+      foundationRuntimeMode(
+        {
+          ...demo,
+          FOUNDATION_TAFSIR_LIVE: 'true',
+          FOUNDATION_WEB_DISCOVERY_ENABLED: 'true',
+        },
+        '0.0.0.0',
+      ),
+    ).toBe('hosted_demo');
+    expect(() =>
+      foundationRuntimeMode({ ...demo, FOUNDATION_REWRITE_ENABLED: 'true' }, '0.0.0.0'),
+    ).toThrow('HOSTED_DEMO_REQUIRES_READ_ONLY_RETRIEVAL');
   });
   it.each([
     [{ ...staging, RAILWAY_ENVIRONMENT_NAME: 'production' }, 'HOSTED_STAGING_ENVIRONMENT_MISMATCH'],
