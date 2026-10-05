@@ -94,6 +94,11 @@ Source review and CI do not require access to those secrets.
 
 ## Exact data locations
 
+See the [Neon branch inventory and cleanup boundary](NEON_BRANCH_INVENTORY.md)
+for active branch IDs, corrected cleaning-child use, expiry, and the failed-child
+preservation/deletion checkpoint. Neon branches are distinct from Git branches
+and local report databases.
+
 | Purpose                                   | Location and identity                                                                                                                                                                                   | Verified contents / boundary                                                                                                                                                                               |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Local report/job database                 | PostgreSQL 18, loopback port `55439`, database `basirah_integration_20261004`                                                                                                                           | Report runtime and worker use separate `bridge_runtime` / `bridge_worker` logins. This is local durable report storage, not the Neon RAG collection.                                                       |
