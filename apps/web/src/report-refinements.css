@@ -1,0 +1,104 @@
+/* Scope result refinements; content-type colors come from the shared mainpage classes. */
+.foundation-report .foundation-compare-card {
+  min-width: 0;
+  padding: clamp(16px, 2.2vw, 24px);
+  border: 1px solid #d4dce3;
+  border-radius: 14px;
+  background: #f7f9fc;
+  color: var(--navy);
+}
+
+.foundation-report .foundation-compare-card--reference {
+  background: #edf7f1;
+  border-color: #bcd8c9;
+}
+
+.foundation-report .foundation-compare-card--different {
+  background: #fff1ef;
+  border-color: #e7c6c1;
+}
+
+.foundation-report .foundation-compare-card blockquote {
+  padding-block: 8px;
+  border: 0;
+  font-size: clamp(1.05rem, 1.8vw, 1.2rem);
+  line-height: 2.25;
+}
+
+.foundation-report .foundation-word-difference {
+  color: inherit;
+  padding-inline: 2px;
+  border-radius: 3px;
+  font-weight: 700;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.foundation-report .foundation-word-difference--draft {
+  background: #f6d2cb;
+  border-block-end: 2px solid #9c4536;
+}
+
+.foundation-report .foundation-word-difference--source {
+  background: #c9e5d4;
+  border-block-end: 2px solid #356c4c;
+}
+
+.foundation-report .foundation-word-difference--omit {
+  border-block-end-style: dashed;
+}
+
+.foundation-report .foundation-difference-key {
+  font-size: 0.85rem;
+  line-height: 1.9;
+}
+
+.foundation-report .foundation-original .foundation-highlight,
+.foundation-report .foundation-original .semantic-highlight {
+  color: inherit;
+}
+
+.foundation-report .foundation-highlight--active {
+  outline: 2px solid #44647b;
+  outline-offset: 2px;
+}
+
+.foundation-report .foundation-original-footer {
+  margin-block-start: 22px;
+  padding-block-start: 16px;
+  border-block-start: 1px solid var(--line);
+}
+
+.foundation-report .foundation-original-footer .foundation-types-toggle {
+  margin-block-start: 0;
+}
+
+.foundation-report .foundation-type-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  list-style: none;
+  padding: 0;
+  margin-block: 16px 10px;
+  font-size: 0.85rem;
+}
+
+.foundation-report .foundation-type-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.foundation-report .foundation-legend-swatch {
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgba(34, 54, 70, 0.2);
+  border-radius: 4px;
+}
+
+.foundation-report .foundation-original-footer p {
+  color: var(--navy-soft);
+  font-size: 0.82rem;
+  line-height: 1.9;
+  margin: 0;
+}

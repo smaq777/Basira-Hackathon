@@ -1,6 +1,15 @@
 # Retrieval-augmented generation design
 
-**Stage:** deterministic retrieval core implemented; database/provider integration and reviewer-labelled evaluation remain pending. RAG supplies attributable evidence; it does not train the model or guarantee correctness.
+**Stage:** deterministic ranking and a persistent typed Neon development corpus
+are implemented. Claim-driven retrieval and bounded web-discovery evaluation are
+development integrations; approved production corpus and reviewer-labelled
+accuracy evaluation remain pending. RAG supplies attributable evidence; it does
+not train the model or guarantee correctness. See the [hosted corpus evidence](../evidence/2026-10-05-hosted-source-corpus.md).
+
+**4 October decision:** the deployment target is hosted Neon PostgreSQL with
+pgvector; local PostgreSQL/SQLite are development fixtures. See
+[issue #8](https://github.com/smaq777/Basira-Hackathon/issues/8) and the
+[integration/source dependency record](FOUNDATION_INTEGRATION.md).
 
 ## Corpus preparation
 
@@ -10,6 +19,18 @@
 4. Chunk by coherent verse explanation or passage, retaining qualifications and neighboring context. Do not cut away negation, exceptions or attributed disagreement.
 5. Assign stable passage IDs and content hashes; retain reference coordinates and parent/neighbor links.
 6. Embed only approved passages. Persist model ID, dimension, task type and corpus version.
+
+The explicitly authorized development experiment can also embed pending sources
+under `basirah_research_runtime`, with every evidence item marked research-only.
+This permission never grants source approval or changes production visibility.
+The typed corpus stores Quran/hadith originals, Tafsir commentary/footnotes,
+`book_excerpt` and `scholar_explanation` independently. Cross-work explanation,
+citation, context and footnote relations preserve attribution without implying
+agreement. Immutable originals, context, provenance and source hashes are
+separate from normalized search keys. `corpus_snapshot` records immutable
+membership per corpus version so expanding a corpus reuses originals rather
+than rewriting or duplicating them. Embeddings remain bound to their model,
+dimensions, document task and corpus version.
 
 ## Retrieval cascade
 
@@ -34,10 +55,16 @@ The implemented pure retrieval contract filters out every edition not marked `ap
 
 ## Model strategy
 
-- **Embedding candidate:** Cohere Embed v4, with a proposed 1,024-dimensional representation where supported. Use matching query/document task types and the same model/configuration for both sides. Validate Arabic retrieval using approved examples.
+- **Development embedding space:** `openai/text-embedding-3-small`, 1,536 dimensions,
+  with separately bound document/query tasks, original hashes and corpus version.
+  Compatible hosted hybrid queries are verified; reviewer-labelled Arabic recall
+  remains pending. Cohere Embed v4 was an earlier proposed candidate, not the
+  current indexed space.
 - **Extraction:** a low-cost structured-output model, selected through a small Arabic extraction benchmark.
 - **Support assessment:** a stronger structured reasoning model evaluated on the bounded categories, not chosen solely by leaderboard claims.
-- **No training from scratch.** Fine-tuning is out of the MVP scope. No paid model or provider credentials have been provisioned in this foundation.
+- **No training from scratch.** Fine-tuning is out of the MVP scope. Authorized
+  development provider calls use credentials only from the owning external
+  `AI_Foundation/.env`; credentials and original corpora are not shipped here.
 
 Embedding models are not interchangeable just because dimensions match. A fallback embedding provider requires a separately indexed compatible corpus. If embeddings fail, use lexical/reference retrieval and disclose degraded recall. Never compare vectors from incompatible model spaces.
 

@@ -9,11 +9,15 @@ const clerkState = vi.hoisted(() => ({
   isSignedIn: false,
   getToken: vi.fn<() => Promise<string | null>>(),
   openUserProfile: vi.fn(),
+  signOut: vi.fn<() => Promise<void>>(),
 }));
 
 vi.mock('@clerk/react', () => ({
   useAuth: () => clerkState,
-  useClerk: () => ({ openUserProfile: clerkState.openUserProfile }),
+  useClerk: () => ({
+    openUserProfile: clerkState.openUserProfile,
+    signOut: clerkState.signOut,
+  }),
   SignInButton: ({ children }: { children: unknown }) => children,
   UserButton: () => <span>صورة الحساب</span>,
 }));
@@ -24,6 +28,7 @@ describe('reviewer access boundary', () => {
     clerkState.isSignedIn = false;
     clerkState.getToken.mockReset();
     clerkState.openUserProfile.mockReset();
+    clerkState.signOut.mockReset();
     vi.stubGlobal('fetch', vi.fn());
   });
 
@@ -34,7 +39,7 @@ describe('reviewer access boundary', () => {
 
   it('shows sign-in without requesting reviewer data when signed out', () => {
     render(
-      <ReviewerAccessBoundary onHome={vi.fn()}>
+      <ReviewerAccessBoundary onHome={vi.fn()} onSignedOut={vi.fn()}>
         {(profile) => (
           <>
             <p>المساحة الخاصة</p>
@@ -55,7 +60,7 @@ describe('reviewer access boundary', () => {
     vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 403 }));
 
     render(
-      <ReviewerAccessBoundary onHome={vi.fn()}>
+      <ReviewerAccessBoundary onHome={vi.fn()} onSignedOut={vi.fn()}>
         {(profile) => (
           <>
             <p>المساحة الخاصة</p>
@@ -77,7 +82,7 @@ describe('reviewer access boundary', () => {
     );
 
     render(
-      <ReviewerAccessBoundary onHome={vi.fn()}>
+      <ReviewerAccessBoundary onHome={vi.fn()} onSignedOut={vi.fn()}>
         {(profile) => (
           <>
             <p>المساحة الخاصة</p>
@@ -98,13 +103,49 @@ describe('reviewer access boundary', () => {
     );
   });
 
+  it('refreshes the signed-out home only after Clerk terminates the session', async () => {
+    clerkState.isSignedIn = true;
+    clerkState.getToken.mockResolvedValue('session-token');
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ authenticated: true, reviewer: true }), { status: 200 }),
+    );
+    const onSignedOut = vi.fn();
+    let finishSignOut!: () => void;
+    let signOutFinished = false;
+    clerkState.signOut.mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        finishSignOut = resolve;
+      });
+      signOutFinished = true;
+    });
+
+    render(
+      <ReviewerAccessBoundary onHome={vi.fn()} onSignedOut={onSignedOut}>
+        {(_profile, onSignOut) => (
+          <button type="button" onClick={() => void onSignOut()}>
+            تسجيل الخروج
+          </button>
+        )}
+      </ReviewerAccessBoundary>,
+    );
+
+    (await screen.findByRole('button', { name: 'تسجيل الخروج' })).click();
+    expect(clerkState.signOut).toHaveBeenCalledOnce();
+    expect(onSignedOut).not.toHaveBeenCalled();
+    expect(signOutFinished).toBe(false);
+
+    finishSignOut();
+    await waitFor(() => expect(signOutFinished).toBe(true));
+    expect(onSignedOut).toHaveBeenCalledOnce();
+  });
+
   it('keeps reviewer content hidden when a successful response has the wrong contract', async () => {
     clerkState.isSignedIn = true;
     clerkState.getToken.mockResolvedValue('session-token');
     vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 200 }));
 
     render(
-      <ReviewerAccessBoundary onHome={vi.fn()}>
+      <ReviewerAccessBoundary onHome={vi.fn()} onSignedOut={vi.fn()}>
         {() => <p>المساحة الخاصة</p>}
       </ReviewerAccessBoundary>,
     );

@@ -1,5 +1,5 @@
 import type { ComponentType, FormEvent, ReactNode } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Archive } from '@phosphor-icons/react/Archive';
 import { ArrowLeft } from '@phosphor-icons/react/ArrowLeft';
 import { ArrowUp } from '@phosphor-icons/react/ArrowUp';
@@ -42,18 +42,39 @@ import { WarningCircle } from '@phosphor-icons/react/WarningCircle';
 import { X } from '@phosphor-icons/react/X';
 import {
   analysisErrorMessage,
+  awaitFoundationReport,
+  BasirahApiError,
+  cancelOwnedReview,
+  createRevisionTicket,
+  createReviewTicket,
+  createOwnedReview,
+  getOwnedReview,
+  getReviewerTicket,
+  listReviewerTickets,
   persistDraftForAnalysis,
+  requireFoundationReview,
+  lookupReviewTicket,
   requestDraftPreflight,
+  saveReviewerResponse,
+  updateReviewTicketContact,
   type DraftAnalysisReceipt,
   type PreflightAnnotation,
-  type PreflightContentType,
   type PreflightFinding,
   type PreflightResponse,
+  type OwnedReview,
+  type TicketLookup,
+  type TicketReceipt,
+  type ReviewerTicket,
+  type ReviewerTicketSummary,
 } from './api.js';
+import { FoundationReportContent, FoundationResultScreen } from './foundation-report.js';
+import type { FoundationReport } from '../../../packages/contracts/src/foundation.js';
 import { ReviewerAccessBoundary, ReviewerAuthUnavailable } from './reviewer-auth.js';
 import { answerReviewQuestion, VOICE_GREETING, type VoiceTone } from './voice.js';
+import { MAX_DRAFT_LENGTH, isSafeDraftText } from '../../../packages/contracts/src/draft-text.js';
+import { compactDraftPreview } from './text-preview.js';
 
-type PublicRoute = 'home' | 'analysis' | 'result' | 'unresolved' | 'ticket';
+type PublicRoute = 'home' | 'analysis' | 'result' | 'unresolved' | 'ticket' | 'follow-up';
 type ReviewerRoute = 'dashboard' | 'queue' | 'detail' | 'sources';
 type Route = PublicRoute | `reviewer-${ReviewerRoute}`;
 
@@ -87,23 +108,16 @@ const PREFLIGHT_EXAMPLES = [
   },
 ];
 
-const SEMANTIC_LEGEND: Array<{
-  type: PreflightContentType;
-  label: string;
-  description: string;
-}> = [
-  { type: 'quran', label: 'آية', description: 'نص قرآني محتمل' },
-  { type: 'hadith_matn', label: 'متن حديث', description: 'نص الحديث المحتمل' },
-  { type: 'isnad', label: 'إسناد / نسبة', description: 'سلسلة النقل أو صيغة النسبة' },
-  {
-    type: 'claimed_source',
-    label: 'مصدر مذكور',
-    description: 'إحالة كتبها صاحب النص ولم تُعتمد بعد',
-  },
-  { type: 'interpretation', label: 'استنتاج', description: 'نتيجة أو تفسير مبني على النص' },
-];
+type CaseListItem = {
+  id: string;
+  title: string;
+  submitter: string;
+  submittedAt: string;
+  status: string;
+  priority: string;
+};
 
-const SAMPLE_CASES = [
+const SAMPLE_CASES: CaseListItem[] = [
   {
     id: 'BR-1042',
     title: 'إخفاء الصدقة في جميع الحالات',
@@ -139,6 +153,7 @@ function routeFromHash(): Route {
     result: 'result',
     unresolved: 'unresolved',
     ticket: 'ticket',
+    'follow-up': 'follow-up',
     'reviewer/dashboard': 'reviewer-dashboard',
     'reviewer/queue': 'reviewer-queue',
     'reviewer/detail': 'reviewer-detail',
@@ -150,6 +165,11 @@ function routeFromHash(): Route {
 function pathFor(route: Route) {
   if (route.startsWith('reviewer-')) return `#/reviewer/${route.replace('reviewer-', '')}`;
   return `#/${route}`;
+}
+
+export function reloadSignedOutHome(location: Pick<Location, 'hash' | 'reload'> = window.location) {
+  location.hash = '#/home';
+  location.reload();
 }
 
 function useRoute() {
@@ -168,12 +188,13 @@ function useRoute() {
     return () => window.removeEventListener('hashchange', update);
   }, []);
 
-  const navigate = (next: Route) => {
-    const hash = pathFor(next);
+  const navigate = useCallback((next: Route, reviewId?: string) => {
+    const parameter = next === 'reviewer-detail' ? 'ticketCode' : 'reviewId';
+    const hash = pathFor(next) + (reviewId ? `?${parameter}=${encodeURIComponent(reviewId)}` : '');
     window.location.hash = hash;
     setLocation({ route: next, hash });
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }, []);
 
   return { route: location.route, navigate };
 }
@@ -190,49 +211,47 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function PublicHeader({ onReviewer }: { onReviewer: () => void }) {
-  const [menuOpen, setMenuOpen] = useState(false);
+function PublicHeader({
+  onReviewer,
+  onFollowUp,
+}: {
+  onReviewer: () => void;
+  onFollowUp: () => void;
+}) {
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-    setMenuOpen(false);
   };
 
   return (
-    <header className="public-header page-shell">
-      <Brand />
-      <nav aria-label="التنقل الرئيسي" className={menuOpen ? 'nav-open' : ''}>
-        <button type="button" onClick={() => scrollTo('how')}>
-          كيف تعمل
-        </button>
-        <button type="button" onClick={() => scrollTo('sources')}>
-          المصادر والحدود
-        </button>
-        <button
-          type="button"
-          className="reviewer-login-mobile"
-          aria-label="دخول مساحة المراجع من قائمة الهاتف"
-          onClick={() => {
-            setMenuOpen(false);
-            onReviewer();
-          }}
-        >
-          <User size={20} />
-          مساحة المراجع
-        </button>
+    <header className="public-header-wrap">
+      <div className="public-header page-shell">
+        <Brand />
+        <div className="public-header-actions">
+          <button className="button button--ghost" onClick={onFollowUp}>
+            <MagnifyingGlass size={20} /> متابعة تذكرة
+          </button>
+          <button className="button button--outline reviewer-login" onClick={onReviewer}>
+            <User size={21} />
+            دخول المراجع
+          </button>
+        </div>
+      </div>
+      <nav className="public-subnav" aria-label="التنقل الرئيسي">
+        <div className="page-shell">
+          <button type="button" onClick={() => scrollTo('review')}>
+            مراجعة النص
+          </button>
+          <button type="button" onClick={() => scrollTo('how')}>
+            كيف تعمل
+          </button>
+          <button type="button" onClick={() => scrollTo('faq')}>
+            الأسئلة الشائعة
+          </button>
+          <button type="button" onClick={() => scrollTo('trust')}>
+            عن التحدي
+          </button>
+        </div>
       </nav>
-      <button className="button button--outline reviewer-login" onClick={onReviewer}>
-        <User size={21} />
-        دخول المراجع
-      </button>
-      <button
-        className="mobile-menu"
-        type="button"
-        aria-label="فتح القائمة"
-        aria-expanded={menuOpen}
-        onClick={() => setMenuOpen((value) => !value)}
-      >
-        <ListChecks size={25} />
-      </button>
     </header>
   );
 }
@@ -329,10 +348,12 @@ function HomeScreen({
   initialText,
   onReview,
   onReviewer,
+  onFollowUp,
 }: {
   initialText: string;
   onReview: (text: string) => void;
   onReviewer: () => void;
+  onFollowUp: () => void;
 }) {
   const [text, setText] = useState(initialText);
   const [error, setError] = useState('');
@@ -343,6 +364,78 @@ function HomeScreen({
   >('idle');
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
+  const acceptedTextRef = useRef(initialText);
+
+  const syncHighlights = () => {
+    const textarea = textAreaRef.current;
+    const highlights = highlightRef.current;
+    if (!textarea || !highlights) return;
+    highlights.style.left = `${textarea.clientLeft}px`;
+    highlights.style.top = `${textarea.clientTop}px`;
+    highlights.style.width = `${textarea.clientWidth}px`;
+    highlights.style.height = `${textarea.clientHeight}px`;
+    highlights.scrollTop = textarea.scrollTop;
+    highlights.scrollLeft = textarea.scrollLeft;
+  };
+
+  useLayoutEffect(() => {
+    const textarea = textAreaRef.current;
+    if (!textarea) return;
+    const resize = () => {
+      const scrollTop = textarea.scrollTop;
+      textarea.style.height = '0px';
+      const cap = Math.max(128, Math.min(420, window.innerHeight * 0.45));
+      textarea.style.height = `${Math.max(128, Math.min(cap, textarea.scrollHeight))}px`;
+      textarea.scrollTop = scrollTop;
+      syncHighlights();
+    };
+    resize();
+    window.addEventListener('resize', resize);
+    let width = textarea.clientWidth;
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            if (width !== textarea.clientWidth) {
+              width = textarea.clientWidth;
+              resize();
+            }
+          });
+    observer?.observe(textarea);
+    let active = true;
+    void document.fonts?.ready.then(() => {
+      if (active) resize();
+    });
+    return () => {
+      active = false;
+      window.removeEventListener('resize', resize);
+      observer?.disconnect();
+    };
+  }, [text]);
+
+  const updateText = (next: string) => {
+    setNotice('');
+    if (next.length > MAX_DRAFT_LENGTH) {
+      setError(
+        'لم يُضف النص لأن الحد الأقصى ٣٠٠٠ حرف. اختصره ثم حاول مجددًا؛ بقي النص الحالي كما هو.',
+      );
+      return false;
+    }
+    if (!isSafeDraftText(next)) {
+      setError('لم يُضف النص لوجود محارف غير صالحة. أعد نسخه كنص عادي؛ بقي النص الحالي كما هو.');
+      return false;
+    }
+    if (next === acceptedTextRef.current) {
+      setError('');
+      return true;
+    }
+    setPreflight(null);
+    setPreflightStatus(next.trim().length >= 20 ? 'checking' : 'idle');
+    acceptedTextRef.current = next;
+    setText(next);
+    setError('');
+    return true;
+  };
 
   useEffect(() => {
     if (text.trim().length < 20) {
@@ -352,16 +445,17 @@ function HomeScreen({
     }
     const controller = new AbortController();
     let active = true;
+    setPreflight(null);
     setPreflightStatus('checking');
     const timer = window.setTimeout(() => {
       void requestDraftPreflight(text, controller.signal)
         .then((result) => {
-          if (!active) return;
+          if (!active || acceptedTextRef.current !== text) return;
           setPreflight(result);
           setPreflightStatus('ready');
         })
         .catch((reason: unknown) => {
-          if (!active) return;
+          if (!active || acceptedTextRef.current !== text) return;
           if (reason instanceof DOMException && reason.name === 'AbortError') return;
           setPreflight(null);
           setPreflightStatus('unavailable');
@@ -373,11 +467,6 @@ function HomeScreen({
       controller.abort();
     };
   }, [text]);
-
-  const selectFinding = (finding: PreflightFinding) => {
-    textAreaRef.current?.focus();
-    textAreaRef.current?.setSelectionRange(finding.startOffset, finding.endOffset);
-  };
 
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
@@ -392,15 +481,22 @@ function HomeScreen({
       return;
     }
     setError('');
-    onReview(clean);
+    if (text.length > MAX_DRAFT_LENGTH) {
+      setError('الحد الأقصى للمراجعة ٣٠٠٠ حرف. اختصر النص ثم أعد المحاولة.');
+      return;
+    }
+    if (!isSafeDraftText(text)) {
+      setError('يتضمن النص محارف غير صالحة. أعد نسخه كنص عادي ثم حاول مجددًا.');
+      return;
+    }
+    onReview(text);
   };
 
   const pasteText = async () => {
     try {
       const clipboard = await navigator.clipboard.readText();
       if (!clipboard) throw new Error('empty');
-      setText(clipboard.slice(0, 3000));
-      setError('');
+      if (!updateText(clipboard)) return;
       setNotice('تم لصق النص.');
     } catch {
       setError('تعذر الوصول إلى الحافظة. الصق النص يدويًا داخل الحقل.');
@@ -409,10 +505,10 @@ function HomeScreen({
 
   return (
     <div className="app-page app-page--home">
-      <PublicHeader onReviewer={onReviewer} />
+      <PublicHeader onReviewer={onReviewer} onFollowUp={onFollowUp} />
       <main className="home-main page-shell">
         {notice && <Toast message={notice} />}
-        <section className="hero-section page-enter">
+        <section className="hero-section page-enter" id="review">
           <p className="eyebrow">مراجعة موثقة قبل النشر</p>
           <h1>ما النص الذي تريد مراجعته؟</h1>
           <p className="hero-copy">تحقق من دقة الاقتباس، ومن أن الدليل يدعم الاستنتاج قبل النشر.</p>
@@ -428,22 +524,36 @@ function HomeScreen({
                   annotations={preflight?.annotations ?? []}
                   findings={preflight?.findings ?? []}
                 />
+                {'\u200b'}
               </div>
               <textarea
                 id="review-text"
                 ref={textAreaRef}
                 value={text}
-                maxLength={3000}
                 rows={4}
-                aria-describedby="preflight-status"
-                onScroll={(event) => {
-                  if (!highlightRef.current) return;
-                  highlightRef.current.scrollTop = event.currentTarget.scrollTop;
-                  highlightRef.current.scrollLeft = event.currentTarget.scrollLeft;
+                aria-invalid={Boolean(error)}
+                aria-describedby={
+                  [
+                    error ? 'composer-error' : '',
+                    preflightStatus !== 'ready' ? 'preflight-status' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ') || undefined
+                }
+                onScroll={syncHighlights}
+                onPaste={(event) => {
+                  event.preventDefault();
+                  const textarea = event.currentTarget;
+                  const pasted = event.clipboardData.getData('text/plain');
+                  const start = textarea.selectionStart;
+                  const next = text.slice(0, start) + pasted + text.slice(textarea.selectionEnd);
+                  if (!updateText(next)) return;
+                  queueMicrotask(() =>
+                    textarea.setSelectionRange(start + pasted.length, start + pasted.length),
+                  );
                 }}
                 onChange={(event) => {
-                  setText(event.target.value);
-                  setError('');
+                  updateText(event.target.value);
                 }}
                 placeholder="ألصق منشورك أو اكتب العبارة التي تريد التحقق منها…"
               />
@@ -451,15 +561,20 @@ function HomeScreen({
             {preflightStatus === 'ready' && preflight && preflight.annotations.length > 0 && (
               <div className="annotation-guide">
                 <div className="annotation-legend" aria-label="دليل ألوان تصنيف أجزاء النص">
-                  {SEMANTIC_LEGEND.filter((item) =>
-                    preflight.annotations.some(
-                      (annotation) => annotation.contentType === item.type,
-                    ),
+                  {Array.from(
+                    new Map(
+                      preflight.annotations.map((annotation) => [
+                        annotation.contentType,
+                        {
+                          type: annotation.contentType,
+                          label: annotation.contentTypeLabel,
+                        },
+                      ]),
+                    ).values(),
                   ).map((item) => (
                     <span
                       key={item.type}
                       className={`annotation-chip annotation-chip--${item.type}`}
-                      title={item.description}
                     >
                       <span aria-hidden="true" />
                       {item.label}
@@ -470,6 +585,9 @@ function HomeScreen({
                   اللون يصف نوع الجزء، والخط السفلي يوضح حالة الفحص. المصدر المذكور هو إحالة كتبها
                   المستخدم، وليس مصدرًا معتمدًا تلقائيًا.
                 </p>
+                {preflight.warnings.includes('annotation_limit_reached') && (
+                  <p role="status">التصنيف الأولي المعروض جزئي؛ راجع بقية النص في التقرير.</p>
+                )}
                 <div className="verification-legend" aria-label="دليل حالة الفحص">
                   <span className="verification-key verification-key--info">
                     <CheckCircle size={15} /> تطابق أولي
@@ -483,49 +601,22 @@ function HomeScreen({
                 </div>
               </div>
             )}
-            <div
-              id="preflight-status"
-              className="preflight-status"
-              role="status"
-              aria-live="polite"
-            >
-              <span
-                className={`preflight-dot preflight-dot--${preflightStatus}`}
-                aria-hidden="true"
-              />
-              {preflightStatus === 'idle' && 'الصق نصًا من 20 حرفًا لبدء الرصد الأولي.'}
-              {preflightStatus === 'checking' && 'نصنّف العبارات ونبحث في المرجع المحلي التجريبي…'}
-              {preflightStatus === 'ready' &&
-                `رصد أولي محلي: ${preflight?.findings.length ?? 0} عبارة. النتائج ليست اعتمادًا للنشر.`}
-              {preflightStatus === 'unavailable' &&
-                'تعذر الرصد الأولي الآن. يمكنك الاستمرار وبدء المراجعة الكاملة.'}
-            </div>
-            {preflightStatus === 'ready' && preflight && preflight.findings.length > 0 && (
-              <div className="preflight-findings" aria-label="نتائج الرصد الأولي">
-                {preflight.findings.map((finding) => (
-                  <button
-                    key={finding.id}
-                    type="button"
-                    className={`preflight-finding preflight-finding--${finding.severity}`}
-                    onClick={() => selectFinding(finding)}
-                  >
-                    <span className="preflight-type">{finding.contentTypeLabel}</span>
-                    <span className="preflight-finding-copy">
-                      <strong>{finding.text}</strong>
-                      <span className={`finding-status finding-status--${finding.severity}`}>
-                        {finding.severity === 'warning'
-                          ? 'يحتاج مراجعة'
-                          : finding.severity === 'neutral'
-                            ? 'غير محسوم'
-                            : 'تطابق أولي'}
-                      </span>
-                      <small>{finding.message}</small>
-                      {finding.evidence && (
-                        <small>المرجع التجريبي: {finding.evidence.reference}</small>
-                      )}
-                    </span>
-                  </button>
-                ))}
+            {preflightStatus !== 'ready' && (
+              <div
+                id="preflight-status"
+                className="preflight-status"
+                role="status"
+                aria-live="polite"
+              >
+                <span
+                  className={`preflight-dot preflight-dot--${preflightStatus}`}
+                  aria-hidden="true"
+                />
+                {preflightStatus === 'idle' && 'الصق نصًا من 20 حرفًا لبدء الرصد الأولي.'}
+                {preflightStatus === 'checking' &&
+                  'نصنّف العبارات ونبحث في المرجع المحلي التجريبي…'}
+                {preflightStatus === 'unavailable' &&
+                  'تعذر الرصد الأولي الآن. يمكنك الاستمرار وبدء المراجعة الكاملة.'}
               </div>
             )}
             <div className="composer-actions">
@@ -534,7 +625,7 @@ function HomeScreen({
                 لصق نص
               </button>
               <span className="counter" dir="ltr">
-                {text.length} / 3000
+                {text.length} / {MAX_DRAFT_LENGTH}
               </span>
               <button className="composer-submit" type="submit" aria-label="ابدأ المراجعة">
                 <span>ابدأ المراجعة</span>
@@ -547,8 +638,7 @@ function HomeScreen({
               className="text-action"
               type="button"
               onClick={() => {
-                setText(DEMO_TEXT);
-                setError('');
+                updateText(DEMO_TEXT);
                 setNotice('تم تحميل مثال توضيحي.');
               }}
             >
@@ -566,8 +656,7 @@ function HomeScreen({
                   key={example.label}
                   type="button"
                   onClick={() => {
-                    setText(example.text);
-                    setError('');
+                    updateText(example.text);
                     setNotice(`تم تحميل مثال: ${example.label}`);
                   }}
                 >
@@ -577,59 +666,204 @@ function HomeScreen({
             </div>
           </details>
           {error && (
-            <p className="field-error" role="alert">
+            <p id="composer-error" className="field-error" role="alert">
               <WarningCircle size={18} /> {error}
             </p>
           )}
         </section>
 
-        <section className="capabilities" id="how" aria-label="ما الذي تراجعه بصيرة">
-          <article>
-            <span className="icon-disc">
-              <Quotes size={30} />
-            </span>
-            <h2>دقة الاقتباس</h2>
-            <p>مطابقة النص ونسبته</p>
-          </article>
-          <article>
-            <span className="icon-disc">
-              <FileText size={30} />
-            </span>
-            <h2>دعم الاستنتاج</h2>
-            <p>هل يدعم الدليل النتيجة؟</p>
-          </article>
-          <article>
-            <span className="icon-disc">
-              <BookOpen size={30} />
-            </span>
-            <h2>مصادر قابلة للتتبع</h2>
-            <p>عرض المرجع بوضوح</p>
-          </article>
+        <div className="insight-marquee" aria-label="أهم ما تقدمه بصيرة">
+          <div>
+            <span>دقة الاقتباس</span>
+            <span>كفاية الاستدلال</span>
+            <span>مصدر قابل للتتبع</span>
+            <span>صياغة تحتاج مراجعتك</span>
+            <span aria-hidden="true">دقة الاقتباس</span>
+            <span aria-hidden="true">كفاية الاستدلال</span>
+            <span aria-hidden="true">مصدر قابل للتتبع</span>
+            <span aria-hidden="true">صياغة تحتاج مراجعتك</span>
+          </div>
+        </div>
+
+        <section className="section-block" id="how" aria-labelledby="benefits-heading">
+          <div className="section-intro">
+            <p className="eyebrow">لماذا بصيرة؟</p>
+            <h2 id="benefits-heading">مراجعة تشرح لك ما وجدته، ولا تخفي حدودها</h2>
+            <p>ست إشارات مركزة تساعد الكاتب والمراجع على اتخاذ قرار واعٍ قبل النشر.</p>
+          </div>
+          <div className="capabilities" aria-label="ما الذي تراجعه بصيرة">
+            <article>
+              <span className="icon-disc">
+                <Quotes size={30} />
+              </span>
+              <h2>دقة الاقتباس</h2>
+              <p>مطابقة النص ونسبته</p>
+            </article>
+            <article>
+              <span className="icon-disc">
+                <FileText size={30} />
+              </span>
+              <h2>دعم الاستنتاج</h2>
+              <p>هل يدعم الدليل النتيجة؟</p>
+            </article>
+            <article>
+              <span className="icon-disc">
+                <BookOpen size={30} />
+              </span>
+              <h2>مصادر قابلة للتتبع</h2>
+              <p>عرض المرجع بوضوح</p>
+            </article>
+            <article>
+              <span className="icon-disc">
+                <Sparkle size={30} />
+              </span>
+              <h2>رصد أولي مباشر</h2>
+              <p>تحديد مواضع تحتاج انتباهك</p>
+            </article>
+            <article>
+              <span className="icon-disc">
+                <PencilSimple size={30} />
+              </span>
+              <h2>صياغة قابلة للتحرير</h2>
+              <p>اقتراح لا يُعتمد تلقائيًا</p>
+            </article>
+            <article>
+              <span className="icon-disc">
+                <UsersThree size={30} />
+              </span>
+              <h2>مراجعة بشرية عند الحاجة</h2>
+              <p>تصعيد اختياري عندما لا تكفي النتيجة</p>
+            </article>
+          </div>
         </section>
 
-        <section className="example-panel" id="sources">
-          <div className="example-copy">
-            <span className="soft-label">مثال توضيحي</span>
-            <h2>مثال سريع</h2>
-            <p>«إن القرآن الكريم يدعو إلى التيسير ورفع الحرج في العبادات والمعاملات».</p>
+        <section className="faq-section" id="faq">
+          <div className="section-intro">
+            <p className="eyebrow">الأسئلة الشائعة</p>
+            <h2>تعرّف على بصيرة</h2>
           </div>
-          <div className="example-results">
-            <span className="result-strip result-strip--success">
-              <CheckCircle size={20} /> دقة الاقتباس: مطابق
-            </span>
-            <span className="result-strip result-strip--warning">
-              <WarningCircle size={20} /> دعم الاستنتاج: يحتاج إلى تقييد
-            </span>
-            <button className="text-action" type="button" onClick={() => setText(DEMO_TEXT)}>
-              شاهد كيف تعمل المراجعة <ArrowLeft size={17} />
-            </button>
+          <div className="faq-list">
+            <details>
+              <summary>ماذا تفعل بصيرة؟</summary>
+              <p>
+                تراجع دقة النقل، وتفحص ما إذا كان الدليل يدعم الاستنتاج، ثم تعرض المصدر والنتيجة
+                وحدودها بوضوح قبل النشر.
+              </p>
+            </details>
+            <details>
+              <summary>ما الذي لا تفعله بصيرة؟</summary>
+              <p>
+                لا تصدر فتوى أو حكمًا شرعيًا، ولا تعتمد النص أو الصياغة المقترحة تلقائيًا، ولا
+                تستبدل قرار المختص أو المراجع البشري.
+              </p>
+            </details>
+            <details>
+              <summary>ما المصادر التي تعتمد عليها بصيرة؟</summary>
+              <p>
+                تستخدم بصيرة المصادر الأصيلة والموثوقة المعتمدة فقط، وتعرض المرجع المستخدم وحدود ما
+                يدعمه بدل تقديم نتيجة بلا مصدر.
+              </p>
+            </details>
+            <details>
+              <summary>ماذا يحدث عندما لا تكون النتيجة مؤكدة؟</summary>
+              <p>
+                توضّح بصيرة موضع عدم اليقين، وتمنحك خيار إرسال الحالة إلى مراجع بشري بدل عرض نتيجة
+                قاطعة غير مدعومة.
+              </p>
+            </details>
+            <details>
+              <summary>كيف تعمل المراجعة البشرية؟</summary>
+              <p>
+                يراجع المختص النص والسياق والمصدر، ثم يسجل نتيجة المراجعة على التذكرة المرتبطة
+                بطلبك.
+              </p>
+            </details>
+            <details>
+              <summary>هل يمكنني استلام نتيجة التذكرة بعد المراجعة؟</summary>
+              <p>
+                نعم. عند إرسال الحالة للمراجعة البشرية يمكنك اختيار متابعة التذكرة واستلام النتيجة
+                بعد اكتمال المراجعة.
+              </p>
+            </details>
+            <details>
+              <summary>كيف تساعد مشاركتي في تطوير بصيرة؟</summary>
+              <p>
+                شكرًا لمساهمتك. الحالات التي تحتاج مراجعة تساعدنا، بعد التحقق البشري، على تنمية
+                قاعدة المعرفة وتحسين التعامل مع حالات مشابهة لاحقًا؛ ولا تُضاف إجابة غير مراجعة
+                تلقائيًا.
+              </p>
+            </details>
           </div>
         </section>
-        <p className="scope-note">
+        <p className="scope-note" id="sources">
           <Info size={19} /> بصيرة أداة مساعدة للمراجعة، وليست فتوى أو اعتمادًا للنشر.
         </p>
       </main>
+      <PublicFooter />
     </div>
+  );
+}
+
+const CHALLENGE_MARKS = [
+  {
+    src: '/brand/challenge/challenge-lockup.svg',
+    alt: 'تحدي الذكاء الاصطناعي في خدمة المحتوى الإسلامي',
+    className: 'challenge-mark--challenge',
+  },
+  {
+    src: '/brand/challenge/year-of-ai-2026.svg',
+    alt: 'عام الذكاء الاصطناعي 2026',
+    className: 'challenge-mark--year',
+  },
+  {
+    src: '/brand/challenge/bathel-wordmark.svg',
+    alt: 'باذل',
+    className: 'challenge-mark--bathel',
+  },
+];
+
+function PublicFooter() {
+  return (
+    <footer className="public-footer" id="trust">
+      <section className="trust-strip">
+        <a
+          className="challenge-marks page-shell"
+          href="https://islamicaich.org/"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="الموقع الرسمي لتحدي الذكاء الاصطناعي في خدمة المحتوى الإسلامي"
+        >
+          {CHALLENGE_MARKS.map((mark) => (
+            <img key={mark.src} src={mark.src} alt={mark.alt} className={mark.className} />
+          ))}
+        </a>
+      </section>
+      <div className="footer-main page-shell">
+        <div className="footer-brand">
+          <Brand compact />
+          <p>أداة عربية لمراجعة دقة النقل وكفاية الاستدلال قبل النشر.</p>
+        </div>
+        <div>
+          <h3>بصيرة</h3>
+          <button type="button" onClick={() => document.getElementById('how')?.scrollIntoView()}>
+            كيف تعمل
+          </button>
+          <button type="button" onClick={() => document.getElementById('faq')?.scrollIntoView()}>
+            الأسئلة الشائعة
+          </button>
+        </div>
+        <div>
+          <h3>حدود الاستخدام</h3>
+          <p>ليست فتوى</p>
+          <p>لا اعتماد تلقائيًا للنشر</p>
+          <p>المراجعة البشرية مطلوبة</p>
+        </div>
+      </div>
+      <div className="footer-bottom page-shell">
+        <span>© 2026 بصيرة</span>
+        <span>صُممت لتوضيح الدليل والحدود قبل القرار.</span>
+      </div>
+    </footer>
   );
 }
 
@@ -637,48 +871,132 @@ function AnalysisScreen({
   text,
   onCancel,
   onComplete,
+  onUnavailable,
+  onTicket,
+  initialReviewId,
 }: {
   text: string;
   onCancel: () => void;
-  onComplete: (receipt: DraftAnalysisReceipt) => void;
+  onComplete: (report: FoundationReport) => void;
+  onUnavailable: (receipt: DraftAnalysisReceipt) => void;
+  onTicket: (revisionId: string) => void;
+  initialReviewId: string | null;
 }) {
   const phases = [
     'فهم بنية النص',
     'اكتشاف الاقتباسات والادعاءات',
-    'مطابقة المصادر المعتمدة',
-    'تقييم دعم الدليل',
+    'استرجاع المصادر ومقارنة النقل',
+    'بناء التقرير مع بيان الحدود',
   ];
   const [phase, setPhase] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+  const [fallbackRevisionId, setFallbackRevisionId] = useState<string | null>(null);
+  const runRef = useRef<OwnedReview | null>(null);
+  const pendingRunRef = useRef<Promise<OwnedReview> | null>(null);
+  const receiptRef = useRef<DraftAnalysisReceipt | null>(null);
+  const idempotencyRef = useRef(crypto.randomUUID());
+  const resumeRef = useRef(initialReviewId);
+  const cancelledRef = useRef(false);
+  const completeRef = useRef(onComplete);
+  completeRef.current = onComplete;
+  const unavailableRef = useRef(onUnavailable);
+  unavailableRef.current = onUnavailable;
+  const controllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let active = true;
-    const interval = window.setInterval(
-      () => setPhase((value) => Math.min(value + 1, phases.length - 1)),
-      550,
-    );
+    const controller = new AbortController();
+    controllerRef.current = controller;
     setError('');
     setPhase(0);
-    const minimumDelay = new Promise((resolve) => window.setTimeout(resolve, 900));
-    void Promise.all([persistDraftForAnalysis(text), minimumDelay])
-      .then(([receipt]) => {
-        if (active) onComplete(receipt);
-      })
-      .catch((reason: unknown) => {
-        if (!active) return;
-        window.clearInterval(interval);
-        setError(analysisErrorMessage(reason));
-      });
+    const execute = async () => {
+      let run = runRef.current;
+      if (!run && resumeRef.current) run = await getOwnedReview(resumeRef.current);
+      if (run) setFallbackRevisionId(run.revisionId);
+      if (!run) {
+        if (!receiptRef.current)
+          receiptRef.current = await persistDraftForAnalysis(text, controller.signal);
+        if (cancelledRef.current || !active) return;
+        setFallbackRevisionId(receiptRef.current.revisionId);
+        await requireFoundationReview();
+        if (cancelledRef.current || !active) return;
+        setPhase(1);
+        pendingRunRef.current = createOwnedReview(
+          receiptRef.current.revisionId,
+          idempotencyRef.current,
+        );
+        run = await pendingRunRef.current;
+      }
+      runRef.current = run;
+      if (cancelledRef.current) return;
+      if (!active) return;
+      window.history.replaceState(
+        null,
+        '',
+        `${pathFor('analysis')}?reviewId=${encodeURIComponent(run.reviewId)}`,
+      );
+      const report = await awaitFoundationReport(
+        run,
+        controller.signal,
+        (current) => {
+          if (!active) return;
+          runRef.current = current;
+          setPhase(
+            current.status === 'queued'
+              ? 1
+              : ['retrieving', 'checking'].includes(current.status)
+                ? 2
+                : 3,
+          );
+        },
+        text || undefined,
+      );
+      if (active && !cancelledRef.current) completeRef.current(report);
+    };
+    void execute().catch((reason: unknown) => {
+      if (!active || controller.signal.aborted) return;
+      if (
+        reason instanceof BasirahApiError &&
+        reason.code === 'FOUNDATION_UNAVAILABLE' &&
+        receiptRef.current
+      ) {
+        unavailableRef.current(receiptRef.current);
+        return;
+      }
+      setError(analysisErrorMessage(reason));
+    });
     return () => {
       active = false;
-      window.clearInterval(interval);
+      controller.abort();
     };
-  }, [attempt, onComplete, phases.length, text]);
+  }, [attempt, text]);
+
+  const cancel = async () => {
+    if (!runRef.current && !pendingRunRef.current) {
+      cancelledRef.current = true;
+      onCancel();
+      return;
+    }
+    cancelledRef.current = true;
+    controllerRef.current?.abort();
+    setCancelling(true);
+    try {
+      const run = runRef.current ?? (await pendingRunRef.current);
+      if (!run) throw new Error('REVIEW_NOT_CREATED');
+      await cancelOwnedReview(run.reviewId);
+      onCancel();
+    } catch (reason) {
+      cancelledRef.current = false;
+      setError(`تعذر تأكيد إلغاء المراجعة. ${analysisErrorMessage(reason)}`);
+      setCancelling(false);
+    }
+  };
 
   return (
     <div className="app-page">
-      <BackHeader onHome={onCancel} />
+      <BackHeader onHome={() => void cancel()} />
       <main className="analysis-main page-shell page-enter">
         <div className="analysis-orbit" aria-hidden="true">
           <Sparkle size={34} weight="fill" />
@@ -686,12 +1004,14 @@ function AnalysisScreen({
         <p className="eyebrow">تحليل تلقائي في الخلفية</p>
         <h1>نراجع النص والمصدر والاستدلال</h1>
         <p className="hero-copy">
-          لا تحتاج إلى تصنيف أي عبارة. يتولى وكيل بصيرة التحليل ويعرض لك ما وجده.
+          لا تحتاج إلى تصنيف أي عبارة. نقارن النقل مع المصادر المتاحة، ونبيّن ما لم يُقيّم من
+          الاستدلال. قد تستغرق مراجعة الأدلة والبحث الإضافي بضع دقائق. يمكنك إلغاء المراجعة في أي
+          وقت.
         </p>
         <section className="analysis-card" aria-live="polite">
           <div className="analysis-text">
-            <span>النص الجاري تحليله</span>
-            <p>{text}</p>
+            <span>مقتطف من النص الجاري تحليله</span>
+            <p aria-label="مقتطف النص الجاري تحليله">{compactDraftPreview(text)}</p>
           </div>
           <div className="analysis-progress">
             {phases.map((item, index) => (
@@ -721,19 +1041,100 @@ function AnalysisScreen({
               <p>{error}</p>
             </div>
             <button
+              disabled={cancelling}
               className="button button--outline"
               onClick={() => setAttempt((value) => value + 1)}
             >
               إعادة المحاولة
             </button>
+            {fallbackRevisionId && (
+              <button
+                className="button button--primary"
+                onClick={() => onTicket(fallbackRevisionId)}
+              >
+                <UsersThree size={20} /> أحتاج مراجعة بشرية
+              </button>
+            )}
           </div>
         )}
         <div className="analysis-footer">
           <p>
             <ShieldCheck size={19} /> النتائج ستفصل بين مطابقة النقل وكفاية الاستدلال.
           </p>
-          <button className="button button--ghost" onClick={onCancel}>
-            إلغاء والعودة للنص
+          <button
+            className="button button--ghost"
+            onClick={() => void cancel()}
+            disabled={cancelling}
+          >
+            {cancelling ? 'جار تأكيد الإلغاء' : 'إلغاء والعودة للنص'}
+          </button>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function UnavailableResultScreen({
+  onHome,
+  onTicket,
+  receipt,
+  text,
+}: {
+  onHome: () => void;
+  onTicket: () => void;
+  receipt: DraftAnalysisReceipt | null;
+  text: string;
+}) {
+  return (
+    <div className="app-page result-page">
+      <BackHeader onHome={onHome} />
+      <main className="result-main page-shell page-enter">
+        <StatusPill tone="warning">
+          <WarningCircle size={20} weight="fill" /> تحتاج النتيجة إلى مراجعة بشرية
+        </StatusPill>
+        <h1>حفظنا النص، ولم نصدر نتيجة غير موثقة</h1>
+        <p className="hero-copy">
+          خدمة التحقق المتصل بالمصادر غير متاحة الآن. لذلك لم نعرض حكمًا أو اقتباسًا أو مرجعًا لم
+          يتم التحقق منه.
+        </p>
+
+        <section className="reason-banner" aria-label="حالة المراجعة">
+          <strong>حالة الطلب:</strong>
+          <StatusPill tone="success">تم حفظ المسودة</StatusPill>
+          <span>التحقق الآلي غير مكتمل</span>
+          <span>لا توجد نتيجة جاهزة للنشر</span>
+          <span>يمكن إحالتها إلى المراجع</span>
+        </section>
+
+        {text.trim() && (
+          <section className="contested-claim">
+            <div>
+              <FileText size={23} />
+              <strong>النص المحفوظ للمراجعة</strong>
+            </div>
+            <p dir="auto">{compactDraftPreview(text)}</p>
+            <span>
+              {receipt
+                ? `رُصدت ${receipt.candidateCount} عبارة مرشحة آليًا، ولم تُراجع بعد.`
+                : 'المسودة مرتبطة بطلب المراجعة المحفوظ.'}
+            </span>
+          </section>
+        )}
+
+        <div className="prototype-disclosure" role="note">
+          <Info size={21} />
+          <p>
+            الإحالة البشرية تحفظ النص نفسه للمراجع. لن تُعامل أي ملاحظة أولية بوصفها نتيجة معتمدة
+            قبل أن يراجعها المختص وينشر رده.
+          </p>
+        </div>
+
+        <div className="result-actions">
+          <button className="button button--primary" onClick={onTicket} type="button">
+            <UsersThree size={20} /> إرسال النص للمراجعة البشرية
+          </button>
+          <button className="button button--outline" onClick={onHome} type="button">
+            العودة وتعديل النص
           </button>
         </div>
       </main>
@@ -1346,88 +1747,158 @@ function UnresolvedScreen({ onHome, onTicket }: { onHome: () => void; onTicket: 
   );
 }
 
-function TicketScreen({ onHome }: { onHome: () => void }) {
+function TicketScreen({
+  onHome,
+  reviewId,
+  revisionId,
+}: {
+  onHome: () => void;
+  reviewId: string | null;
+  revisionId: string | null;
+}) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
+  const [receipt, setReceipt] = useState<TicketReceipt | null>(null);
+  const [loading, setLoading] = useState(Boolean(reviewId || revisionId));
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!reviewId && !revisionId) return;
+    let active = true;
+    setLoading(true);
+    void (reviewId ? createReviewTicket(reviewId) : createRevisionTicket(revisionId!))
+      .then((created) => {
+        if (active) setReceipt(created);
+      })
+      .catch(() => {
+        if (active) setError('تعذر إنشاء التذكرة الآن. احتفظ بالتقرير وحاول مرة أخرى.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [reviewId, revisionId]);
+
+  const saveContact = async () => {
+    if (!receipt || !email || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await updateReviewTicketContact(receipt.ticketCode, {
+        email,
+        name: name || undefined,
+        notify: true,
+      });
+      setReceipt(updated);
+      setSaved(true);
+    } catch {
+      setError('تعذر حفظ بيانات المتابعة. تحقق من البريد وحاول مرة أخرى.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="app-page ticket-page">
       <BackHeader onHome={onHome} />
       {saved && <Toast message="تم حفظ بيانات المتابعة لهذه التذكرة." />}
       <main className="ticket-main page-shell page-enter">
-        <StatusPill tone="success">
-          <CheckCircle size={20} weight="fill" /> تم استلام طلبك
-        </StatusPill>
-        <h1>تم إنشاء تذكرتك</h1>
-        <button className="ticket-code" onClick={() => navigator.clipboard?.writeText('BR-1042')}>
-          <Copy size={23} />
-          <b dir="ltr">#BR-1042</b>
-        </button>
-        <p className="hero-copy">احتفظ برقم التذكرة للرجوع إلى طلبك.</p>
-        <section className="ticket-grid">
-          <article className="ticket-card">
-            <span className="icon-disc">
-              <FileText size={30} />
-            </span>
-            <h2>تفاصيل الطلب</h2>
-            <StatusPill tone="success">نسخة النص ١</StatusPill>
-            <p>
-              <CalendarBlank size={19} /> ٢ أكتوبر ٢٠٢٦ — ١٠:٢٤ ص
-            </p>
-            <button className="button button--outline">
-              <Eye size={20} /> عرض النص المرسل
-            </button>
-            <button className="button button--ghost">
-              <DownloadSimple size={20} /> تنزيل ملف المراجعة
-            </button>
-            <hr />
-            <h3>الملفات المرفقة في طلب المراجعة</h3>
-            <ul>
-              <li>
-                <FileText /> النص والعبارات المؤكدة
-              </li>
-              <li>
-                <FileText /> المراجع والمقاطع المتاحة
-              </li>
-              <li>
-                <FileText /> أسباب عدم الحسم
-              </li>
-            </ul>
-          </article>
-          <article className="ticket-card follow-card">
-            <span className="icon-disc">
-              <UsersThree size={30} />
-            </span>
-            <h2>هل ترغب في متابعة النتيجة؟</h2>
-            <p>أضف بياناتك اختياريًا لنرسل لك تحديثًا عند اكتمال المراجعة.</p>
-            <label>
-              الاسم (اختياري)
-              <input value={name} onChange={(event) => setName(event.target.value)} />
-            </label>
-            <label>
-              البريد الإلكتروني
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </label>
+        {loading && <p role="status">جار إنشاء تذكرة مرتبطة بتقريرك…</p>}
+        {!reviewId && !revisionId && (
+          <div className="analysis-error" role="alert">
+            افتح التذكرة من زر «أحتاج مراجعة بشرية» داخل تقرير محفوظ.
+          </div>
+        )}
+        {error && (
+          <div className="analysis-error" role="alert">
+            {error}
+          </div>
+        )}
+        {receipt && (
+          <>
+            <StatusPill tone="success">
+              <CheckCircle size={20} weight="fill" /> تم استلام طلبك
+            </StatusPill>
+            <h1>تم إنشاء تذكرتك</h1>
             <button
-              className="button button--primary"
-              disabled={!email}
-              onClick={() => setSaved(true)}
+              className="ticket-code"
+              onClick={() => navigator.clipboard?.writeText(receipt.ticketCode)}
             >
-              حفظ وإرسال التحديثات
+              <Copy size={23} />
+              <b dir="ltr">#{receipt.ticketCode}</b>
             </button>
-            <button className="text-action" onClick={onHome}>
-              متابعة بدون بيانات
-            </button>
-            <small>
-              <Lock size={17} /> تستخدم بياناتك لمتابعة هذه التذكرة فقط.
-            </small>
-          </article>
-        </section>
+            <p className="hero-copy">احتفظ برقم التذكرة للرجوع إلى طلبك.</p>
+          </>
+        )}
+        {receipt && (
+          <section className="ticket-grid">
+            <article className="ticket-card">
+              <span className="icon-disc">
+                <FileText size={30} />
+              </span>
+              <h2>تفاصيل الطلب</h2>
+              <StatusPill tone="success">نسخة النص ١</StatusPill>
+              <p>
+                <CalendarBlank size={19} /> {new Date(receipt.createdAt).toLocaleString('ar-SA')}
+              </p>
+              <button className="button button--outline">
+                <Eye size={20} /> عرض النص المرسل
+              </button>
+              <button className="button button--ghost">
+                <DownloadSimple size={20} /> تنزيل ملف المراجعة
+              </button>
+              <hr />
+              <h3>الملفات المرفقة في طلب المراجعة</h3>
+              <ul>
+                <li>
+                  <FileText /> النص والعبارات المؤكدة
+                </li>
+                <li>
+                  <FileText /> المراجع والمقاطع المتاحة
+                </li>
+                <li>
+                  <FileText /> أسباب عدم الحسم
+                </li>
+              </ul>
+            </article>
+            <article className="ticket-card follow-card">
+              <span className="icon-disc">
+                <UsersThree size={30} />
+              </span>
+              <h2>هل ترغب في متابعة النتيجة؟</h2>
+              <p>أضف بياناتك اختياريًا لنرسل لك تحديثًا عند اكتمال المراجعة.</p>
+              <label>
+                الاسم (اختياري)
+                <input value={name} onChange={(event) => setName(event.target.value)} />
+              </label>
+              <label>
+                البريد الإلكتروني
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+              </label>
+              <button
+                className="button button--primary"
+                disabled={!email || saving}
+                onClick={() => void saveContact()}
+              >
+                {saving ? 'جار الحفظ…' : 'حفظ وإرسال التحديثات'}
+              </button>
+              <button className="text-action" onClick={onHome}>
+                متابعة بدون بيانات
+              </button>
+              <small>
+                <Lock size={17} /> تستخدم بياناتك لمتابعة هذه التذكرة فقط.
+              </small>
+            </article>
+          </section>
+        )}
         <div className="ticket-footer">
           <p>يمكنك العودة إلى بصيرة ومراجعة نص جديد في أي وقت.</p>
           <button className="button button--outline" onClick={onHome}>
@@ -1437,6 +1908,86 @@ function TicketScreen({ onHome }: { onHome: () => void }) {
             <House size={20} /> العودة إلى الصفحة الرئيسية
           </button>
         </div>
+      </main>
+    </div>
+  );
+}
+
+function FollowUpScreen({ onHome }: { onHome: () => void }) {
+  const [code, setCode] = useState('');
+  const [email, setEmail] = useState('');
+  const [result, setResult] = useState<TicketLookup | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!code || !email || loading) return;
+    setLoading(true);
+    setError('');
+    setResult(null);
+    try {
+      const found = await lookupReviewTicket(code.trim().toUpperCase(), email);
+      if (!found.found) setError('تعذر العثور على تذكرة مطابقة لهذه البيانات.');
+      else setResult(found);
+    } catch {
+      setError('تعذر استعادة التذكرة الآن. حاول مرة أخرى لاحقًا.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <div className="app-page ticket-page">
+      <BackHeader onHome={onHome} />
+      <main className="ticket-main page-shell page-enter">
+        <StatusPill tone="neutral">
+          <Lock size={18} /> متابعة آمنة
+        </StatusPill>
+        <h1>متابعة تذكرة المراجعة</h1>
+        <p className="hero-copy">أدخل رقم التذكرة والبريد نفسه الذي استخدمته عند الطلب.</p>
+        <form className="ticket-card follow-card ticket-followup-form" onSubmit={submit}>
+          <label>
+            رقم التذكرة
+            <input
+              dir="ltr"
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              placeholder="BR-XXXXXXXXXXXX"
+            />
+          </label>
+          <label>
+            البريد الإلكتروني
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+          </label>
+          <button className="button button--primary" disabled={!code || !email || loading}>
+            {loading ? 'جار التحقق…' : 'عرض نتيجة التذكرة'}
+          </button>
+        </form>
+        {error && (
+          <div className="analysis-error" role="alert">
+            {error}
+          </div>
+        )}
+        {result?.found && (
+          <section className="ticket-followup-result">
+            <h2 dir="ltr">{result.ticketCode}</h2>
+            <StatusPill tone={result.status === 'published' ? 'success' : 'warning'}>
+              {result.status === 'published' ? 'اكتملت المراجعة' : 'قيد المراجعة البشرية'}
+            </StatusPill>
+            {result.report && <FoundationReportContent report={result.report} />}
+            {!result.report && result.submission && (
+              <article className="reviewer-panel">
+                <h2>النص المرسل للمراجعة</h2>
+                <p>{result.submission.originalText}</p>
+              </article>
+            )}
+            {result.response && (
+              <article className="reviewer-panel">
+                <h2>رد المراجع</h2>
+                <p>{result.response.text}</p>
+              </article>
+            )}
+          </section>
+        )}
       </main>
     </div>
   );
@@ -1455,13 +2006,29 @@ const reviewerNavigation: Array<{
 export function ReviewerShell({
   route,
   navigate,
+  selectedTicketCode = null,
   profile,
+  onSignOut,
 }: {
   route: ReviewerRoute;
-  navigate: (route: Route) => void;
+  navigate: (route: Route, reference?: string) => void;
+  selectedTicketCode?: string | null;
   profile?: ReactNode;
+  onSignOut: () => Promise<void>;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await onSignOut();
+    } catch {
+      setSigningOut(false);
+    }
+  };
+
   return (
     <div className={`reviewer-shell ${collapsed ? 'reviewer-shell--collapsed' : ''}`}>
       <aside className="reviewer-sidebar">
@@ -1497,8 +2064,12 @@ export function ReviewerShell({
             <span>الإعدادات</span>
           </button>
           <button onClick={() => navigate('home')}>
+            <House size={22} />
+            <span>العودة للواجهة العامة</span>
+          </button>
+          <button disabled={signingOut} onClick={() => void handleSignOut()}>
             <SignOut size={22} />
-            <span>الخروج للواجهة العامة</span>
+            <span>{signingOut ? 'جاري تسجيل الخروج…' : 'تسجيل الخروج'}</span>
           </button>
           <div className="reviewer-profile">
             {profile ?? <span aria-hidden="true">م</span>}
@@ -1519,12 +2090,12 @@ export function ReviewerShell({
                 : route === 'queue'
                   ? 'طلبات المراجعة'
                   : route === 'detail'
-                    ? 'مراجعة الطلب BR-1042'
+                    ? `مراجعة الطلب ${selectedTicketCode ?? ''}`
                     : 'المصادر المعتمدة'}
             </h1>
           </div>
           <div className="topbar-actions">
-            <span className="demo-badge">بيانات تجريبية</span>
+            <span className="demo-badge">بيانات التذاكر المحمية</span>
             <button className="icon-button" aria-label="الإشعارات">
               <Bell size={23} />
               <i />
@@ -1533,20 +2104,45 @@ export function ReviewerShell({
         </header>
         {route === 'dashboard' && <ReviewerDashboard navigate={navigate} />}
         {route === 'queue' && <ReviewerQueue navigate={navigate} />}
-        {route === 'detail' && <ReviewerDetail navigate={navigate} />}
+        {route === 'detail' && (
+          <ReviewerDetail navigate={navigate} ticketCode={selectedTicketCode} />
+        )}
         {route === 'sources' && <ReviewerSources />}
       </section>
     </div>
   );
 }
 
-function ReviewerDashboard({ navigate }: { navigate: (route: Route) => void }) {
+function ReviewerDashboard({ navigate }: { navigate: (route: Route, reference?: string) => void }) {
+  const [tickets, setTickets] = useState<ReviewerTicketSummary[]>([]);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    void listReviewerTickets()
+      .then(setTickets)
+      .catch(() => setError(true));
+  }, []);
+  const pending = tickets.filter((ticket) => ticket.status === 'pending').length;
+  const inReview = tickets.filter((ticket) => ticket.status === 'in_review').length;
+  const published = tickets.filter((ticket) => ticket.status === 'published').length;
+  const items: CaseListItem[] = tickets.slice(0, 3).map((ticket) => ({
+    id: ticket.ticketCode,
+    title: 'طلب مراجعة بشرية مرتبط بتقرير محفوظ',
+    submitter: ticket.notifyOptIn ? 'متابعة بالبريد مفعّلة' : 'زائر',
+    submittedAt: new Date(ticket.createdAt).toLocaleString('ar-SA'),
+    status:
+      ticket.status === 'published'
+        ? 'مكتمل'
+        : ticket.status === 'in_review'
+          ? 'قيد المراجعة'
+          : 'جديد',
+    priority: 'متوسط',
+  }));
   return (
     <main className="reviewer-main page-enter">
       <div className="welcome-row">
         <div>
-          <h2>مرحبًا صالح</h2>
-          <p>لديك طلبان جديدان يحتاجان إلى مراجعة اليوم.</p>
+          <h2>مساحة المراجعة</h2>
+          <p>لديك {pending} طلبات جديدة تحتاج إلى مراجعة.</p>
         </div>
         <button className="button button--primary" onClick={() => navigate('reviewer-queue')}>
           <Tray size={20} /> فتح قائمة المراجعة
@@ -1558,7 +2154,7 @@ function ReviewerDashboard({ navigate }: { navigate: (route: Route) => void }) {
             <Tray size={23} />
           </span>
           <p>طلبات جديدة</p>
-          <strong>2</strong>
+          <strong>{pending}</strong>
           <small>بانتظار البدء</small>
         </article>
         <article>
@@ -1566,7 +2162,7 @@ function ReviewerDashboard({ navigate }: { navigate: (route: Route) => void }) {
             <Clock size={23} />
           </span>
           <p>قيد المراجعة</p>
-          <strong>1</strong>
+          <strong>{inReview}</strong>
           <small>تحتاج إلى قرار</small>
         </article>
         <article>
@@ -1574,16 +2170,16 @@ function ReviewerDashboard({ navigate }: { navigate: (route: Route) => void }) {
             <CheckCircle size={23} />
           </span>
           <p>مكتملة هذا الأسبوع</p>
-          <strong>8</strong>
-          <small>متوسط 18 دقيقة</small>
+          <strong>{published}</strong>
+          <small>ردود منشورة</small>
         </article>
         <article>
           <span>
             <Archive size={23} />
           </span>
           <p>إجمالي الحالات</p>
-          <strong>31</strong>
-          <small>منذ بدء التجربة</small>
+          <strong>{tickets.length}</strong>
+          <small>طلبات مفتوحة ومحفوظة</small>
         </article>
       </section>
       <section className="dashboard-grid">
@@ -1597,7 +2193,11 @@ function ReviewerDashboard({ navigate }: { navigate: (route: Route) => void }) {
               عرض الكل <CaretLeft size={16} />
             </button>
           </div>
-          <CaseList compact onOpen={() => navigate('reviewer-detail')} />
+          {error ? (
+            <ErrorState onRetry={() => window.location.reload()} />
+          ) : (
+            <CaseList compact items={items} onOpen={(code) => navigate('reviewer-detail', code)} />
+          )}
         </article>
         <article className="reviewer-panel activity-panel">
           <div className="panel-heading">
@@ -1636,14 +2236,14 @@ function CaseList({
   items = SAMPLE_CASES,
 }: {
   compact?: boolean;
-  onOpen: () => void;
-  items?: typeof SAMPLE_CASES;
+  onOpen: (code: string) => void;
+  items?: CaseListItem[];
 }) {
   if (items.length === 0) return <EmptyState />;
   return (
     <div className={`case-list ${compact ? 'case-list--compact' : ''}`}>
       {items.map((item) => (
-        <button className="case-row" onClick={onOpen} key={item.id}>
+        <button className="case-row" onClick={() => onOpen(item.id)} key={item.id}>
           <span className="case-id" dir="ltr">
             {item.id}
           </span>
@@ -1680,25 +2280,47 @@ function EmptyState() {
   );
 }
 
-function ReviewerQueue({ navigate }: { navigate: (route: Route) => void }) {
+function ReviewerQueue({ navigate }: { navigate: (route: Route, reference?: string) => void }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('الكل');
-  const [loading, setLoading] = useState(false);
-  const forceError = window.location.hash.includes('state=error');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [tickets, setTickets] = useState<ReviewerTicketSummary[]>([]);
+  const refresh = useCallback(() => {
+    setLoading(true);
+    setLoadError(false);
+    void listReviewerTickets()
+      .then(setTickets)
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(refresh, [refresh]);
+  const items = useMemo<CaseListItem[]>(
+    () =>
+      tickets.map((ticket) => ({
+        id: ticket.ticketCode,
+        title: 'طلب مراجعة بشرية مرتبط بتقرير محفوظ',
+        submitter: ticket.notifyOptIn ? 'متابعة بالبريد مفعّلة' : 'زائر دون إشعار',
+        submittedAt: new Date(ticket.createdAt).toLocaleString('ar-SA'),
+        status:
+          ticket.status === 'published'
+            ? 'مكتمل'
+            : ticket.status === 'in_review'
+              ? 'قيد المراجعة'
+              : 'جديد',
+        priority: 'متوسط',
+      })),
+    [tickets],
+  );
   const filtered = useMemo(
     () =>
-      SAMPLE_CASES.filter(
+      items.filter(
         (item) =>
           (filter === 'الكل' || item.status === filter) &&
           `${item.id} ${item.title}`.toLowerCase().includes(query.toLowerCase()),
       ),
-    [filter, query],
+    [filter, items, query],
   );
-
-  const refresh = () => {
-    setLoading(true);
-    window.setTimeout(() => setLoading(false), 700);
-  };
 
   return (
     <main className="reviewer-main page-enter">
@@ -1734,12 +2356,12 @@ function ReviewerQueue({ navigate }: { navigate: (route: Route) => void }) {
             <p>{filtered.length} طلبات ضمن العرض الحالي</p>
           </div>
         </div>
-        {forceError ? (
-          <ErrorState onRetry={() => navigate('reviewer-queue')} />
-        ) : loading ? (
+        {loadError ? (
+          <ErrorState onRetry={refresh} />
+        ) : loading && tickets.length > 0 ? (
           <LoadingState />
         ) : (
-          <CaseList items={filtered} onOpen={() => navigate('reviewer-detail')} />
+          <CaseList items={filtered} onOpen={(code) => navigate('reviewer-detail', code)} />
         )}
       </section>
     </main>
@@ -1771,135 +2393,156 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function ReviewerDetail({ navigate }: { navigate: (route: Route) => void }) {
-  const [decision, setDecision] = useState<'needs-context' | 'bounded' | 'return'>('needs-context');
+function ReviewerDetail({
+  navigate,
+  ticketCode,
+}: {
+  navigate: (route: Route, reference?: string) => void;
+  ticketCode: string | null;
+}) {
+  const [ticket, setTicket] = useState<ReviewerTicket | null>(null);
+  const [decision, setDecision] = useState<'needs_context' | 'bounded_revision' | 'returned'>(
+    'needs_context',
+  );
   const [note, setNote] = useState('');
-  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(Boolean(ticketCode));
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const load = useCallback(() => {
+    if (!ticketCode) return;
+    setLoading(true);
+    setError('');
+    void getReviewerTicket(ticketCode)
+      .then((value) => {
+        setTicket(value);
+        const latest = value.responses.at(-1);
+        if (latest && !latest.published) {
+          setDecision(latest.decision);
+          setNote(latest.text);
+        }
+      })
+      .catch(() => setError('تعذر تحميل التذكرة المحمية.'))
+      .finally(() => setLoading(false));
+  }, [ticketCode]);
+  useEffect(load, [load]);
+
+  const save = async (publish: boolean) => {
+    if (!ticketCode || !note.trim() || saving) return;
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      await saveReviewerResponse(ticketCode, { decision, text: note, publish });
+      setMessage(
+        publish
+          ? 'تم نشر رد المراجع وإدراج الإشعار في طابور الإرسال.'
+          : 'تم حفظ نسخة جديدة من المسودة.',
+      );
+      load();
+    } catch {
+      setError('تعذر حفظ القرار. لم يُنشر أي رد ولم يُرسل أي إشعار.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <main className="reviewer-main detail-main page-enter">
-      {saved && <Toast message="تم حفظ القرار التجريبي دون إرسال خارجي." />}
+      {message && <Toast message={message} />}
+      {error && <Toast message={error} tone="error" />}
       <button className="back-link" onClick={() => navigate('reviewer-queue')}>
         <ArrowLeft size={18} /> العودة إلى الطلبات
       </button>
-      <div className="detail-layout">
-        <section className="detail-stack">
-          <article className="reviewer-panel">
+      {!ticketCode && <ErrorState onRetry={() => navigate('reviewer-queue')} />}
+      {loading && <LoadingState />}
+      {ticket && !loading && (
+        <div className="detail-layout">
+          <section className="detail-stack">
+            <article className="reviewer-panel">
+              <div className="panel-heading">
+                <div>
+                  <StatusPill tone={ticket.status === 'published' ? 'success' : 'warning'}>
+                    {ticket.status === 'published' ? 'منشور' : 'قيد المراجعة'}
+                  </StatusPill>
+                  <h2>النص والتقرير المرتبطان بالتذكرة</h2>
+                  <p dir="ltr">{ticket.ticketCode}</p>
+                </div>
+              </div>
+              <div className="submitted-copy">
+                <span>النص المرسل</span>
+                <p>{ticket.submission.originalText}</p>
+              </div>
+            </article>
+            {ticket.report ? (
+              <FoundationReportContent report={ticket.report} />
+            ) : (
+              <article className="reviewer-panel">
+                <h2>أُحيل مباشرة للمراجع</h2>
+                <p>لم يكتمل تقرير آلي لهذا النص؛ راجع النص والمصدر يدويًا قبل نشر الرد.</p>
+              </article>
+            )}
+          </section>
+          <aside className="decision-panel reviewer-panel">
             <div className="panel-heading">
               <div>
-                <StatusPill tone="warning">جديد</StatusPill>
-                <h2>إخفاء الصدقة في جميع الحالات</h2>
-                <p dir="ltr">BR-1042</p>
+                <h2>رد المراجع</h2>
+                <p>احفظ مسودات مستقلة، ثم انشر الرد النهائي مرة واحدة.</p>
               </div>
-              <span>نسخة النص ١</span>
+              <ListChecks size={24} />
             </div>
-            <div className="submitted-copy">
-              <span>النص المرسل</span>
-              <p>{DEMO_TEXT}</p>
+            <div className="decision-options">
+              {(
+                [
+                  ['needs_context', 'يحتاج سياقًا إضافيًا', 'الأدلة الحالية لا تكفي للحسم.'],
+                  ['bounded_revision', 'اعتماد صياغة مقيّدة', 'اعتماد التعديل ضمن حدود المصدر.'],
+                  ['returned', 'إعادة للمحرر', 'يتطلب تعديلًا قبل إعادة المراجعة.'],
+                ] as const
+              ).map(([value, label, description]) => (
+                <label className={decision === value ? 'selected' : ''} key={value}>
+                  <input
+                    type="radio"
+                    name="decision"
+                    checked={decision === value}
+                    onChange={() => setDecision(value)}
+                  />
+                  <span>
+                    <strong>{label}</strong>
+                    <small>{description}</small>
+                  </span>
+                </label>
+              ))}
             </div>
-          </article>
-          <article className="reviewer-panel">
-            <div className="panel-heading">
-              <div>
-                <h2>ملخص بصيرة</h2>
-                <p>ملاحظات آلية للمساعدة وليست قرار المراجع.</p>
-              </div>
-              <Sparkle size={24} />
-            </div>
-            <div className="review-summary">
-              <p>
-                <WarningCircle size={21} /> يوجد حذف داخل الاقتباس مقارنة بالنص المعتمد.
-              </p>
-              <p>
-                <WarningCircle size={21} /> الاستنتاج أوسع من دلالة الآية المعروضة.
-              </p>
-            </div>
-          </article>
-          <article className="reviewer-panel">
-            <div className="panel-heading">
-              <div>
-                <h2>الأدلة المرفقة</h2>
-                <p>المقاطع التي استخدمها التحليل لهذه النسخة.</p>
-              </div>
-              <BookOpen size={24} />
-            </div>
-            <div className="evidence-card">
-              <div>
-                <strong>القرآن الكريم — سورة البقرة، الآية ٢٧١</strong>
-                <small dir="ltr">Tanzil Uthmani v1.1</small>
-              </div>
-              <blockquote>
-                وَإِن تُخْفُوهَا وَتُؤْتُوهَا الْفُقَرَاءَ فَهُوَ خَيْرٌ لَكُمْ
-              </blockquote>
-              <button className="text-action">
-                فتح المصدر <ArrowLeft size={16} />
-              </button>
-            </div>
-          </article>
-        </section>
-        <aside className="decision-panel reviewer-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>قرار المراجع</h2>
-              <p>اختر الإجراء المناسب وسجّل سببه.</p>
-            </div>
-            <ListChecks size={24} />
-          </div>
-          <div className="decision-options">
-            <label className={decision === 'needs-context' ? 'selected' : ''}>
-              <input
-                type="radio"
-                name="decision"
-                checked={decision === 'needs-context'}
-                onChange={() => setDecision('needs-context')}
+            <label className="note-field">
+              ملاحظة المراجع
+              <textarea
+                rows={9}
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="اكتب القرار وحدوده والتصحيح المقترح…"
               />
-              <span>
-                <strong>يحتاج سياقًا إضافيًا</strong>
-                <small>الأدلة الحالية لا تكفي للحسم.</small>
-              </span>
             </label>
-            <label className={decision === 'bounded' ? 'selected' : ''}>
-              <input
-                type="radio"
-                name="decision"
-                checked={decision === 'bounded'}
-                onChange={() => setDecision('bounded')}
-              />
-              <span>
-                <strong>اعتماد صياغة مقيّدة</strong>
-                <small>اعتماد التعديل ضمن حدود المصدر.</small>
-              </span>
-            </label>
-            <label className={decision === 'return' ? 'selected' : ''}>
-              <input
-                type="radio"
-                name="decision"
-                checked={decision === 'return'}
-                onChange={() => setDecision('return')}
-              />
-              <span>
-                <strong>إعادة للمحرر</strong>
-                <small>يتطلب تعديلًا قبل إعادة المراجعة.</small>
-              </span>
-            </label>
-          </div>
-          <label className="note-field">
-            ملاحظة المراجع
-            <textarea
-              rows={6}
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="اكتب سبب القرار وحدوده…"
-            />
-          </label>
-          <button className="button button--primary" onClick={() => setSaved(true)}>
-            <Check size={20} /> حفظ القرار
-          </button>
-          <button className="button button--ghost">حفظ كمسودة</button>
-          <p className="decision-note">
-            <Lock size={17} /> لن يُنشر القرار تلقائيًا أو يغيّر المصدر.
-          </p>
-        </aside>
-      </div>
+            <button
+              className="button button--ghost"
+              disabled={!note.trim() || saving || ticket.status === 'published'}
+              onClick={() => void save(false)}
+            >
+              حفظ كمسودة
+            </button>
+            <button
+              className="button button--primary"
+              disabled={!note.trim() || saving || ticket.status === 'published'}
+              onClick={() => void save(true)}
+            >
+              <Check size={20} /> نشر الرد النهائي
+            </button>
+            <p className="decision-note">
+              <Lock size={17} /> النشر يُشعر المستخدم إن اختار البريد، لكنه لا يعتمد الرد تلقائيًا
+              كمصدر RAG.
+            </p>
+          </aside>
+        </div>
+      )}
     </main>
   );
 }
@@ -1966,29 +2609,60 @@ function ReviewerSources() {
 export default function App({ clerkConfigured = false }: { clerkConfigured?: boolean }) {
   const { route, navigate } = useRoute();
   const [reviewText, setReviewText] = useState('');
-  const [analysisReceipt, setAnalysisReceipt] = useState<DraftAnalysisReceipt | null>(null);
+  const [foundationReport, setFoundationReport] = useState<FoundationReport | null>(null);
+  const [unavailableReceipt, setUnavailableReceipt] = useState<DraftAnalysisReceipt | null>(null);
+  const reviewId = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('reviewId');
+  const revisionId = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get(
+    'revisionId',
+  );
+  const selectedTicketCode = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get(
+    'ticketCode',
+  );
 
-  const startReview = (text: string) => {
-    setReviewText(text);
-    setAnalysisReceipt(null);
-    navigate('analysis');
-  };
+  const startReview = useCallback(
+    (text: string) => {
+      setReviewText(text);
+      setFoundationReport(null);
+      setUnavailableReceipt(null);
+      navigate('analysis');
+    },
+    [navigate],
+  );
 
-  const startNewReview = () => {
+  const startNewReview = useCallback(() => {
     setReviewText('');
-    setAnalysisReceipt(null);
+    setFoundationReport(null);
+    setUnavailableReceipt(null);
     navigate('home');
-  };
+  }, [navigate]);
+
+  const completeAnalysis = useCallback(
+    (report: FoundationReport) => {
+      setFoundationReport(report);
+      navigate('result', report.reviewId);
+    },
+    [navigate],
+  );
+
+  const showUnavailableResult = useCallback((receipt: DraftAnalysisReceipt) => {
+    setUnavailableReceipt(receipt);
+    window.location.hash = `${pathFor('result')}?revisionId=${encodeURIComponent(receipt.revisionId)}`;
+  }, []);
 
   if (route.startsWith('reviewer-')) {
     if (!clerkConfigured) return <ReviewerAuthUnavailable onHome={() => navigate('home')} />;
     return (
-      <ReviewerAccessBoundary onHome={() => navigate('home')}>
-        {(profile) => (
+      <ReviewerAccessBoundary
+        onHome={() => navigate('home')}
+        onSignedOut={() => reloadSignedOutHome()}
+      >
+        {(profile, onSignOut) => (
           <ReviewerShell
             route={route.replace('reviewer-', '') as ReviewerRoute}
             navigate={navigate}
+            selectedTicketCode={selectedTicketCode}
             profile={profile}
+            onSignOut={onSignOut}
           />
         )}
       </ReviewerAccessBoundary>
@@ -1998,11 +2672,35 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
     return (
       <AnalysisScreen
         text={reviewText}
+        initialReviewId={reviewId}
         onCancel={() => navigate('home')}
-        onComplete={(receipt) => {
-          setAnalysisReceipt(receipt);
-          navigate('result');
+        onComplete={completeAnalysis}
+        onUnavailable={showUnavailableResult}
+        onTicket={(ownedRevisionId) => {
+          window.location.hash = `${pathFor('ticket')}?revisionId=${encodeURIComponent(ownedRevisionId)}`;
         }}
+      />
+    );
+  if (route === 'result')
+    if (reviewId)
+      return (
+        <FoundationResultScreen
+          key={reviewId}
+          reviewId={reviewId}
+          initialReport={foundationReport?.reviewId === reviewId ? foundationReport : null}
+          onHome={startNewReview}
+          onTicket={() => navigate('ticket', reviewId)}
+        />
+      );
+  if (route === 'result' && revisionId)
+    return (
+      <UnavailableResultScreen
+        onHome={() => navigate('home')}
+        onTicket={() => {
+          window.location.hash = `${pathFor('ticket')}?revisionId=${encodeURIComponent(revisionId)}`;
+        }}
+        receipt={unavailableReceipt?.revisionId === revisionId ? unavailableReceipt : null}
+        text={reviewText}
       />
     );
   if (route === 'result')
@@ -2011,17 +2709,20 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
         onHome={startNewReview}
         onTicket={() => navigate('ticket')}
         onUnresolved={() => navigate('unresolved')}
-        receipt={analysisReceipt}
+        receipt={null}
       />
     );
   if (route === 'unresolved')
     return <UnresolvedScreen onHome={startNewReview} onTicket={() => navigate('ticket')} />;
-  if (route === 'ticket') return <TicketScreen onHome={startNewReview} />;
+  if (route === 'ticket')
+    return <TicketScreen onHome={startNewReview} reviewId={reviewId} revisionId={revisionId} />;
+  if (route === 'follow-up') return <FollowUpScreen onHome={startNewReview} />;
   return (
     <HomeScreen
       initialText={reviewText}
       onReview={startReview}
       onReviewer={() => navigate('reviewer-dashboard')}
+      onFollowUp={() => navigate('follow-up')}
     />
   );
 }

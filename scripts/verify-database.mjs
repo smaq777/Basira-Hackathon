@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { readdir } from 'node:fs/promises';
 
 const { Client } = pg;
 const connectionString = process.env.DATABASE_URL;
@@ -26,21 +27,26 @@ function assert(condition, message) {
 
 await client.connect();
 try {
+  const migrationVersions = (await readdir('migrations'))
+    .filter((file) => /^\d+_[a-z0-9_]+\.sql$/u.test(file))
+    .sort()
+    .map((file) => file.replace(/\.sql$/u, ''));
+  const expectedMigration = migrationVersions.at(-1);
   const readiness = await client.query('select * from basirah_api.readiness()');
-  assert(
-    readiness.rows[0]?.migration_version === '0005_expired_guest_cleanup',
-    'Migration is not current',
-  );
+  assert(readiness.rows[0]?.migration_version === expectedMigration, 'Migration is not current');
 
   const rls = await client.query(`
-    select count(*)::int as count
+    select count(*)::int as count,
+           count(*) filter (where c.relrowsecurity)::int as protected_count
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     where n.nspname in ('basirah', 'basirah_private')
       and c.relkind = 'r'
-      and c.relrowsecurity
   `);
-  assert(rls.rows[0]?.count === 15, 'Every Basirah table must have RLS enabled');
+  assert(
+    rls.rows[0]?.count === rls.rows[0]?.protected_count,
+    'Every Basirah table must have RLS enabled',
+  );
 
   const publicPrivileges = await client.query(`
     select count(*)::int as count
