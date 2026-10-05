@@ -440,6 +440,18 @@ export async function createReviewTicket(
   );
 }
 
+export async function createRevisionTicket(
+  revisionId: string,
+  contact: { name?: string; email?: string; notify?: boolean } = {},
+): Promise<TicketReceipt> {
+  return ticketReceipt(
+    await requestJson(`/api/v1/revisions/${encodeURIComponent(revisionId)}/tickets`, {
+      method: 'POST',
+      body: JSON.stringify(contact),
+    }),
+  );
+}
+
 export async function updateReviewTicketContact(
   code: string,
   contact: { name?: string; email: string; notify: boolean },
@@ -457,6 +469,7 @@ export type TicketLookup = {
   ticketCode?: string;
   status?: TicketReceipt['status'];
   report?: FoundationReport;
+  submission?: { revisionId: string; originalText: string };
   response?: { decision: string; text: string; publishedAt: string } | null;
 };
 
@@ -485,7 +498,8 @@ export type ReviewerTicketSummary = {
 };
 
 export type ReviewerTicket = ReviewerTicketSummary & {
-  report: FoundationReport;
+  report: FoundationReport | null;
+  submission: { revisionId: string; originalText: string };
   responses: Array<{
     version: number;
     decision: 'needs_context' | 'bounded_revision' | 'returned';
@@ -514,17 +528,22 @@ export async function getReviewerTicket(code: string): Promise<ReviewerTicket> {
   if (typeof value !== 'object' || value === null || !('ticket' in value))
     throw new BasirahApiError('INVALID_RESPONSE', 0);
   const ticket = value.ticket as Partial<ReviewerTicket>;
-  const report = FoundationReportSchema.safeParse(ticket.report);
+  const report = ticket.report == null ? null : FoundationReportSchema.safeParse(ticket.report);
   if (
     typeof ticket.ticketCode !== 'string' ||
     !['pending', 'in_review', 'published', 'closed'].includes(ticket.status ?? '') ||
     typeof ticket.createdAt !== 'string' ||
     typeof ticket.notifyOptIn !== 'boolean' ||
     !Array.isArray(ticket.responses) ||
-    !report.success
+    typeof ticket.submission?.revisionId !== 'string' ||
+    typeof ticket.submission?.originalText !== 'string' ||
+    (report !== null && !report.success)
   )
     throw new BasirahApiError('INVALID_RESPONSE', 0);
-  return { ...(ticket as ReviewerTicket), report: report.data };
+  return {
+    ...(ticket as ReviewerTicket),
+    report: report === null ? null : report.data,
+  };
 }
 
 export async function saveReviewerResponse(

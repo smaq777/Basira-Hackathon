@@ -1,5 +1,10 @@
 # Database migrations
 
+Migration `0014` lets an owned current revision enter the same secure human-review
+queue when automated analysis is unavailable. It keeps report-backed tickets
+compatible, exposes the original submission to authorized reviewers, and does
+not weaken the ticket-code plus email lookup requirement.
+
 Migration `0011` adds insert-only retained-page metadata and pinned vectors with
 exact UTF16/codepoint parent bindings. It requires `0010` and isolated fresh/copy
 validation. Forward `0012` fixes empty-prefix UTF16 length discovered by a valid
