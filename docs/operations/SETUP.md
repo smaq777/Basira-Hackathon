@@ -114,6 +114,9 @@ Use `npm ci` in CI for locked dependencies. If a dependency changes, regenerate 
 
 ## Optional local semantic experiment
 
+The existing loopback profile below remains the default. An independently opted-in
+Railway staging profile is described in [hosted research setup](HOSTED_RESEARCH_STAGING.md).
+
 Apply migration `0007_complete_quotation_findings` before source review. Keep
 `FOUNDATION_SEMANTIC_ENABLED=false` unless an operator has authorized the test
 payload to be sent to OpenRouter and its selected provider. Activation requires
@@ -140,7 +143,12 @@ stored reports or enable rewriting. See the [pilot evidence](../evidence/2026-10
 
 ## Research cache and discovery profile — 5 October
 
-All foundation, semantic, retrieval, discovery, and cache flags default off. Live research activation requires `NODE_ENV` other than production, `HOST=127.0.0.1` or `::1`, and `FOUNDATION_RESEARCH_PREVIEW=true`. It is not a production deployment setting.
+All foundation, semantic, retrieval, discovery, and cache flags default off. The
+default local profile requires `NODE_ENV` other than production, `HOST=127.0.0.1`
+or `::1`, and `FOUNDATION_RESEARCH_PREVIEW=true`. The separate
+[hosted staging profile](HOSTED_RESEARCH_STAGING.md) permits real connected testing
+in the explicitly selected Railway staging service, retaining provisional research
+status. It does not authorize a main/production release.
 
 For a time-bounded public hackathon demonstration, `FOUNDATION_HOSTED_DEMO=true`
 selects a separate read-only hosted profile. It starts from the immutable submitted

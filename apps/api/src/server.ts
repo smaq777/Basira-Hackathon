@@ -82,13 +82,13 @@ if (reviewerAuth.configured !== Boolean(clerkFrontendApiOrigin))
 async function initializeFoundation() {
   const runtimeMode = foundationRuntimeMode(process.env, host);
   if (runtimeMode === 'disabled') return undefined;
-  const researchPreview = runtimeMode === 'local_research';
+  const researchPreview = ['local_research', 'hosted_research'].includes(runtimeMode);
   const hostedDemo = runtimeMode === 'hosted_demo';
   const researchEvidence = researchPreview || hostedDemo;
   // This opt-in uses only numeric verse references and the pinned Tafsir adapter.
-  // Hosted activation needs separate source-edition and deployment validation.
+  // Both research profiles retain provisional source/edition status.
   if (process.env.FOUNDATION_TAFSIR_LIVE === 'true' && !researchPreview)
-    throw new Error('LIVE_SOURCE_ACQUISITION_REQUIRES_LOCAL_RESEARCH_PREVIEW');
+    throw new Error('LIVE_SOURCE_ACQUISITION_REQUIRES_RESEARCH_PREVIEW');
   const semanticEnabled = process.env.FOUNDATION_SEMANTIC_ENABLED === 'true';
   const semanticBudget = semanticBudgetConfiguration(process.env, researchEvidence);
   if (semanticEnabled && !researchEvidence)
@@ -313,6 +313,7 @@ async function initializeFoundation() {
     return {
       worker,
       reports,
+      runtimeMode,
       researchPreview,
       hostedDemo,
       liveTafsir: process.env.FOUNDATION_TAFSIR_LIVE === 'true',
@@ -337,10 +338,9 @@ const rewriteEnabled = process.env.FOUNDATION_REWRITE_ENABLED === 'true';
 if (
   rewriteEnabled &&
   (!foundation?.researchPreview ||
-    process.env.NODE_ENV === 'production' ||
-    !['127.0.0.1', '::1'].includes(host))
+    !['local_research', 'hosted_research'].includes(foundation.runtimeMode))
 )
-  throw new Error('REWRITE_REQUIRES_LOCAL_RESEARCH_PREVIEW');
+  throw new Error('REWRITE_REQUIRES_RESEARCH_PREVIEW');
 const rewrite = rewriteEnabled
   ? createRewriteService(createAuthorRewriteGenerator(process.env.OPENROUTER_API_KEY ?? ''), {
       verifier: createAuthorRewriteVerifier(process.env.OPENROUTER_API_KEY ?? ''),

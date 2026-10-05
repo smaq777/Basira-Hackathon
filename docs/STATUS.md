@@ -1,5 +1,13 @@
 # Current delivery status
 
+**Hosted research staging (#69/#14/#20):** A separate explicit profile now permits
+the selected Railway staging service to run real Foundation research, with matching
+service/environment/development declarations, verified TLS and unchanged ownership,
+quotas and source/citation guards. Local/default-off behavior remains. This is a
+review proposal; no hosted activation is claimed. See [boundary and remaining
+evidence](evidence/2026-10-05-hosted-staging-profile.md) and
+[operator setup](operations/HOSTED_RESEARCH_STAGING.md).
+
 ## Latest development evidence — 5 October
 
 **Exact extraction selection (#11):** Prompt/pipeline v1.9 sends short C/E aliases and translates them exactly through a request-owned canonical map before the unchanged span/source validator. Optional report-local diagnostics preserve fixed rejection counts and hashes; valid-empty reconsideration remains distinct from malformed binding. A separate syntactic correction excludes manifest-bound bracketed citation framing while preserving author conditions. Twelve retained baseline public calls include two repeated candidate-ID binding failures and a bibliographic false assertion; the frozen changed-packet comparison retained eight valid selections/four empty selections with no binding or provider failures, repeat-identical exact canonical spans, and independent audit. The selected two-to-zero binding change is not general reliability or full UI acceptance. See [selected evidence and limits](evidence/2026-10-05-claim-selection-aliases.md).
