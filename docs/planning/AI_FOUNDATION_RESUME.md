@@ -56,13 +56,21 @@ completion or acceptance receipt. Read the [integration handoff](../operations/A
 
 ## Remaining priorities, in order
 
+Later owner checkpoint: development `845d608` adds #91 saved-result fallback when
+connected analysis is unavailable. Capacity draft #95 now preserves that owner
+change at `a84ec9c4d1fa457e0e0f1c70621cb4366c420071`. Focused 69 tests and full
+51 files / 684 tests plus all local checks pass. Policy/dependency CI succeeded;
+one duplicate quality run was still running at the last exact-head snapshot.
+Recheck before reporting final CI. Root reviewed both unavailable and capacity
+catch paths. The live quota test remains pending; no new quota/provider test is claimed.
+
 1. **Finish delivery review (#8/#17):** publish selected fresh UI audit in cache PR
    without replacing frozen source 53c757f; inspect exact-head quality/policy/dependency
    checks. Saleh accepts #85 before #92. Source originals and experimental history stay intact.
 2. **Capacity feedback (#79):** active Sol worktree `79-capacity-feedback`, based on53c757f.
    Distinguish documents/revisions/reviews 429 capacity from network/burst failures.
    Preserve draft/session/reports, remove fixed-cap retry and keep cancellation safe.
-   Focused 40 tests pass; finish full checks, lead review, draft and actual UI verification.
+   Draft #95 and local full checks are complete; finish CI and actual UI verification.
    No quota increase, session reset or automatic resubmission.
 3. **Claim consistency and relevance (#11/#8):** representative mixed-writing
    original-span/source-ID selection, valid-empty versus malformed output, safe editor
