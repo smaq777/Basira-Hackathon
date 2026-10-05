@@ -76,6 +76,16 @@ describe('hosted evidence boundaries', () => {
     const results = await corpus.search('Quoted text', ['31:15']);
     expect(results.map((result) => result.snapshotKey)).toEqual(['quran-anchor']);
   });
+  it('does not substitute broad lexical neighbors for an unresolved explicit locator', async () => {
+    const f = fixture([], [row('unrelated-neighbor', 'scholar_explanation')]);
+    const corpus = createHostedCorpus({
+      pool: f.pool,
+      corpusVersion: 'synthetic-v1',
+      researchPreview: true,
+    });
+    await expect(corpus.search('Quoted text', ['2:271'])).resolves.toEqual([]);
+    expect(f.query.mock.calls.some(([sql]) => String(sql).includes('word_similarity'))).toBe(false);
+  });
   it('rejects corrupted stored originals and always rolls back/releases', async () => {
     const f = fixture([], [{ ...row('tampered'), original_text: 'changed' }]);
     const corpus = createHostedCorpus({ pool: f.pool, corpusVersion: 'synthetic-v1' });
