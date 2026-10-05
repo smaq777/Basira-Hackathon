@@ -72,22 +72,20 @@ it('keeps the local research preview and hosted demo mutually exclusive', () => 
   ).toThrow('FOUNDATION_RUNTIME_MODE_CONFLICT');
 });
 
-it.each([
-  'FOUNDATION_WEB_DISCOVERY_ENABLED',
-  'FOUNDATION_WEB_CACHE_ENABLED',
-  'FOUNDATION_WEB_CACHE_PASSAGES_ENABLED',
-  'FOUNDATION_REWRITE_ENABLED',
-] as const)('keeps %s disabled in the hosted staging demo', (key) => {
-  expect(() =>
-    foundationRuntimeMode({
-      FOUNDATION_ENABLED: 'true',
-      FOUNDATION_HOSTED_DEMO: 'true',
-      FOUNDATION_SEMANTIC_ENABLED: 'true',
-      FOUNDATION_CLAIM_RETRIEVAL_ENABLED: 'true',
-      [key]: 'true',
-    }),
-  ).toThrow('HOSTED_DEMO_REQUIRES_READ_ONLY_RETRIEVAL');
-});
+it.each(['FOUNDATION_REWRITE_ENABLED'] as const)(
+  'keeps %s disabled in the hosted staging demo',
+  (key) => {
+    expect(() =>
+      foundationRuntimeMode({
+        FOUNDATION_ENABLED: 'true',
+        FOUNDATION_HOSTED_DEMO: 'true',
+        FOUNDATION_SEMANTIC_ENABLED: 'true',
+        FOUNDATION_CLAIM_RETRIEVAL_ENABLED: 'true',
+        [key]: 'true',
+      }),
+    ).toThrow('HOSTED_DEMO_REQUIRES_READ_ONLY_RETRIEVAL');
+  },
+);
 
 it('allows read-only MCP and web discovery in hosted production', () => {
   expect(
@@ -108,16 +106,29 @@ it('allows read-only Tafsir MCP in the hosted staging demo', () => {
   ).toBe('hosted_demo');
 });
 
-it.each([
-  'FOUNDATION_WEB_CACHE_ENABLED',
-  'FOUNDATION_WEB_CACHE_PASSAGES_ENABLED',
-  'FOUNDATION_WEB_CACHE_CONTENT_VIEWS_ENABLED',
-  'FOUNDATION_REWRITE_ENABLED',
-] as const)('keeps production mutation path %s disabled', (key) => {
-  expect(() => foundationRuntimeMode({ ...hostedProductionEnvironment, [key]: 'true' })).toThrow(
-    'HOSTED_PRODUCTION_REQUIRES_READ_ONLY_ACQUISITION',
-  );
-});
+it.each(['FOUNDATION_REWRITE_ENABLED'] as const)(
+  'keeps production author-rewrite path %s disabled',
+  (key) => {
+    expect(() => foundationRuntimeMode({ ...hostedProductionEnvironment, [key]: 'true' })).toThrow(
+      'HOSTED_PRODUCTION_REQUIRES_READ_ONLY_ACQUISITION',
+    );
+  },
+);
+
+it.each([hostedDemoEnvironment, hostedProductionEnvironment])(
+  'allows bounded RAG cache writes for a hosted runtime',
+  (environment) => {
+    expect(
+      foundationRuntimeMode({
+        ...environment,
+        FOUNDATION_WEB_DISCOVERY_ENABLED: 'true',
+        FOUNDATION_WEB_CACHE_ENABLED: 'true',
+        FOUNDATION_WEB_CACHE_PASSAGES_ENABLED: 'true',
+        FOUNDATION_WEB_CACHE_CONTENT_VIEWS_ENABLED: 'true',
+      }),
+    ).toMatch(/hosted_(demo|production)/u);
+  },
+);
 
 it('requires semantic claim retrieval in the hosted demo', () => {
   expect(() =>
