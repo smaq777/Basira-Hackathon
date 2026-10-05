@@ -31,6 +31,9 @@ describe('explicit research time profile', () => {
   });
   it('rejects production extension, malformed/unbounded inputs and insufficient durable deadlines', () => {
     expect(() =>
+      semanticBudgetConfiguration({ FOUNDATION_EXTRACTION_TIMEOUT_MS: '20000' }, false),
+    ).toThrow();
+    expect(() =>
       semanticBudgetConfiguration(
         { FOUNDATION_SEMANTIC_TIMEOUT_MS: '240000', REVIEW_DEADLINE_SECONDS: '240' },
         false,

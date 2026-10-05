@@ -951,6 +951,32 @@ describe('claim-driven evidence freeze', () => {
     expect(result.intake).toEqual(input);
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+  it('logs known retrieval codes while redacting arbitrary error content', async () => {
+    const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      for (const [message, code] of [
+        ['RETRIEVAL_PACKET_TOO_LARGE', 'RETRIEVAL_PACKET_TOO_LARGE'],
+        ['private SQL and draft content', 'RETRIEVAL_UNAVAILABLE'],
+      ]) {
+        const result = await createSemanticAssessmentAdapter(
+          options(successfulFetch(), {
+            claimRetrieval: {
+              retrieve: async () => {
+                throw new Error(message);
+              },
+            },
+          }),
+        ).assessWithEvidence(fixture());
+        expect(result.report.assessments).toEqual([]);
+        expect(JSON.parse(diagnostic.mock.calls.at(-1)![0])).toEqual({
+          event: 'semantic_retrieval_failed',
+          code,
+        });
+      }
+    } finally {
+      diagnostic.mockRestore();
+    }
+  });
 });
 
 describe('bounded claim retrieval adapter', () => {

@@ -10,6 +10,8 @@ The Neon research corpus has 62 originals; the larger local index has 6,236 Qura
 
 The tables below retain deployment/baseline context; this development evidence does not promote production, resolve source rights, or establish scholarly accuracy.
 
+Live verification and the fixes for report-size failure and cache-search timeout are recorded in the [runtime integration diagnostic](evidence/2026-10-05-web-cache-runtime.md). Cached sources remain research evidence even when a model finds a claim supported; software delivery checks are separate from adjudicated semantic calibration.
+
 **Hosted retrieval follow-up, 5 October:** The
 [persistent Neon development corpus](evidence/2026-10-05-hosted-source-corpus.md)
 contains 62 attributed research passages and compatible embeddings with a
