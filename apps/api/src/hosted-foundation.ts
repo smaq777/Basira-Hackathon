@@ -3,8 +3,35 @@ import {
   type FoundationIntake,
 } from '../../../packages/contracts/src/foundation.js';
 import { sha256, type FoundationAdapter } from './foundation.js';
+import { foundationActivation } from './foundation-activation.js';
 
-export type FoundationRuntimeMode = 'disabled' | 'local_research' | 'hosted_demo';
+export type FoundationRuntimeMode =
+  'disabled' | 'local_research' | 'hosted_research' | 'hosted_demo';
+
+function assertHostedDemoBoundary(environment: NodeJS.ProcessEnv, host: string): void {
+  const serviceId = environment.FOUNDATION_STAGING_SERVICE_ID;
+  const revision = environment.BASIRAH_DEPLOYMENT_SHA;
+  const reportTls = environment.DATABASE_TLS_MODE || 'verify-full';
+  if (
+    environment.NODE_ENV !== 'production' ||
+    host !== '0.0.0.0' ||
+    environment.RAILWAY_ENVIRONMENT_NAME !== 'staging' ||
+    environment.BASIRAH_DEPLOYMENT_ENVIRONMENT !== 'staging' ||
+    !serviceId ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(serviceId) ||
+    environment.RAILWAY_SERVICE_ID !== serviceId ||
+    environment.BASIRAH_DEPLOYMENT_REF !== 'refs/heads/development' ||
+    !revision ||
+    !/^[0-9a-f]{40}$/u.test(revision) ||
+    (environment.RAILWAY_GIT_BRANCH !== undefined &&
+      environment.RAILWAY_GIT_BRANCH !== 'development') ||
+    (environment.RAILWAY_GIT_COMMIT_SHA !== undefined &&
+      environment.RAILWAY_GIT_COMMIT_SHA !== revision) ||
+    !['require', 'verify-full'].includes(reportTls) ||
+    (environment.FOUNDATION_CORPUS_TLS_MODE || 'verify-full') !== 'verify-full'
+  )
+    throw new Error('HOSTED_DEMO_ENVIRONMENT_MISMATCH');
+}
 
 export function foundationRuntimeMode(
   environment: NodeJS.ProcessEnv = process.env,
@@ -14,11 +41,7 @@ export function foundationRuntimeMode(
   const localResearch = environment.FOUNDATION_RESEARCH_PREVIEW === 'true';
   const hostedDemo = environment.FOUNDATION_HOSTED_DEMO === 'true';
   if (localResearch && hostedDemo) throw new Error('FOUNDATION_RUNTIME_MODE_CONFLICT');
-  if (
-    localResearch &&
-    (environment.NODE_ENV === 'production' || !['127.0.0.1', '::1'].includes(host))
-  )
-    throw new Error('RESEARCH_PREVIEW_REQUIRES_LOCAL_DEVELOPMENT');
+  const activation = foundationActivation(environment, host);
   if (!localResearch && !hostedDemo) throw new Error('FOUNDATION_RUNTIME_MODE_REQUIRED');
   if (
     hostedDemo &&
@@ -37,7 +60,11 @@ export function foundationRuntimeMode(
       environment.FOUNDATION_CLAIM_RETRIEVAL_ENABLED !== 'true')
   )
     throw new Error('HOSTED_DEMO_REQUIRES_SEMANTIC_RETRIEVAL');
-  return hostedDemo ? 'hosted_demo' : 'local_research';
+  if (hostedDemo) {
+    assertHostedDemoBoundary(environment, host);
+    return 'hosted_demo';
+  }
+  return activation.profile === 'hosted-staging' ? 'hosted_research' : 'local_research';
 }
 
 /**

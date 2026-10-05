@@ -138,6 +138,16 @@ are not standalone quotation findings. Search presentation aliases never change
 originals and are applied to already-normalized index views to avoid reprocessing
 the corpus for each passage.
 
+Source intake v1.9 recognizes a complete balanced square/parenthesized Quran
+locator such as `[لقمان: 31:15]` as reference metadata, binding the exact full
+inner span to one available pinned verse and any supplied surah name. Source
+speech containing a locator remains reviewable. Wrong names, unavailable sources,
+ranges, malformed wrappers and author qualifications keep their conservative
+fallback; score/time/ratio contexts do not resolve bare numeric metadata. Original
+text, UTF16/codepoint offsets and source hashes remain unchanged. This applies to
+future intakes only; historical reports are not rewritten. See
+[diagnosis and offline evidence](../../docs/evidence/2026-10-05-quran-locator-intake.md).
+
 Stored and in-memory Tafsir replays report `delivery: snapshot`; only a fresh
 acquisition reports `live`. Their original acquisition transport remains separate
 in provenance. A replay is not evidence of a new MCP request.

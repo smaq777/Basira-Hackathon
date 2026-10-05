@@ -42,6 +42,7 @@ import { WarningCircle } from '@phosphor-icons/react/WarningCircle';
 import { X } from '@phosphor-icons/react/X';
 import {
   analysisErrorMessage,
+  isResourceCapacityError,
   awaitFoundationReport,
   BasirahApiError,
   cancelOwnedReview,
@@ -645,7 +646,7 @@ function HomeScreen({
               جرّب مثالًا <ArrowLeft size={18} />
             </button>
             <span>
-              <Lock size={17} /> يمكنك البدء كضيف، وتنتهي صلاحية الوصول للمسودة بعد 24 ساعة.
+              <Lock size={17} /> يمكنك البدء كضيف.
             </span>
           </div>
           <details className="preflight-examples">
@@ -688,7 +689,7 @@ function HomeScreen({
         <section className="section-block" id="how" aria-labelledby="benefits-heading">
           <div className="section-intro">
             <p className="eyebrow">لماذا بصيرة؟</p>
-            <h2 id="benefits-heading">مراجعة تشرح لك ما وجدته، ولا تخفي حدودها</h2>
+            <h2 id="benefits-heading">مراجعة واضحة بالدليل وحدوده</h2>
             <p>ست إشارات مركزة تساعد الكاتب والمراجع على اتخاذ قرار واعٍ قبل النشر.</p>
           </div>
           <div className="capabilities" aria-label="ما الذي تراجعه بصيرة">
@@ -754,14 +755,16 @@ function HomeScreen({
               <summary>ما الذي لا تفعله بصيرة؟</summary>
               <p>
                 لا تصدر فتوى أو حكمًا شرعيًا، ولا تعتمد النص أو الصياغة المقترحة تلقائيًا، ولا
-                تستبدل قرار المختص أو المراجع البشري.
+                تستبدل قرار المختص أو المراجع البشري. بل توثّق النتائج والتحليلات، وتربطها بالمصادر
+                المتاحة، وتوضح حدود الدليل ليتخذ المختص قراره.
               </p>
             </details>
             <details>
               <summary>ما المصادر التي تعتمد عليها بصيرة؟</summary>
               <p>
-                تستخدم بصيرة المصادر الأصيلة والموثوقة المعتمدة فقط، وتعرض المرجع المستخدم وحدود ما
-                يدعمه بدل تقديم نتيجة بلا مصدر.
+                تبحث بصيرة ضمن مجموعة منتقاة من النصوص والمراجع الإسلامية الموثقة، مثل القرآن الكريم
+                وكتب التفسير والحديث وشروح العلماء. وتعرض مع كل نتيجة المصدر المستخدم ومرجعه وحدود
+                ما يثبته، لتكون النتيجة قابلة للتحقق؛ وظهور المصدر لا يعني فتوى أو اعتمادًا نهائيًا.
               </p>
             </details>
             <details>
@@ -782,7 +785,7 @@ function HomeScreen({
               <summary>هل يمكنني استلام نتيجة التذكرة بعد المراجعة؟</summary>
               <p>
                 نعم. عند إرسال الحالة للمراجعة البشرية يمكنك اختيار متابعة التذكرة واستلام النتيجة
-                بعد اكتمال المراجعة.
+                بعد اكتمالها. احتفظ بالرقم المرجعي، ثم استخدمه في الموقع للاطلاع على نتيجة المختص.
               </p>
             </details>
             <details>
@@ -796,7 +799,8 @@ function HomeScreen({
           </div>
         </section>
         <p className="scope-note" id="sources">
-          <Info size={19} /> بصيرة أداة مساعدة للمراجعة، وليست فتوى أو اعتمادًا للنشر.
+          <Info size={19} /> تظهر بصيرة المصدر المرجعي المستخدم وحدود ما يدعمه مع كل نتيجة؛ ولا يعني
+          ظهور المرجع اعتمادًا شرعيًا نهائيًا.
         </p>
       </main>
       <PublicFooter />
@@ -822,9 +826,66 @@ const CHALLENGE_MARKS = [
   },
 ];
 
+const CHALLENGE_PARTNERS = [
+  {
+    src: 'https://islamicaich.org/files/HackathonPartner/SGlRb7pxNBZSq35HmInYJ3kFeGajxZUVQkiVeitP.png',
+    alt: 'وزارة الاتصالات وتقنية المعلومات',
+    className: 'partner-logo--mcit',
+  },
+  {
+    src: 'https://islamicaich.org/files/Hackathon/8FwPG5Wrrw6EgBggTVazuLAm67igqpWDSCZv1LPV.svg',
+    alt: 'الهيئة السعودية للبيانات والذكاء الاصطناعي (سدايا)',
+    className: 'partner-logo--sdaia',
+  },
+  {
+    src: 'https://islamicaich.org/files/Hackathon/hRJQfbmJiyGIxnIvjACFIPb9f9Enri4nmVr80zSa.svg',
+    alt: 'شركة التحول التقني',
+    className: 'partner-logo--tts',
+  },
+  {
+    src: 'https://islamicaich.org/files/Hackathon/WhQ6X1afIrcgTa3yi9jJNzqRij58DjKmTKy1USAU.svg',
+    alt: 'Future Frontiers',
+    className: 'partner-logo--future-frontiers',
+  },
+];
+
+function PartnerLogoGroup({ duplicate = false }: { duplicate?: boolean }) {
+  return (
+    <div className="partner-logo-group" aria-hidden={duplicate || undefined}>
+      {CHALLENGE_PARTNERS.map((partner) => (
+        <img
+          key={partner.src}
+          src={partner.src}
+          alt={duplicate ? '' : partner.alt}
+          className={partner.className}
+          loading="lazy"
+          decoding="async"
+        />
+      ))}
+    </div>
+  );
+}
+
 function PublicFooter() {
   return (
     <footer className="public-footer" id="trust">
+      <section className="partner-strip" aria-labelledby="challenge-partners-title">
+        <div className="partner-strip-heading page-shell">
+          <div>
+            <p className="eyebrow">شركاء التحدي</p>
+            <h2 id="challenge-partners-title">جهات تصنع الأثر في تحدي المحتوى الإسلامي</h2>
+          </div>
+          <a href="https://islamicaich.org/#partners-sponsors" target="_blank" rel="noreferrer">
+            الموقع الرسمي للتحدي
+          </a>
+        </div>
+        <div className="partner-marquee" aria-label="شعارات شركاء التحدي">
+          <div className="partner-marquee-track">
+            <PartnerLogoGroup />
+            <PartnerLogoGroup duplicate />
+          </div>
+        </div>
+      </section>
       <section className="trust-strip">
         <a
           className="challenge-marks page-shell"
@@ -853,10 +914,12 @@ function PublicFooter() {
           </button>
         </div>
         <div>
-          <h3>حدود الاستخدام</h3>
-          <p>ليست فتوى</p>
-          <p>لا اعتماد تلقائيًا للنشر</p>
-          <p>المراجعة البشرية مطلوبة</p>
+          <h3>مصادر موثقة</h3>
+          <p className="footer-source-copy">
+            نراجع النصوص بالرجوع إلى القرآن الكريم، وكتب التفسير والحديث، وشروح العلماء، ونُظهر
+            المرجع المستخدم وحدود دلالته داخل النتيجة.
+          </p>
+          <a href="#sources">كيف نعرض المصادر في النتيجة</a>
         </div>
       </div>
       <div className="footer-bottom page-shell">
@@ -891,6 +954,7 @@ function AnalysisScreen({
   const [phase, setPhase] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState('');
+  const [capacityLimited, setCapacityLimited] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [fallbackRevisionId, setFallbackRevisionId] = useState<string | null>(null);
   const runRef = useRef<OwnedReview | null>(null);
@@ -910,6 +974,7 @@ function AnalysisScreen({
     const controller = new AbortController();
     controllerRef.current = controller;
     setError('');
+    setCapacityLimited(false);
     setPhase(0);
     const execute = async () => {
       let run = runRef.current;
@@ -965,6 +1030,12 @@ function AnalysisScreen({
         unavailableRef.current(receiptRef.current);
         return;
       }
+      const fixedCapacity = isResourceCapacityError(reason);
+      // A documented capacity rejection cannot have created a review. Keep the
+      // existing run path for ambiguous transport failures and owned reviews.
+      if (fixedCapacity && !runRef.current) pendingRunRef.current = null;
+      setCapacityLimited(fixedCapacity);
+
       setError(analysisErrorMessage(reason));
     });
     return () => {
@@ -1037,16 +1108,18 @@ function AnalysisScreen({
           <div className="analysis-error" role="alert">
             <WarningCircle size={22} />
             <div>
-              <strong>لم يكتمل الاتصال</strong>
+              <strong>{capacityLimited ? 'بلغت حد السعة' : 'لم يكتمل الاتصال'}</strong>
               <p>{error}</p>
             </div>
-            <button
-              disabled={cancelling}
-              className="button button--outline"
-              onClick={() => setAttempt((value) => value + 1)}
-            >
-              إعادة المحاولة
-            </button>
+            {!capacityLimited && (
+              <button
+                disabled={cancelling}
+                className="button button--outline"
+                onClick={() => setAttempt((value) => value + 1)}
+              >
+                إعادة المحاولة
+              </button>
+            )}
             {fallbackRevisionId && (
               <button
                 className="button button--primary"
@@ -1066,7 +1139,11 @@ function AnalysisScreen({
             onClick={() => void cancel()}
             disabled={cancelling}
           >
-            {cancelling ? 'جار تأكيد الإلغاء' : 'إلغاء والعودة للنص'}
+            {cancelling
+              ? 'جار تأكيد الإلغاء'
+              : capacityLimited
+                ? 'العودة للنص'
+                : 'إلغاء والعودة للنص'}
           </button>
         </div>
       </main>

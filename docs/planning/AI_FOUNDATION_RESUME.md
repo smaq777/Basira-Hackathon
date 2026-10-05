@@ -1,111 +1,177 @@
 # AI Foundation resumption checklist — 5 October 2026
 
-This checkpoint supports continuation after a context or goal interruption.
-The active objective remains local research activation, owner PR-state review and
-remaining AI Foundation priorities. Do not mark it complete merely because the
-dependency queue awaits Saleh.
+Checkpoint: 18:55 UTC. Continue local research integration and remaining priorities;
+owner PR acceptance does not prevent isolated implementation. Saleh alone accepts,
+merges and deploys shared releases. This document is a continuation record, not a
+completion or acceptance receipt. Read the [integration handoff](../operations/AI_FOUNDATION_HANDOFF.md).
 
-## Rules and authorization to preserve
+## Current checkpoint — supersedes the dated implementation status below
 
-- Use Basira-Hackathon UI/API, issue-linked `saleh/` branches and isolated worktrees.
-  Preserve merge commits; do not change the primary checkout, rebase or force-push.
-- Saleh (`smaq777`) alone accepts and merges the shared repository/release.
-  Isolated implementation and local integration may continue before acceptance.
-- The user requests Sol agents at Medium effort; the lead reviews their work.
-  Existing agent `/root/model_comparison_v2` is handling the next source-cleaning
-  task. Respect agent capacity; do not resume an old agent under an unknown model.
-- Public-text OpenRouter tests, approved discovery/cache and isolated Neon research
-  validation are authorized. Freeze test inputs/guards and retain every failure.
-  Do not ask again for the same public-model permission. Production migration and
-  shared release are not authorized by local testing.
-- Keep credentials in the owning environment, never output or commit them. Source
-  originals, hashes, edition identities, citations and historical receipts stay
-  immutable. Machine topics/content labels are not scholarly approval.
+- Saleh merged #85, #92, #95, #99, #100, #104 and #87 into development; observed
+  head `ce54db6`. #98 and #103 are accepted production promotion merges. Merge
+  status is not evidence of live model activation; recheck current GitHub/deployment.
+- Copied-role bootstrap passed actual empty/recovery/rerun/isolation controls on a
+  separate PostgreSQL 18/pgvector0.8.7 cluster. Owner c33 merge passed 51 files /
+  662 tests and all required local checks. Fresh Neon/cleaning0015 parity remains.
+- Two first-outcome mixed-writing UI runs on frozen b99 source completed semantic
+  assessment with exact author bindings and delivered citations; both retained
+  provisional supported relations. [Evidence and remaining defects](../evidence/2026-10-05-mixed-writing-ui.md).
+  Bibliographic locator false quotation, mixed-language explanation, missing
+  negation in a scope phrase and misleading escalation remain recorded.
+- Separate UI fixture is on 55441, schema0014; app8776 uses
+  `basirah-selection.localhost` for cookie isolation and read-only corrected Neon
+  child. Existing 55439/8771–8773 databases/configuration were not reset or changed.
+- Authorized Neon cleanup deleted only unused failed leaf `br-square-salad-b2mo9m2a`.
+  Production, research parent, passage parent and corrected child remain; before/
+  after retained data hashes match. Historical failed SQL/receipts/source are
+  archived externally. The branch itself no longer exists.
 
-## Completed checkpoint
+Next implementation order: (1) bibliographic reference detection and precise
+partial-result/capability copy; (2) measured passage relevance/packet compaction;
+(3) clear Arabic with explicit qualifier preservation; (4) evidence-bound rewrite
+modality/citation checks; (5) contextual RAG expansion and fresh Neon0015 parity;
+(6) source-rights/scholarly review, editor pilot and reproducible judging demo.
+Use separate issue-linked Sol Medium tasks and lead review; preserve frozen
+results. Earlier lists below describe their dated state, not pending acceptance.
 
-- At the read-only GitHub checkpoint on 5 October 2026, 13:53 UTC, #59 and #70–#72
-  were merged into development `809baeed63a9e70c5e1d79a7d010e7f12ed6db4d`.
-  #73–#78 remained open with required checks green, and #80 remained draft with
-  required checks green at `48acf4a`. Recheck before making statements about
-  current acceptance; do not infer approval from CI.
-- Claim recovery v1.8 reaches real evidence for one fresh source-free assertion.
-  A mixed-writing `invalid_claims` failure is retained. Rewrite v2 preserves
-  explicit obligation/non-obligation in a retained supported UI report and keeps
-  the Ayah unchanged. Neither establishes general semantic reliability.
-- Draft passage PR #80: validated schema/roles/immutable bindings on isolated
-  child `br-weathered-tooth-b2luwnxr`. Migration 0012 fixes the empty-prefix defect
-  without changing applied 0011. Twelve actual-role rollback probes and separate
-  metadata-only/read-only CLI paths passed; owner-only trigger probes are unclaimed.
-- Paid fixed comparison retained 20 embedding attempts, 19 valid responses and one
-  unknown-billing transport failure. Passage-first composition demoted an unindexed
-  title. Corrected source `589de58f46895acd27c4ac178f424fa2b76779fc` preserves parent
-  ranks and enriches exact windows. Zero-provider replay passed 24 rank comparisons,
-  four rank-one controls and four selected full-paragraph deliveries versus baseline
-  zero. Three historical cold-cache failures remain; warm replay did not resolve them.
-- Passage documentation is at `c150027` before this handoff addition. Source worktree
-  is `Project_Code/Basira-worktrees/8-cache-passage-index`. Draft PR #80 still needs
-  final published-head CI, owner review and actual cache-window UI delivery evidence.
-- Isolated integrated worktree `14-next-priority-validation` merged reviewed source
-  through `7b080546ad27a81ff29f77f9b9f1c480c5a037c7`. Combined check passed 48 files,
-  617 tests, type/docs/policy/format/build. The only merge conflict was the priority
-  plan, resolved retaining current claim/rewrite findings and new passage priorities.
-- Port8771 process retains its existing research-parent configuration. Separate
-  port8772 child preview launched hidden via `start_passage_preview.ps1`, launcher
-  PID36116 at this checkpoint; `/ready` passed and stderr was empty. PIDs/readiness
-  can change. Fresh persisted report `0bb5b9ff-fbbd-4854-84f5-ec86b882dfce` on8772
-  completed real Luna extraction/Sol assessment using the pinned Neon corpus and
-  cited Muyassar31:15 for the public obedience claim. Its durable trace contained
-  zero cache-parent candidates and zero preferred cache windows. This confirms
-  real UI/model/corpus activation, not passage-window UI delivery. No owning `.env`
-  edits or active parent/production migration occurred.
+## Rules to preserve
 
-## Ordered remaining work
+- Basira-Hackathon UI/API; issue-linked `saleh/` branches and isolated worktrees.
+  Preserve merge commits, primary checkout, user changes and applied SQL/checksums.
+- User requests Sol agents at Medium effort; lead reviews before publication/activation.
+  Reuse `/root/model_comparison_v2`; do not repeatedly spawn beyond available capacity.
+- Public-text OpenRouter/web tests and isolated Neon research are authorized.
+  Freeze source/input/scope; retain failures and all outcomes. Do not repeat a paid
+  case just to select a passing result. Owning `.env` and production remain unchanged.
+- Credentials stay outside Git/browser/logs. Originals, citations, hashes, source
+  identities and first accepted sidecars are immutable. Machine topics/cleanup,
+  checksums and CI are separate from edition/rights/scholarly approval.
+- Keep the 3000 UTF16-unit / five-claim scope; preserve conditions, negation, exceptions and scope.
+  Partial Ayah fidelity is separate from quotation extent; Hadith authenticity is
+  separate from matn matching. Do not put IslamicEval gold/wrong answers in RAG.
 
-Cache delivery now precedes capacity/claim follow-ups because source cleaning adds
-another lookup to the existing tight budget. Independent lexical and simulated
-unavailable-embedding diagnostics delivered cache parents and durable preferences,
-but neither explains the historical UI omission. See the
-[retained diagnostic](../evidence/2026-10-05-cache-delivery-diagnostic.md).
-Current public staging still returns a Vercel capabilities 404 and Railway reports
-foundation review off at migration 0005; owner merges alone do not activate it.
+## Verified progress and exact locations
 
-| Order | Priority                                                                               | Current status and next action                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ----- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | Source-content cleaning with classification (#8)                                       | Sol design approved; implement in new `saleh/8-source-content-views` worktree from reviewed integration7b08054, declaring unmerged PR80 dependency. One default-off joint Luna request labels exact immutable block IDs plus topics. Remove only structurally recognized boilerplate with model agreement; retain all article/dialogue/citations/corrective footnotes/uncertain blocks. Store a versioned immutable sidecar and contiguous lexical body windows; leave old originals/window/vector records untouched. New cleaned vectors need a separate representation and offline test phase. Freeze up to four public parents/two classifier repeats before the authorized eight-call diagnostic; lead audits SQL/paid scope before execution. |
-| 2     | Cache deadline and explicit partial outcomes (#17)                                     | Pending; actual three empty diagnostic cache deliveries are recorded on the issue. Make bounded cache timing coherent with the longer review deadline and surface report-local unavailable/partial outcomes. Test slow success, cancellation and expiry. No automatic retries of auth/permission failures.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| 3     | Distinct capacity feedback (#79)                                                       | Not implemented. Recognize only documents/revisions/reviews capacity responses, show simple Arabic copy, retain draft/reports and avoid pointless fixed-capacity retries. Keep ordinary network/rate failures recoverable. Do not reset sessions or increase the20-document limit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| 4     | Claim selection consistency (#11)                                                      | Bounded valid-empty recovery exists; malformed selections still fail. Test candidate/source-ID constraints and safe failure reasons with representative mixed writing. Never force questions/quotations into claims or guess an unretained invalid response. Editor confirmation is pending.                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| 5     | RAG topic coverage and durable report capacity (#5/#7/#8)                              | 86 corpus passages and16 pending cache parents are selected research coverage. Finish the170 contextual-passage plan across nine labels/independent works, remove navigation pollution conservatively, and compact report/model representations without losing restorable full originals/restrictions/footnotes. Current rank-preserving enrichment intentionally does not improve parent discovery; unified comparable parent ranking needs separate measurement.                                                                                                                                                                                                                                                                                 |
-| 6     | Semantic calibration, Arabic clarity and broader AI-ReWrite preservation (#13/#18/#38) | Selected fixed-packet relations and v2 rewrite guards exist; detailed qualifier attachment varies and stronger-thinking benefit is unproven. Test negation, conditions, exceptions, scope, unrelated/missing evidence and conflicting interpretations. Produce plain, deduplicated Arabic explanations; expand independently reviewed modality/ambiguity controls and source-bound rewrite cases. Keep unsupported source-strengthening separate from style changes.                                                                                                                                                                                                                                                                               |
-| 7     | Fresh-database bootstrap and shared staging (#81/#14/#20/#69)                          | Copied roles break historical0008 on a fresh database; preserve failed DB and applied checksums, implement an additive/idempotent bootstrap strategy without dropping roles. Saleh accepts/merges dependency PRs before shared staging. Configure the selected API/proxy and permitted hosted research profile, then verify a new persisted report through that actual UI. Current research gates require non-production loopback; do not silently weaken them.                                                                                                                                                                                                                                                                                    |
-| 8     | Source/content review, beneficiary pilot and committee handoff (#4/#18/#21/#22/#27)    | Prepare a small edition/rights review pack, independently adjudicated source-family-separated cases, editor observations and three reproducible demo cases including failure recovery. Measure actual editor benefit; automated schema tests and model agreement are not beneficiary outcomes or judge scores.                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+- Development `661fef89` includes accepted #59, #70–#78, #80, #88/#89. Ticket
+  migrations 0013/0014 are unchanged. Recheck GitHub before reporting current status.
+- Cleaning draft #85 is corrected at `845ae1a` (51 files / 659 tests and other checks).
+  Deployment cleaning is 0015. Historical failed experimental 0013 / SQL 42702 child and
+  corrected experimental 0014 child/checksums remain untouched.
+- Cleaning child: project `weathered-pond-44811639`, branch
+  `br-little-pond-b2y5usie`, host `ep-long-frost-b2ebbc7n.c-6.eu-central-1.aws.neon.tech`,
+  DB `basirah_research`. Fourteen actual-role/window probes pass. Eight public
+  joint-classifier calls on four complete originals were valid; removal IDs stable,
+  one topic drifted. First repeats stored four views / eight windows; 16 originals / eight old vectors
+  retained. Reader enrichment verified six hints. No general accuracy claim.
+- Cache draft #92, tested source `53c757f1d4e7f3ccbf5a8bc5b0f511d154998acb`, is in
+  `Project_Code/Basira-worktrees/17-cache-delivery-diagnostics`; 51 files / 673 tests
+  and type/docs/policy/format/build pass. Search/restore hard deadlines, coherent
+  research budgets and per-call outcomes preserve source order and citation guards.
+- Actual fresh UI report on 8773: `fed992b6-9e99-49d5-aeb0-bd57b410c9b1` completed
+  in 14.081 seconds. Luna extracted, Sol assessed; cache embedding/pages/passages/content
+  all succeeded. Two selected/restored cached parents supplied six exact cleaned
+  windows, and a Bin Baz 8881 citation fell inside a delivered window alongside Muyassar 31:15.
+  Independent audit matches first-repeat selections and recomputes every window hash.
+  Earlier 8772 zero-cache report and cold-cache failures remain; this does not prove their cause.
+- Port 8771 retains active-parent setup; 8772 older passage child; 8773 new cleaned child.
+  Launcher `start_cleaned_cache_preview_v1.ps1` lives externally in integration-lead-v1.
+  Local reports use PostgreSQL on port 55439 `basirah_integration_20261004`, migration 0009;
+  tickets are disabled on 8773. This is not deployment 0015/ticket schema parity.
+- At 16:32 UTC, shared Railway is ready at owner migration 0014 but Foundation/live
+  providers/rewrite remain off; Vercel capabilities URL 404. Current research gates
+  require non-production loopback. Do not silently weaken them to host the preview.
+- Claim recovery and evidence-bound rewrite v2 exist; selected UI modality/copy tests
+  passed. Mixed-writing invalid claims and detailed qualifier inconsistencies remain.
 
-Additional regression requirements remain: accurate partial Ayah fidelity separate
-from extent; explicit separated-excerpt/ellipsis alignment; Hadith authenticity and
-canonical reference verification separate from matn matching; provider/gateway outage
-and overall-deadline behavior; no IslamicEval gold/wrong answers in reusable retrieval.
+## Remaining priorities, in order
 
-## Immediate continuation steps
+Latest owner development is `f130560`, including #91 saved-result fallback and
+#97 restricted hosted demo. Full staging draft #100 at `b38d95c` preserves #97;
+53 files / 719 tests and all local checks pass. Defaults are off; it changes no
+shared environment/database/deployment. Restricted hosted demo cannot check
+literal quotations, acquire live Tafsir/web or rewrite; complete staging needs
+its separate accepted profile and assets. Read its hosted staging runbook.
 
-1. Read [Saleh's handoff](../operations/AI_FOUNDATION_HANDOFF.md) and this file.
-2. Inspect exact branch/worktree status and live agent state; preserve uncommitted
-   user/agent edits. Read the retained8772 UI report and screenshot; its successful
-   base-corpus assessment does not prove cache-window delivery. Diagnose the
-   missing cache candidates under #17 before treating the passage UI gate as passed.
-   Do not repeat paid calls merely to replace retained failures with a passing run.
-3. Review/finish the source-cleaning implementation and frozen controls; leave
-   migration/paid execution pending until the concrete branch/input guards are
-   audited. Then implement #17 diagnostics/budgets before runtime cleaning
-   activation, followed by #79 and the ordered tasks above.
-4. Publish the handoff and verified evidence with the current PR; recheck exact-head
-   quality/policy/dependency CI and Saleh state. Leave merge/closure to Saleh.
+Capacity #95 has actual local quota proof at source `a84ec9c`, evidence head
+`ba109f4`: twenty documents, one denied next attempt, no retry, exact draft return,
+two retained prior reports. Earlier batched browser timeouts remain retained.
+No session reset, quota increase, automatic resubmission or provider call occurred.
+Revision/review quota controls are offline only.
 
-External experiment receipts remain under
-`Project_Code/AI_Foundation/experiments/cache-passage-index-2026-10-05` and
-`experiments/integration-lead-v1`. The owning environment is outside the repository;
-use its documented variable names, not invented connection strings.
+1. **Finish delivery review (#8/#17):** publish selected fresh UI audit in cache PR
+   without replacing frozen source 53c757f; inspect exact-head quality/policy/dependency
+   checks. Saleh accepts #85 before #92. Source originals and experimental history stay intact.
+2. **Capacity feedback (#79):** active Sol worktree `79-capacity-feedback`, preserving owner #91.
+   Distinguish documents/revisions/reviews 429 capacity from network/burst failures.
+   Preserve draft/session/reports, remove fixed-cap retry and keep cancellation safe.
+   Draft #95, full local checks and actual document-quota UI verification are complete; recheck evidence-head CI and owner acceptance.
+   No quota increase, session reset or automatic resubmission.
+3. **Claim consistency and relevance (#11/#8):** representative mixed-writing
+   original-span/source-ID selection, valid-empty versus malformed output, safe editor
+   confirmation and passage-level reranking. The fresh case returned 13 sources including
+   unrelated material and used 14,490 assessment input tokens. Reduce distraction while
+   preserving restorable originals, attribution and source-family integrity.
+4. **Semantic calibration and AI-ReWrite (#13/#18/#38):** fresh scope field omitted
+   negation despite correct conditions/explanation. Test qualifier consistency across
+   explanation/conditions/negations/scope/citations; deduplicate Arabic copy. Preserve
+   modality, quotation and unsupported text through independent rewrite checks.
+   Stronger-thinking advantage remains unproven; use held-out independent judgments.
+5. **RAG expansion and report compaction (#5/#7/#8):** execute reviewed 170 contextual
+   passage plan across nine labels/independent works after source/rights selection.
+   Current 86 corpus and 16 pending cache originals are selected coverage. Cleaning is
+   lexical; cleaned embeddings/unified parent ranking need separate measured phases.
+   Do not discard remote footnotes/conditions or contaminate evaluation retrieval.
+6. **Bootstrap and shared staging (#81/#14/#20/#69), owner parallel:** copied cluster
+   roles break historical 0008 on fresh DBs. Add reviewed compatible bootstrap; never
+   rewrite history/drop roles. Verify current full deployment chain on a fresh/copy
+   environment, permitted hosted profile/assets/secrets/proxy, then a fresh actual
+   shared-UI report. Local research readiness is insufficient deployment proof.
+7. **Source/content acceptance and pilot (#4/#18/#21/#22/#27):** edition/rights pack,
+   independently adjudicated source-family-separated cases, editor observations and
+   measured benefit. Automated checks/model agreement are not scholarly acceptance.
+8. **Judging/demo handoff:** three reproducible supported/partial/failure cases,
+   outage/cancellation recovery and source/citation/rewrite narrative. Weights:
+   technical 25%, reliability 15%, innovation 15%, UX 10%, impact 20%, operations 10%,
+   presentation 5%; these are supplied weights, not awarded scores.
 
-Judging weights are technical25%, reliability15%, innovation15%, UX10%, impact20%,
-operations10% and presentation5%. Current missing proof includes accepted hosted
-end-to-end behavior, qualified evaluation, measured editor benefit and final demo.
+## Active claim-selection checkpoint (#11)
+
+Frozen baseline worktree `11-selection-binding` remains at `a84ec9c`. Its twelve
+public extraction-only calls retained two invalid bindings, six valid selections
+and four valid empty results; cost $0.001832175, no unknown billing. Both new
+historical-request responses mistyped a canonical claim ID; the validator correctly
+rejected them. The missing original historical raw response still prevents
+identifying that older rejection's exact cause. A bibliographic fragment was also
+selected as an assertion; valid binding does not imply correct claim extraction.
+
+Frozen alias worktree `11-selection-aliases` remains clean at `8fab08f`. C/E aliases
+resolve through exact maps; unknown/duplicate IDs stay rejected, original UTF16
+spans remain authoritative, and recognized citation framing has separate condition
+controls. All twelve comparison calls were retained: eight valid selections,
+four valid empty results, zero invalid bindings/provider failures; cost $0.001410035,
+no unknown billing. Every final selection and original span was identical across
+repeats. Combined alias/citation correction on selected cases is not an isolated
+causal estimate, religious accuracy score or stronger-thinking superiority.
+
+Active Sol Medium worktree is `11-selection-integration`, branch
+`saleh/11-selection-integration`, PR #99 at `b99e910`. It preserve-merges owner
+`f130560`; owner hosted adapter is unchanged. Full 53 files / 710 tests plus
+type/docs/policy/format/build pass. Root must review the exact two-case protocol,
+source/build/launcher/inputs and budgets before provider execution on localhost:8775.
+Use local report storage and the isolated cleaned child; do not change shared
+configuration, canonical corpus or frozen comparisons.
+
+External evidence: `AI_Foundation/experiments/claim-selection-binding-2026-10-05`,
+baseline/alias protocols V2, all first raw cells/results, independent
+`LEAD_BASELINE_AUDIT_V2.json` / `LEAD_ALIAS_AUDIT_V2.json` and continuation V3.
+Qualifier calibration and relevance pruning remain separate next work.
+
+## Resume procedure
+
+Inspect current Git/agent status first; preserve dirty work. Read exclusive protocols,
+UI_REPORT_V1, LEAD_UI_RESULT_AUDIT_V1 and UI_REVIEW_V1.jpg in
+`AI_Foundation/experiments/cache-delivery-diagnostics-2026-10-05`. Historical cleaning
+receipts remain in `source-content-cleaning-2026-10-05`; passage failures in
+`cache-passage-index-2026-10-05`. Confirm actual endpoint/roles before any SQL.
+Keep the primary checkout untouched. Recheck current PR/CI/deployment states;
+continue the first unfinished task rather than repeating completed paid diagnostics.

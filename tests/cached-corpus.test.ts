@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { withResearchPageCorpus } from '../apps/api/src/cached-corpus.js';
 import type { ClaimCorpusSearch } from '../apps/api/src/claim-retrieval.js';
 import type { ResearchPageCache } from '../apps/api/src/research-page-cache.js';
@@ -19,6 +19,7 @@ function setup() {
   return { base, cache, combined: withResearchPageCorpus(base, cache) };
 }
 describe('reusable research corpus before assessment', () => {
+  afterEach(() => vi.useRealTimers());
   it('keeps exact canonical references first while admitting bounded cached candidates', async () => {
     const { combined } = setup();
     expect((await combined.search('author assertion', ['2:1'])).map((r) => r.snapshotKey)).toEqual([
@@ -87,7 +88,7 @@ describe('reusable research corpus before assessment', () => {
     const { base, cache, combined } = setup();
     const rows = await combined.restore(['verse', 'web-cache:1']);
     expect(base.restore).toHaveBeenCalledWith(['verse'], undefined);
-    expect(cache.restore).toHaveBeenCalledWith(['web-cache:1'], undefined);
+    expect(cache.restore).toHaveBeenCalledWith(['web-cache:1'], expect.any(AbortSignal));
     expect(rows.map((r) => r.snapshotKey)).toEqual(['verse', 'tafsir-context', 'web-cache:1']);
   });
   it('preserves base retrieval when the optional cache is unavailable', async () => {
@@ -108,5 +109,125 @@ describe('reusable research corpus before assessment', () => {
     const controller = new AbortController();
     controller.abort();
     await expect(combined.search('assertion', [], controller.signal)).rejects.toThrow();
+  });
+  it('delivers slow cached success within an explicitly longer bounded search budget', async () => {
+    vi.useFakeTimers();
+    const { base, cache } = setup();
+    vi.mocked(cache.search).mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve([row('web-cache:slow')]), 3500)),
+    );
+    const combined = withResearchPageCorpus(base, cache, { timeoutMs: 5000 });
+    const pending = combined.searchWithDiagnostics!('assertion', []);
+    await vi.advanceTimersByTimeAsync(3501);
+    const result = await pending;
+    expect(result.evidence.map((r) => r.snapshotKey)).toContain('web-cache:slow');
+    expect(result.cache).toMatchObject({
+      outcome: 'success',
+      parentCandidateCount: 1,
+      selectedParentCount: 1,
+      budgetMs: 5000,
+    });
+  });
+  it('hard-races hung cache work and ignores its later success without changing base authority', async () => {
+    vi.useFakeTimers();
+    const { base, cache } = setup();
+    let finish!: (rows: SourceEvidence[]) => void;
+    let receivedSignal: AbortSignal | undefined;
+    vi.mocked(cache.search).mockImplementation((_query, signal) => {
+      receivedSignal = signal;
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    });
+    const combined = withResearchPageCorpus(base, cache, { timeoutMs: 25 });
+    const pending = combined.searchWithDiagnostics!('assertion', []);
+    await vi.advanceTimersByTimeAsync(26);
+    const result = await pending;
+    expect(result.evidence.map((r) => r.snapshotKey)).toEqual(['verse', 'related']);
+    expect(result.cache).toMatchObject({
+      outcome: 'timeout',
+      failureCodes: ['cache_timeout'],
+      selectedParentCount: 0,
+    });
+    expect(receivedSignal?.aborted).toBe(true);
+    finish([row('web-cache:late')]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(result.evidence.map((r) => r.snapshotKey)).toEqual(['verse', 'related']);
+  });
+  it('propagates caller abort even if both base and cache ignore cancellation', async () => {
+    const { base, cache } = setup();
+    vi.mocked(base.search).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(cache.search).mockImplementation(() => new Promise(() => {}));
+    const controller = new AbortController();
+    const combined = withResearchPageCorpus(base, cache, { timeoutMs: 100 });
+    const pending = combined.searchWithDiagnostics!('assertion', [], controller.signal);
+    const rejected = expect(pending).rejects.toThrow('caller cancelled');
+    controller.abort(new Error('caller cancelled'));
+    await rejected;
+  });
+  it('preserves partial zero-row diagnostics per query without global crossover', async () => {
+    const { base, cache } = setup();
+    cache.searchWithDiagnostics = async (query) =>
+      query === 'partial'
+        ? {
+            evidence: [],
+            diagnostics: {
+              outcome: 'partial',
+              elapsedMs: 1,
+              parentCandidateCount: 0,
+              failureCodes: ['content_unavailable'],
+            },
+          }
+        : {
+            evidence: [row('web-cache:complete')],
+            diagnostics: {
+              outcome: 'success',
+              elapsedMs: 1,
+              parentCandidateCount: 1,
+              failureCodes: [],
+            },
+          };
+    const combined = withResearchPageCorpus(base, cache);
+    const [partial, complete] = await Promise.all([
+      combined.searchWithDiagnostics!('partial', []),
+      combined.searchWithDiagnostics!('complete', []),
+    ]);
+    expect(partial.cache).toMatchObject({
+      outcome: 'partial',
+      parentCandidateCount: 0,
+      failureCodes: ['content_unavailable'],
+    });
+    expect(complete.cache).toMatchObject({
+      outcome: 'success',
+      parentCandidateCount: 1,
+      failureCodes: [],
+    });
+    expect(complete.evidence.map((r) => r.snapshotKey)).toContain('web-cache:complete');
+  });
+  it('bounds hung optional restore, preserves base families and ignores late rows', async () => {
+    vi.useFakeTimers();
+    const { base, cache } = setup();
+    let finish!: (rows: SourceEvidence[]) => void;
+    let signal: AbortSignal | undefined;
+    vi.mocked(cache.restore).mockImplementation((_keys, received) => {
+      signal = received;
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    });
+    const combined = withResearchPageCorpus(base, cache, { timeoutMs: 25 });
+    const pending = combined.restoreWithDiagnostics!(['verse', 'web-cache:1']);
+    await vi.advanceTimersByTimeAsync(26);
+    const result = await pending;
+    expect(result.evidence.map((row) => row.snapshotKey)).toEqual(['verse', 'tafsir-context']);
+    expect(result.cacheRestore).toMatchObject({
+      outcome: 'timeout',
+      restoredParentCount: 0,
+      failureCodes: ['cache_timeout'],
+    });
+    expect(signal?.aborted).toBe(true);
+    finish([row('web-cache:late')]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(result.evidence.map((row) => row.snapshotKey)).toEqual(['verse', 'tafsir-context']);
   });
 });

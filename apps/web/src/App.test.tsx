@@ -469,6 +469,35 @@ describe('Basirah web flow', () => {
     expect(screen.getByText('كيف تساعد مشاركتي في تطوير بصيرة؟')).not.toBeNull();
     expect(screen.queryByText('ماذا يقرأ المشغّل الصوتي؟')).toBeNull();
     expect(screen.queryByText('شرح صوتي للنتيجة')).toBeNull();
+    expect(screen.getByText(/لا تصدر فتوى أو حكمًا شرعيًا/)).not.toBeNull();
+    expect(screen.getByText(/مجموعة منتقاة من النصوص والمراجع الإسلامية الموثقة/)).not.toBeNull();
+    expect(screen.getByText(/احتفظ بالرقم المرجعي/)).not.toBeNull();
+  });
+
+  it('keeps the revised homepage copy concise and identifies challenge partners', () => {
+    render(<App />);
+
+    expect(screen.getByText('يمكنك البدء كضيف.')).not.toBeNull();
+    expect(screen.queryByText(/تنتهي صلاحية الوصول للمسودة بعد 24 ساعة/)).toBeNull();
+    expect(screen.getByRole('heading', { name: 'مراجعة واضحة بالدليل وحدوده' })).not.toBeNull();
+    expect(
+      screen.getByRole('heading', { name: 'جهات تصنع الأثر في تحدي المحتوى الإسلامي' }),
+    ).not.toBeNull();
+    expect(screen.getByRole('img', { name: 'وزارة الاتصالات وتقنية المعلومات' })).not.toBeNull();
+    expect(
+      screen.getByRole('img', {
+        name: 'الهيئة السعودية للبيانات والذكاء الاصطناعي (سدايا)',
+      }),
+    ).not.toBeNull();
+    expect(screen.getByRole('img', { name: 'شركة التحول التقني' })).not.toBeNull();
+    expect(screen.getByRole('img', { name: 'Future Frontiers' })).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'الموقع الرسمي للتحدي' }).getAttribute('href')).toBe(
+      'https://islamicaich.org/#partners-sponsors',
+    );
+    expect(
+      screen.getByRole('link', { name: 'كيف نعرض المصادر في النتيجة' }).getAttribute('href'),
+    ).toBe('#sources');
+    expect(screen.getByRole('heading', { name: 'مصادر موثقة' })).not.toBeNull();
   });
 
   it('renders the authorized reviewer workspace with a simple labelled sidebar', () => {

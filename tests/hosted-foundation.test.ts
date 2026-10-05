@@ -6,6 +6,23 @@ import {
 import { sha256 } from '../apps/api/src/foundation.js';
 
 const revisionId = '33333333-3333-4333-8333-333333333333';
+const hostedDemoEnvironment = {
+  FOUNDATION_ENABLED: 'true',
+  FOUNDATION_HOSTED_DEMO: 'true',
+  FOUNDATION_SEMANTIC_ENABLED: 'true',
+  FOUNDATION_CLAIM_RETRIEVAL_ENABLED: 'true',
+  NODE_ENV: 'production',
+  RAILWAY_ENVIRONMENT_NAME: 'staging',
+  BASIRAH_DEPLOYMENT_ENVIRONMENT: 'staging',
+  FOUNDATION_STAGING_SERVICE_ID: '4d15a8f1-0028-42d6-adfa-cef07e55a9bc',
+  RAILWAY_SERVICE_ID: '4d15a8f1-0028-42d6-adfa-cef07e55a9bc',
+  BASIRAH_DEPLOYMENT_REF: 'refs/heads/development',
+  BASIRAH_DEPLOYMENT_SHA: '1'.repeat(40),
+  RAILWAY_GIT_BRANCH: 'development',
+  RAILWAY_GIT_COMMIT_SHA: '1'.repeat(40),
+  DATABASE_TLS_MODE: 'require',
+  FOUNDATION_CORPUS_TLS_MODE: 'verify-full',
+} satisfies NodeJS.ProcessEnv;
 
 it('keeps the local research preview and hosted demo mutually exclusive', () => {
   expect(
@@ -14,15 +31,7 @@ it('keeps the local research preview and hosted demo mutually exclusive', () => 
       '127.0.0.1',
     ),
   ).toBe('local_research');
-  expect(
-    foundationRuntimeMode({
-      FOUNDATION_ENABLED: 'true',
-      FOUNDATION_HOSTED_DEMO: 'true',
-      FOUNDATION_SEMANTIC_ENABLED: 'true',
-      FOUNDATION_CLAIM_RETRIEVAL_ENABLED: 'true',
-      NODE_ENV: 'production',
-    }),
-  ).toBe('hosted_demo');
+  expect(foundationRuntimeMode(hostedDemoEnvironment)).toBe('hosted_demo');
   expect(() =>
     foundationRuntimeMode({
       FOUNDATION_ENABLED: 'true',
@@ -54,6 +63,17 @@ it('requires semantic claim retrieval in the hosted demo', () => {
   expect(() =>
     foundationRuntimeMode({ FOUNDATION_ENABLED: 'true', FOUNDATION_HOSTED_DEMO: 'true' }),
   ).toThrow('HOSTED_DEMO_REQUIRES_SEMANTIC_RETRIEVAL');
+});
+
+it('binds the hosted demo to the accepted staging service, source and verified corpus TLS', () => {
+  for (const environment of [
+    { ...hostedDemoEnvironment, BASIRAH_DEPLOYMENT_ENVIRONMENT: 'production' },
+    { ...hostedDemoEnvironment, RAILWAY_SERVICE_ID: '00000000-0000-0000-0000-000000000000' },
+    { ...hostedDemoEnvironment, RAILWAY_GIT_BRANCH: 'main' },
+    { ...hostedDemoEnvironment, FOUNDATION_CORPUS_TLS_MODE: 'require' },
+    { ...hostedDemoEnvironment, DATABASE_TLS_MODE: 'disable' },
+  ])
+    expect(() => foundationRuntimeMode(environment)).toThrow('HOSTED_DEMO_ENVIRONMENT_MISMATCH');
 });
 
 it('creates a bound research-only draft intake without inventing source matches', async () => {

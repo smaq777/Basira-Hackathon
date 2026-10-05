@@ -1,6 +1,49 @@
 # Current delivery status
 
+**Shared staging activation (#114):** The selected Railway staging service now
+runs the bounded hosted-demo path with a distinct report worker login, the pinned
+86-passage Neon research corpus and OpenRouter assessment. A fresh browser request
+rendered a durable partial report with provisional assessment and 16 candidate
+sources. The run also exposed weak retrieval relevance and unavailable canonical
+quotation matching, so production remains disabled and all 17 source editions
+remain pending. See the [activation evidence](evidence/2026-10-05-hosted-demo-activation.md).
+
+**Hosted research staging (#69/#14/#20):** A separate explicit profile now permits
+the selected Railway staging service to run real Foundation research, with matching
+service/environment/development declarations, verified TLS and unchanged ownership,
+quotas and source/citation guards. Local/default-off behavior remains. This is a
+review proposal; no hosted activation is claimed. See [boundary and remaining
+evidence](evidence/2026-10-05-hosted-staging-profile.md) and
+[operator setup](operations/HOSTED_RESEARCH_STAGING.md).
+
 ## Latest development evidence — 5 October
+
+**18:55 UTC checkpoint (#11):** Saleh merged #85/#92/#95/#99/#100/#104/#87;
+development was observed at `ce54db6`. Two real first-outcome mixed-writing tests
+on frozen b99 source passed exact claim/source/window/citation delivery checks;
+both provisionally supported the author claim. [UI evidence](evidence/2026-10-05-mixed-writing-ui.md)
+retains locator-as-quotation, Arabic qualifier/copy and escalation defects.
+The [resumption checklist](planning/AI_FOUNDATION_RESUME.md) gives the updated
+order. Owner acceptance and local proof do not establish shared live activation.
+Unused failed Neon cleaning leaf was deleted after data-equivalence/usage checks;
+four used branches and their data remain unchanged. Historical failures are kept.
+
+**Copied-role bootstrap (#81):** An explicit migration-runner compatibility profile
+validates and reuses an existing safe research group role without changing
+historical SQL/checksums or other role grants. It records a separate atomic
+execution receipt. [Runbook](operations/COPIED_ROLE_BOOTSTRAP.md) and
+[actual evidence](evidence/2026-10-05-copied-role-bootstrap.md) cover strict empty
+and copied-role recovery through owner chain 0014, preserved grants and negative
+controls. Fresh Neon/cleaning0015 parity remains separate; shared configuration
+is unchanged.
+
+**Exact extraction selection (#11):** Prompt/pipeline v1.9 sends short C/E aliases and translates them exactly through a request-owned canonical map before the unchanged span/source validator. Optional report-local diagnostics preserve fixed rejection counts and hashes; valid-empty reconsideration remains distinct from malformed binding. A separate syntactic correction excludes manifest-bound bracketed citation framing while preserving author conditions. Twelve retained baseline public calls include two repeated candidate-ID binding failures and a bibliographic false assertion; the frozen changed-packet comparison retained eight valid selections/four empty selections with no binding or provider failures, repeat-identical exact canonical spans, and independent audit. The selected two-to-zero binding change is not general reliability or full UI acceptance. See [selected evidence and limits](evidence/2026-10-05-claim-selection-aliases.md).
+
+**Guest capacity feedback (#79):** Known documents/revisions/reviews capacity responses now have a separate Arabic explanation and return-to-text action, with no fixed-limit retry, automatic resubmission or session replacement. Transient rate/network retries remain distinct. Offline UI/client validation precedes lead live rechecking; server quotas and ownership are unchanged. See [capacity evidence](evidence/2026-10-05-capacity-feedback.md).
+
+**Bounded cache delivery (#17):** Optional report-local diagnostics now distinguish successful empty retrieval, partial stage fallback, timeout and unavailable cache. Search and restore hard-race optional work; research configuration can reserve assessment time and extend coherent phase ceilings while ordinary defaults remain unchanged. Full offline checks passed. One audited loopback UI report on frozen `53c757f` delivered six exact cleaned-window preferences and an 8881 citation with real models; unrelated candidates, a scope-field negation omission and large packets remain unresolved. This is selected local evidence, not shared staging or production activation. See [evidence and limitations](evidence/2026-10-05-cache-delivery-budgets.md).
+
+**Conservative source cleaning (#8):** Default-off joint classification labels exact original blocks and derives lexical content views only when model labels and narrow structural rules agree. Originals and v1 vectors remain unchanged. The SQL `42702` failed child is preserved. Corrected isolated validation passed fourteen role/window probes, eight selected public joint-classifier calls and first-repeat-only readback of four views/eight windows. Actual reader enrichment delivered six verified hints; parent 8880's topic varied across repeats. Owner ticket migration `0014` is preserved; unapplied deployment cleaning uses `0015`. Full UI delivery, deployment-chain parity, source approval and general model reliability remain unclaimed. See [scope and retained evidence](evidence/2026-10-05-source-content-views.md).
 
 **Passage index (#8, related #11):** A separate default-off implementation adds
 offline bounded vector backfill and per-claim verified retained-page delivery.
@@ -139,7 +182,7 @@ without weakening source validation. Repeated editorial notes are consolidated
 with their affected passages. Claim-driven retrieval and a persistent typed Neon
 source corpus are now the next implementation priorities.
 
-The fresh repository baseline contains the completed foundation and architecture work. Current validation is recorded by this repository's GitHub Actions runs. [Issue #27](https://github.com/smaq777/Basira-Hackathon/issues/27) tracks the judge-ready repository and deployment handoff.
+The repository contains the current foundation, architecture, and integrated product work. Current validation is recorded by this repository's GitHub Actions runs. [Issue #27](https://github.com/smaq777/Basira-Hackathon/issues/27) tracks the judge-ready repository and deployment handoff.
 
 | Area                           | Actual state                                                                                                                                                                                                                                                                               |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
