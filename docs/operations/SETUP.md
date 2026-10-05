@@ -3,7 +3,7 @@
 ## Optional retained-page passage index
 
 `FOUNDATION_WEB_CACHE_PASSAGES_ENABLED=false` keeps the legacy cache path. Enabling
-it requires the existing research cache configuration, reviewed migration `0011`
+it requires the existing research cache configuration, reviewed migrations `0011`/`0012`
 and an explicit offline backfill. Read the [bounded operation and rollback](../evidence/2026-10-05-cache-passage-index.md).
 Runtime discovery does not embed a page's passages automatically.
 

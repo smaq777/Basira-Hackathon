@@ -2,7 +2,8 @@
 
 Migration `0011` adds insert-only retained-page metadata and pinned vectors with
 exact UTF16/codepoint parent bindings. It requires `0010` and isolated fresh/copy
-validation. The application flag defaults off. See the
+validation. Forward `0012` fixes empty-prefix UTF16 length discovered by a valid
+Unicode insertion probe; apply both before enabling. The application flag defaults off. See the
 [passage-index evidence](../docs/evidence/2026-10-05-cache-passage-index.md).
 
 Basirah uses reviewed, forward-only SQL migrations. Production migrations are explicit operator actions; the application never runs them at startup.

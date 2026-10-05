@@ -37,7 +37,11 @@ After isolated migration validation, use `node --import tsx
 scripts/backfill-cache-passages.mts --manifest <public-parent-manifest.json>
 --receipt <new-receipt.json>` from the repo. Default mode is read-only. The manifest
 pins policy SHA-256 and one to eight exact retained parent keys/hashes/URLs. Supply
-`DATABASE_URL_UNPOOLED` only to this operator process; no connection string is printed.
+`FOUNDATION_PASSAGE_READER_DATABASE_URL` for the existing research reader and, only
+for apply mode, `FOUNDATION_PASSAGE_WRITER_DATABASE_URL` for the existing cache-writer
+login. Both must be distinct principals on the same direct host/database with verified
+TLS. Do not grant permanent writer membership to the owner to make this tool run.
+No connection string is printed or written to a receipt.
 
 `--apply --max-embeddings 0` inserts metadata only. Paid execution additionally
 requires `--allow-paid --max-embeddings <0..256>` and the owning OpenRouter key.
@@ -60,7 +64,17 @@ late SQL, incompatible vectors and shared admission rejection. The complete
 cache/corpus/retrieval/assessor regression uses two distinct dense middle windows from
 the same existing seed. Each claim receives its own window; cross-claim citation fails.
 
-Isolated SQL and paid diagnostics are pending the stable code/migration freeze.
+The first isolated schema application succeeded, but functional insertion failed:
+`cache_utf16_length('')` returned 1, rejecting valid zero-prefix bindings. Forward
+migration `0012` filters the empty row; applied `0011` remains unchanged. The initial
+single-pool operator also failed because the owner cannot set the cache-writer role;
+the corrected operator uses separate reader/writer connections. All failures are
+retained. Temporary probe membership was rolled back and independently read back
+as unavailable. Functional SQL/least-privilege CLI and paid diagnostics await the new
+stable freeze. Fresh-database migration failed at copied role creation in `0008`;
+this separate [bootstrap issue #81](https://github.com/smaq777/Basira-Hackathon/issues/81)
+retains the empty database and historical SQL without modification.
+
 Frozen external `VALIDATION_PLAN_V1.json` remains unchanged. A separate final protocol
 will bind the actual child receipt and committed hashes. Comparison holds all 16
 eligible legacy parents constant while indexing only four selected originals. Partial

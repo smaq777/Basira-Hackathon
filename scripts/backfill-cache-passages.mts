@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { loadSourcePolicy } from '../apps/api/src/source-policy.js';
 import { createResearchPagePassageIndex } from '../apps/api/src/research-page-passage-index.js';
 import { createOpenRouterQueryEmbedding } from '../apps/api/src/query-embedding.js';
+import { cachePassageConnections } from './cache-passage-connections.js';
 const { values } = parseArgs({
   options: {
     manifest: { type: 'string' },
@@ -56,20 +57,30 @@ if (policy.sha256 !== manifest.policySha256) throw Error('POLICY_MANIFEST_MISMAT
 // Reserve the receipt before any connection or paid call; never overwrite prior evidence.
 const receipt = await import('node:fs/promises').then((fs) => fs.open(values.receipt!, 'wx'));
 try {
-  const raw = process.env.DATABASE_URL_UNPOOLED;
-  if (!raw) throw Error('DIRECT_ISOLATED_DATABASE_REQUIRED');
-  const url = new URL(raw);
-  url.searchParams.delete('sslmode');
-  url.searchParams.delete('channel_binding');
+  const connections = cachePassageConnections(
+    process.env.FOUNDATION_PASSAGE_READER_DATABASE_URL,
+    process.env.FOUNDATION_PASSAGE_WRITER_DATABASE_URL,
+    values.apply,
+  );
   const mode = process.env.DATABASE_TLS_MODE || 'verify-full';
   if (!['verify-full', 'require', 'disable'].includes(mode))
     throw Error('DATABASE_TLS_MODE_INVALID');
   const pool = new pg.Pool({
-    connectionString: url.toString(),
+    connectionString: connections.reader,
     max: 2,
+    connectionTimeoutMillis: 10000,
     ssl: mode === 'disable' ? false : { rejectUnauthorized: mode === 'verify-full' },
     application_name: 'basirah-cache-passage-backfill',
   });
+  const writerPool = connections.writer
+    ? new pg.Pool({
+        connectionString: connections.writer,
+        max: 2,
+        connectionTimeoutMillis: 10000,
+        ssl: mode === 'disable' ? false : { rejectUnauthorized: mode === 'verify-full' },
+        application_name: 'basirah-cache-passage-backfill-writer',
+      })
+    : undefined;
   try {
     const embed = maxEmbeddings
       ? createOpenRouterQueryEmbedding({
@@ -79,7 +90,7 @@ try {
       : undefined;
     const index = createResearchPagePassageIndex({
       readerPool: pool,
-      writerPool: values.apply ? pool : undefined,
+      writerPool,
       policy,
       embed,
     });
@@ -119,6 +130,7 @@ try {
       }),
     );
   } finally {
+    if (writerPool) await writerPool.end();
     await pool.end();
   }
 } catch {
