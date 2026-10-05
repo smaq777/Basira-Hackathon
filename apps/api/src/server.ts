@@ -152,7 +152,9 @@ async function initializeFoundation() {
       corpusUrl.searchParams.delete('channel_binding');
       corpusPool = new Pool({
         connectionString: corpusUrl.toString(),
-        ssl: databaseTls(process.env.FOUNDATION_CORPUS_TLS_MODE || 'verify-full'),
+        ssl: databaseTls(process.env.FOUNDATION_CORPUS_TLS_MODE || 'verify-full', process.env, {
+          ca: process.env.FOUNDATION_CORPUS_CA_CERT,
+        }),
         max: semanticBudget.corpusPoolMax,
         connectionTimeoutMillis: semanticBudget.corpusConnectionTimeoutMs,
         idleTimeoutMillis: 30_000,
@@ -228,7 +230,9 @@ async function initializeFoundation() {
         cacheUrl.searchParams.delete('channel_binding');
         webCachePool = new Pool({
           connectionString: cacheUrl.toString(),
-          ssl: databaseTls(process.env.FOUNDATION_CORPUS_TLS_MODE || 'verify-full'),
+          ssl: databaseTls(process.env.FOUNDATION_CORPUS_TLS_MODE || 'verify-full', process.env, {
+            ca: process.env.FOUNDATION_CORPUS_CA_CERT,
+          }),
           max: 2,
           connectionTimeoutMillis: 5_000,
           idleTimeoutMillis: 30_000,
