@@ -12,6 +12,14 @@ This supersedes earlier inactive/62-passage local status below. Source approval,
 the planned 170-passage expansion, owner acceptance and shared staging deployment
 remain separate.
 
+**Source-free claim selection (#11):** Semantic v1.8 separates assertion selection
+from evidence support and records one bounded model re-selection after a valid
+empty result with remaining candidates. Both requests share the existing
+extraction phase budget; questions and classified quotation-only writing still
+bypass selection. A second empty result stays partial with unselected coverage;
+no inventory candidate becomes a claim automatically. See
+[diagnostic and limits](evidence/2026-10-05-claim-selection-recovery.md).
+
 **Claim and passage follow-up (#11):** Semantic v1.7 binds model selections to a
 deterministic inventory of original author spans and sends bounded exact source
 passages with immutable hashes and UTF16 offsets, including late-page context.
