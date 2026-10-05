@@ -6,12 +6,37 @@ here are real, but are not automatically present in a Vercel/Railway deployment.
 
 ## Message to the integration agent
 
-Current review instructions, 5 October 2026, 17:23 UTC: development `845d608`
-includes owner #91 saved-result fallback. Review cleaning #85 (`845ae1a`), then
-cache delivery #92 (tested code `53c757f`, documentation head `79ff315`), capacity
-#95 (`a84ec9c`, preserving #91) and this handoff #87. Preserve owner ticket
-migrations 0013/0014; deployment cleaning is 0015. Acceptance and deployment
-remain Saleh's responsibility. Read the dated evidence and recheck exact-head CI.
+Current review instructions, 5 October 2026, 18:05 UTC: development `f130560`
+includes owner #91 saved-result fallback and #97 bounded hosted demo. Review
+cleaning #85 (`845ae1a`), cache delivery #92 (tested code `53c757f`, documentation
+head `79ff315`), capacity #95 (tested code `a84ec9c`, evidence head `ba109f4`),
+claim-selection #99 (`b99e910`, preserving #97), explicit full staging #100
+(`b38d95c`, preserving #97), then this handoff #87. These are draft proposals;
+Saleh owns acceptance, merge, configuration and deployment. Preserve owner ticket
+migrations 0013/0014; unapplied deployment cleaning is 0015. Recheck exact-head CI.
+
+PR #97's hosted demo uses pinned RAG/model assessment without Python assets.
+It explicitly cannot check literal quotations, acquire live Tafsir/web pages or
+rewrite. PR #100 proposes a separate complete staging research profile with
+Python/index assets and operator-verified staging service/source bindings; all
+provider flags remain separately selected and defaults remain off. Its full
+post-owner-merge check passed 53 files / 719 tests and type/docs/policy/format/build.
+No shared environment, database migration or deployment was changed.
+
+PR #99 integrates canonical C/E model-facing aliases and recognized citation
+framing. In the frozen extraction comparison, all twelve first calls were valid:
+eight selections, four empty results, zero invalid bindings, compared with two
+invalid bindings in the retained baseline. Every original selected span was
+identical across repetitions. This selected binding evidence is not a religious
+accuracy score. Integrated checks passed 53 files / 710 tests; two fresh mixed
+UI cases are planned separately and have not yet run.
+
+PR #95 now has a real local document-quota UI receipt: twenty documents including
+eighteen synthetic drafts and two retained earlier documents. The next attempt
+showed document-capacity explanation without retry; returning restored the exact
+text. Two prior report rows remained. Revision/review quota controls remain
+offline tests. Evidence is external in `capacity-feedback-2026-10-05`; source
+`a84ec9c` and documentation `ba109f4` are distinct.
 
 For a missing database/RAG configuration, distinguish the report database
 `basirah_integration_20261004` from Neon `basirah_research`. The latter is in
@@ -25,13 +50,11 @@ expect them in the clone, expose them through Vite or paste their values into
 GitHub. Shared staging needs its own authorized server-side configuration and
 Foundation assets; merging code does not provision them.
 
-At 17:03 UTC the actual Vercel capabilities URL still returned 404, while Railway
-was ready at migration 0014 with Foundation, research, semantic and rewrite
-disabled and no live providers. Verify the UI proxy, hosted activation boundary,
-assets and server environment under #69/#14/#20, then a fresh persisted report
-through the shared UI. The current live research gate requires loopback;
-review an explicit hosted profile before deployment. Follow the
-[resumption checklist](../planning/AI_FOUNDATION_RESUME.md) for active #11 work.
+The latest post-#97 read-only check still found Vercel's capabilities URL at 404. Railway was ready at migration 0014, with Foundation, research, hosted demo,
+semantic and rewrite disabled and no live providers. Owner code progress does
+not activate hosted AI. Verify selected proxy, deployed source/service receipt,
+server credentials/assets and capability flags, then a fresh persisted report
+through the shared UI. Follow the [resumption checklist](../planning/AI_FOUNDATION_RESUME.md).
 
 Latest checkpoint, 5 October 2026, 16:48 UTC: owner development `661fef89` includes
 #88/#89 direct human-ticket intake and contact validation. Cleaning draft #85 is
@@ -222,11 +245,13 @@ The selected report still includes unrelated candidate sources, and its scope
 wording omits a negation preserved elsewhere. Claim relevance, compact evidence
 and qualifier consistency remain priorities; successful delivery does not erase them.
 
-All research/provider flags default off. Current live semantic/retrieval/discovery
-activation requires a non-production loopback research preview. It cannot simply
-be copied into a public production process. Review the staging boundary and API
-proxy in PR #71 / issue #69, choose an explicitly permitted hosted profile, then
-verify a fresh report through the actual shared UI after owner acceptance.
+All research/provider flags default off. The original full research activation
+requires a non-production loopback preview. Owner #97 adds a restricted hosted
+demo without literal quotation checking; proposed #100 adds a distinct full
+staging profile with explicit service/source/TLS configuration. Operator-declared
+bindings are trusted configuration, not cryptographic deployment attestation.
+Review the issue #69 proxy and profile/assets runbook, then verify a fresh report
+through the actual shared UI after owner acceptance.
 `/ready` alone does not prove RAG retrieval or semantic assessment. See
 [setup](SETUP.md), [passage evidence](../evidence/2026-10-05-cache-passage-index.md)
 and [current delivery priorities](../planning/AI_FOUNDATION_NEXT.md).

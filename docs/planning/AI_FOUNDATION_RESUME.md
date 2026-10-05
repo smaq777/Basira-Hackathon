@@ -1,6 +1,6 @@
 # AI Foundation resumption checklist — 5 October 2026
 
-Checkpoint: 17:23 UTC. Continue local research integration and remaining priorities;
+Checkpoint: 18:05 UTC. Continue local research integration and remaining priorities;
 owner PR acceptance does not prevent isolated implementation. Saleh alone accepts,
 merges and deploys shared releases. This document is a continuation record, not a
 completion or acceptance receipt. Read the [integration handoff](../operations/AI_FOUNDATION_HANDOFF.md).
@@ -56,16 +56,18 @@ completion or acceptance receipt. Read the [integration handoff](../operations/A
 
 ## Remaining priorities, in order
 
-Later owner checkpoint: development `845d608` adds #91 saved-result fallback when
-connected analysis is unavailable. Capacity draft #95 now preserves that owner
-change at `a84ec9c4d1fa457e0e0f1c70621cb4366c420071`. Focused 69 tests and full
-51 files / 684 tests plus all local checks pass. Policy/dependency CI succeeded;
-all exact-head quality, policy and dependency runs succeeded in the agent's retained
-`CI_A84_V2.json` snapshot. Recheck before acceptance. Root reviewed both unavailable
-and capacity catch paths. Providers-disabled UI on localhost:8774 saved synthetic
-drafts and returned their text unchanged; the actual quota-denial screen remains
-unverified. Browser automation timed out on a batched transition. Preserve the
-session and prior reports; resume from observed state rather than reset its quota.
+Latest owner development is `f130560`, including #91 saved-result fallback and
+#97 restricted hosted demo. Full staging draft #100 at `b38d95c` preserves #97;
+53 files / 719 tests and all local checks pass. Defaults are off; it changes no
+shared environment/database/deployment. Restricted hosted demo cannot check
+literal quotations, acquire live Tafsir/web or rewrite; complete staging needs
+its separate accepted profile and assets. Read its hosted staging runbook.
+
+Capacity #95 has actual local quota proof at source `a84ec9c`, evidence head
+`ba109f4`: twenty documents, one denied next attempt, no retry, exact draft return,
+two retained prior reports. Earlier batched browser timeouts remain retained.
+No session reset, quota increase, automatic resubmission or provider call occurred.
+Revision/review quota controls are offline only.
 
 1. **Finish delivery review (#8/#17):** publish selected fresh UI audit in cache PR
    without replacing frozen source 53c757f; inspect exact-head quality/policy/dependency
@@ -73,7 +75,7 @@ session and prior reports; resume from observed state rather than reset its quot
 2. **Capacity feedback (#79):** active Sol worktree `79-capacity-feedback`, preserving owner #91.
    Distinguish documents/revisions/reviews 429 capacity from network/burst failures.
    Preserve draft/session/reports, remove fixed-cap retry and keep cancellation safe.
-   Draft #95 and local full checks are complete; finish CI and actual UI verification.
+   Draft #95, full local checks and actual document-quota UI verification are complete; recheck evidence-head CI and owner acceptance.
    No quota increase, session reset or automatic resubmission.
 3. **Claim consistency and relevance (#11/#8):** representative mixed-writing
    original-span/source-ID selection, valid-empty versus malformed output, safe editor
@@ -105,29 +107,35 @@ session and prior reports; resume from observed state rather than reset its quot
 
 ## Active claim-selection checkpoint (#11)
 
-Sol Medium worktree `11-selection-binding` starts at `a84ec9c`. Its frozen baseline
-protocol V2 was independently reviewed before twelve public extraction-only calls
-(six fixtures, two repetitions; no retry, assessment, web, embedding or SQL calls).
-All twelve responses were retained: two invalid bindings, six binding-valid
-selections and four valid empty results. Recorded response cost was $0.001832175;
-there was no unknown billing. These counts describe binding, not religious accuracy.
+Frozen baseline worktree `11-selection-binding` remains at `a84ec9c`. Its twelve
+public extraction-only calls retained two invalid bindings, six valid selections
+and four valid empty results; cost $0.001832175, no unknown billing. Both new
+historical-request responses mistyped a canonical claim ID; the validator correctly
+rejected them. The missing original historical raw response still prevents
+identifying that older rejection's exact cause. A bibliographic fragment was also
+selected as an assertion; valid binding does not imply correct claim extraction.
 
-Both new repetitions of the exact historical request mistyped one character in
-the owned claim ID. The validator correctly rejected that proposal. The original
-historical response is missing, so its exact rejection cause remains unknown.
-The explicit-reference control also selected `لقمان: 31:15]` as an assertion;
-binding-valid output therefore does not imply correct claim extraction.
+Frozen alias worktree `11-selection-aliases` remains clean at `8fab08f`. C/E aliases
+resolve through exact maps; unknown/duplicate IDs stay rejected, original UTF16
+spans remain authoritative, and recognized citation framing has separate condition
+controls. All twelve comparison calls were retained: eight valid selections,
+four valid empty results, zero invalid bindings/provider failures; cost $0.001410035,
+no unknown billing. Every final selection and original span was identical across
+repeats. Combined alias/citation correction on selected cases is not an isolated
+causal estimate, religious accuracy score or stronger-thinking superiority.
 
-Next implementation is an exact C/E alias map for model-facing selection and
-fixed-code report-local diagnostics, preserving canonical IDs, original UTF16
-spans and strict unknown/duplicate rejection. Recognized bracketed citation
-framing needs a separate commit with author-condition controls. Freeze changed
-packets and obtain lead review before paid comparison; do not replace baseline
-outcomes. Qualifier calibration and relevance pruning remain separate work.
+Active Sol Medium worktree is `11-selection-integration`, branch
+`saleh/11-selection-integration`, PR #99 at `b99e910`. It preserve-merges owner
+`f130560`; owner hosted adapter is unchanged. Full 53 files / 710 tests plus
+type/docs/policy/format/build pass. Root must review the exact two-case protocol,
+source/build/launcher/inputs and budgets before provider execution on localhost:8775.
+Use local report storage and the isolated cleaned child; do not change shared
+configuration, canonical corpus or frozen comparisons.
 
-External continuation evidence is in
-`AI_Foundation/experiments/claim-selection-binding-2026-10-05`: protocol V2,
-`LEAD_BASELINE_RELEASE_V2.json`, all twelve raw cells, results and analysis.
+External evidence: `AI_Foundation/experiments/claim-selection-binding-2026-10-05`,
+baseline/alias protocols V2, all first raw cells/results, independent
+`LEAD_BASELINE_AUDIT_V2.json` / `LEAD_ALIAS_AUDIT_V2.json` and continuation V3.
+Qualifier calibration and relevance pruning remain separate next work.
 
 ## Resume procedure
 
