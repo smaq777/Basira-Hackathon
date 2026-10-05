@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { isSafeDraftText, MAX_DRAFT_LENGTH } from '../../../packages/contracts/src/draft-text.js';
 import {
   compareQuotation,
   extractClaimCandidates,
@@ -11,7 +12,12 @@ import {
 } from '../../../packages/contracts/src/index.js';
 
 export const PreflightInputSchema = z
-  .object({ text: z.string().trim().min(20).max(3000) })
+  .object({
+    text: z
+      .string()
+      .max(MAX_DRAFT_LENGTH)
+      .refine((text) => text.trim().length >= 20 && isSafeDraftText(text)),
+  })
   .strict();
 
 const ContentTypeSchema = z.enum([
@@ -87,10 +93,15 @@ export const PreflightResponseSchema = z
     corpusVersion: z.literal('software-fixture-v1'),
     inputHash: z.string().length(64),
     offsetUnit: z.literal('utf16_code_unit'),
-    annotations: z.array(PreflightAnnotationSchema).max(20),
+    annotations: z.array(PreflightAnnotationSchema).max(80),
     findings: z.array(PreflightFindingSchema).max(5),
     warnings: z.array(
-      z.enum(['unbalanced_quotation_marks', 'candidate_limit_reached', 'no_claims_detected']),
+      z.enum([
+        'unbalanced_quotation_marks',
+        'candidate_limit_reached',
+        'annotation_limit_reached',
+        'no_claims_detected',
+      ]),
     ),
   })
   .strict();
@@ -141,11 +152,11 @@ const typeLabels: Record<ContentType, string> = {
 };
 
 function cueContentType(candidate: ClaimCandidate): ContentType {
-  if (/(?:قال الله|قال تعالى|القرآن|آية|سورة)/u.test(candidate.text)) return 'quran';
-  if (/(?:قال رسول الله|قال النبي|حديث|رواه البخاري|رواه مسلم|متفق عليه)/u.test(candidate.text))
-    return 'hadith_matn';
-  if (/(?:قال الشيخ|قال الإمام|قال العالم|ذكر العلماء|أجمع العلماء)/u.test(candidate.text))
-    return 'scholarly_statement';
+  const prefix = candidate.quotation
+    ? candidate.text.slice(0, candidateQuotationStart(candidate))
+    : candidate.text;
+  const sourceType = sourceCue(prefix);
+  if (sourceType !== 'unknown') return sourceType;
   if (
     candidate.claimType === 'interpretation' ||
     /(?:يدل|يعني|المقصود|يُفهم|يفهم)/u.test(candidate.text)
@@ -154,6 +165,54 @@ function cueContentType(candidate: ClaimCandidate): ContentType {
   if (candidate.claimType === 'generalization' || candidate.claimType === 'exclusivity')
     return 'general_claim';
   return 'unknown';
+}
+
+/** Visible attribution is a proposal, never a source or authenticity verdict. */
+function sourceCue(context: string): ContentType {
+  const key = searchKey(context);
+  const matches = [
+    ...[...key.matchAll(/قال\s+(?:الله|تعالى)|قوله\s+تعالى/gu)].map((match) => ({
+      match,
+      type: 'quran' as const,
+    })),
+    ...[
+      ...key.matchAll(
+        /قال\s+(?:رسول\s+الله|النبي|ﷺ)|قال\s*[-–]?\s*صلى\s+الله\s+عليه\s+وسلم|رواه\s+(?:البخاري|مسلم)|متفق\s+عليه/gu,
+      ),
+    ].map((match) => ({ match, type: 'hadith_matn' as const })),
+    ...[...key.matchAll(/قال\s+(?:الشيخ|الإمام|العالم)|ذكر\s+العلماء|أجمع\s+العلماء/gu)].map(
+      (match) => ({ match, type: 'scholarly_statement' as const }),
+    ),
+  ].sort((a, b) => b.match.index - a.match.index);
+  const last = matches[0];
+  if (!last) return 'unknown';
+  const before = key.slice(0, last.match.index);
+  const after = key.slice(last.match.index + last.match[0].length);
+  const negator = '(?:ليس|ليست|لست|لسنا|غير|لا|ما|لم|لن|دون)';
+  if (
+    new RegExp('(?:^|\\s)' + negator + '\\s+(?:\\S+\\s+){0,4}$', 'u').test(before + ' ') ||
+    new RegExp('(?:^|\\s)' + negator + '(?:\\s|$)', 'u').test(after)
+  )
+    return 'unknown';
+  return last.type;
+}
+
+function quotationFixtureType(quote: string, cue: ContentType): ContentType | undefined {
+  const words = (value: string) =>
+    searchKey(value)
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/u)
+      .filter(Boolean);
+  const quoted = words(quote);
+  if (quoted.length < 3) return undefined;
+  const candidates = fixturePassages.filter((passage) => {
+    const source = words(passage.originalText);
+    if ((' ' + source.join(' ') + ' ').includes(' ' + quoted.join(' ') + ' ')) return true;
+    if (fixtureTypes.get(passage.id) !== cue) return false;
+    const shared = new Set(quoted.filter((word) => source.includes(word)));
+    return shared.size >= 3 && shared.size / new Set(quoted).size >= 0.5;
+  });
+  return candidates.length === 1 ? fixtureTypes.get(candidates[0]!.id) : undefined;
 }
 
 function inlineClaimedSource(text: string): string | null {
@@ -189,32 +248,111 @@ function annotationForCandidate(
   });
 }
 
-function structuralAnnotations(
-  text: string,
-  candidates: ClaimCandidate[],
-  candidateTypes: Map<string, ContentType>,
-): PreflightAnnotation[] {
+function structuralAnnotations(text: string): PreflightAnnotation[] {
   const annotations: PreflightAnnotation[] = [];
-
-  for (const candidate of candidates) {
-    if (candidateTypes.get(candidate.id) !== 'hadith_matn' || !candidate.quotation) continue;
-    const quoteOffset = candidate.text.indexOf(candidate.quotation);
-    if (quoteOffset <= 0) continue;
-    const prefix = candidate.text.slice(0, quoteOffset).replace(/[«\s]+$/u, '');
-    if (!/(?:عن\s|قال|روى|حدثنا|أخبرنا|رسول الله|النبي)/u.test(prefix)) continue;
-    const startOffset = candidate.startOffset;
-    const endOffset = startOffset + prefix.length;
+  const add = (
+    startOffset: number,
+    endOffset: number,
+    contentType: ContentType,
+    classificationBasis: PreflightAnnotation['classificationBasis'],
+  ) => {
+    while (startOffset < endOffset && /\s/u.test(text[startOffset]!)) startOffset++;
+    while (endOffset > startOffset && /\s/u.test(text[endOffset - 1]!)) endOffset--;
+    if (startOffset === endOffset) return;
     annotations.push(
       PreflightAnnotationSchema.parse({
-        id: `isnad-${candidate.id}`,
+        id: `${contentType}-${startOffset}-${endOffset}`,
         text: text.slice(startOffset, endOffset),
         startOffset,
         endOffset,
-        contentType: 'isnad',
-        contentTypeLabel: typeLabels.isnad,
-        classificationBasis: 'pattern',
+        contentType,
+        contentTypeLabel: typeLabels[contentType],
+        classificationBasis,
       }),
     );
+  };
+  const addIsnad = (prefix: string, prefixStart: number, end: number) => {
+    const chain =
+      /(?:عن\s+|حدثنا\s+|أخبرنا\s+|اخبرنا\s+|قال\s+(?:رسول\s+الله|النبي|ﷺ)|قال\s*[-–]?\s*صلى\s+الله\s+عليه\s+وسلم)/u.exec(
+        prefix,
+      );
+    if (chain) add(prefixStart + chain.index, end, 'isnad', 'pattern');
+  };
+  // Scan the entire bounded draft, independently of the five claim candidates.
+  // Nested parentheses are retained inside the outer quotation, including notes.
+  const pairs: Record<string, string> = {
+    '«': '»',
+    '﴿': '﴾',
+    '“': '”',
+    '"': '"',
+    '{': '}',
+    '(': ')',
+  };
+  let previousQuoteEnd = 0;
+  for (let opening = 0; opening < text.length; opening++) {
+    const closer = pairs[text[opening]!];
+    if (!closer) continue;
+    const stack = [closer];
+    let end = opening + 1;
+    for (; end < text.length; end++) {
+      if (text[end] === stack.at(-1)) {
+        stack.pop();
+        if (!stack.length) break;
+      } else if (pairs[text[end]!]) stack.push(pairs[text[end]!]!);
+    }
+    if (stack.length) continue;
+    const quote = text.slice(opening + 1, end).trim();
+    if (!/\p{L}/u.test(quote)) {
+      opening = end;
+      continue;
+    }
+    const context = text.slice(Math.max(previousQuoteEnd, opening - 260), opening);
+    const sentenceStart =
+      Math.max(...['.', '!', '؟', '؛'].map((mark) => context.lastIndexOf(mark))) + 1;
+    const prefix = context.slice(sentenceStart);
+    let contentType = sourceCue(prefix);
+    // Quran brackets are a visible formatting cue. Ordinary braces/parentheses
+    // require an affirmative attribution, so author notes do not become ayat.
+    if (
+      contentType === 'unknown' &&
+      text[opening] === '﴿' &&
+      !/(?:ليس|ليست|غير|لم|لا)\s/u.test(searchKey(prefix))
+    )
+      contentType = 'quran';
+    const matchedType = quotationFixtureType(quote, contentType);
+    contentType = matchedType ?? contentType;
+    const quotedWrapper = !['(', '{'].includes(text[opening]!);
+    if (contentType !== 'unknown' || quotedWrapper) {
+      add(
+        opening + 1,
+        end,
+        contentType,
+        matchedType ? 'fixture_match' : contentType === 'unknown' ? 'unknown' : 'cue',
+      );
+      if (contentType === 'hadith_matn' && sourceCue(prefix) === 'hadith_matn') {
+        addIsnad(prefix, opening - prefix.length, opening);
+      }
+      previousQuoteEnd = end + 1;
+    }
+    opening = end;
+  }
+
+  // Unwrapped attributed statements still receive a cue annotation throughout
+  // the draft. Do not extend a source label across already separated quotations.
+  for (const match of text.matchAll(/[^.!؟\n]+[.!؟]?/gu)) {
+    const start = match.index,
+      end = start + match[0].length;
+    if (annotations.some((row) => start < row.endOffset && end > row.startOffset)) continue;
+    const colon = [
+      ...match[0].matchAll(/قال\s+(?:الله|تعالى|رسول\s+الله|النبي)[^:：\n]{0,100}[:：]/gu),
+    ].at(-1);
+    const bodyStart = colon ? colon.index + colon[0].length : 0;
+    const prefix = bodyStart ? match[0].slice(0, bodyStart) : match[0];
+    const type = sourceCue(prefix);
+    if (type !== 'unknown') {
+      add(start + bodyStart, end, type, 'cue');
+      if (type === 'hadith_matn' && bodyStart) addIsnad(prefix, start, start + bodyStart);
+    }
   }
 
   const claimedSourceRanges: Array<{ startOffset: number; endOffset: number }> = [];
@@ -252,6 +390,14 @@ function structuralAnnotations(
   return annotations;
 }
 
+function candidateQuotationStart(candidate: ClaimCandidate): number {
+  if (!candidate.quotation) return -1;
+  const wrapper = /«[^»]+»|“[^”]+”|"[^"\n]+"/u.exec(candidate.text);
+  if (!wrapper) return -1;
+  const offset = wrapper[0].slice(1, -1).indexOf(candidate.quotation);
+  return offset < 0 ? -1 : wrapper.index + 1 + offset;
+}
+
 function findingOffsets(
   candidate: ClaimCandidate,
   issueCode: PreflightFinding['issueCode'],
@@ -273,7 +419,7 @@ function findingOffsets(
       endOffset: candidate.startOffset + issueMatch.index + issueMatch[0].length,
     };
   }
-  const relativeStart = candidate.text.indexOf(candidate.quotation);
+  const relativeStart = candidateQuotationStart(candidate);
   if (relativeStart < 0)
     return { startOffset: candidate.startOffset, endOffset: candidate.endOffset };
   return {
@@ -413,16 +559,25 @@ export function buildDemoPreflight(input: unknown): PreflightResponse {
         : null,
     });
   });
-  const annotations = [
-    ...extraction.candidates.map((candidate) =>
-      annotationForCandidate(
-        text,
-        candidate,
-        candidateTypes.get(candidate.id) ?? 'unknown',
-        candidateBases.get(candidate.id) ?? 'unknown',
+  const structural = structuralAnnotations(text);
+  const allAnnotations = [
+    ...extraction.candidates
+      .filter(
+        (candidate) =>
+          !candidate.quotation &&
+          !structural.some(
+            (row) => candidate.startOffset < row.endOffset && candidate.endOffset > row.startOffset,
+          ),
+      )
+      .map((candidate) =>
+        annotationForCandidate(
+          text,
+          candidate,
+          candidateTypes.get(candidate.id) ?? 'unknown',
+          candidateBases.get(candidate.id) ?? 'unknown',
+        ),
       ),
-    ),
-    ...structuralAnnotations(text, extraction.candidates, candidateTypes),
+    ...structural,
   ].sort(
     (left, right) =>
       left.startOffset - right.startOffset ||
@@ -430,14 +585,16 @@ export function buildDemoPreflight(input: unknown): PreflightResponse {
       left.id.localeCompare(right.id),
   );
 
+  const warnings: PreflightResponse['warnings'] = [...extraction.warnings];
+  if (allAnnotations.length > 80) warnings.push('annotation_limit_reached');
   return PreflightResponseSchema.parse({
     mode: 'local_demo',
     verification: false,
     corpusVersion: 'software-fixture-v1',
     inputHash: createHash('sha256').update(text).digest('hex'),
     offsetUnit: 'utf16_code_unit',
-    annotations,
+    annotations: allAnnotations.slice(0, 80),
     findings,
-    warnings: extraction.warnings,
+    warnings,
   });
 }

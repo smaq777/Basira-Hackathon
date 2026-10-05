@@ -1,5 +1,5 @@
 import type { ComponentType, FormEvent, ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Archive } from '@phosphor-icons/react/Archive';
 import { ArrowLeft } from '@phosphor-icons/react/ArrowLeft';
 import { ArrowUp } from '@phosphor-icons/react/ArrowUp';
@@ -42,15 +42,25 @@ import { WarningCircle } from '@phosphor-icons/react/WarningCircle';
 import { X } from '@phosphor-icons/react/X';
 import {
   analysisErrorMessage,
+  awaitFoundationReport,
+  cancelOwnedReview,
+  createOwnedReview,
+  getOwnedReview,
   persistDraftForAnalysis,
+  requireFoundationReview,
   requestDraftPreflight,
   type DraftAnalysisReceipt,
   type PreflightAnnotation,
   type PreflightFinding,
   type PreflightResponse,
+  type OwnedReview,
 } from './api.js';
+import { FoundationResultScreen } from './foundation-report.js';
+import type { FoundationReport } from '../../../packages/contracts/src/foundation.js';
 import { ReviewerAccessBoundary, ReviewerAuthUnavailable } from './reviewer-auth.js';
 import { answerReviewQuestion, VOICE_GREETING, type VoiceTone } from './voice.js';
+import { MAX_DRAFT_LENGTH, isSafeDraftText } from '../../../packages/contracts/src/draft-text.js';
+import { compactDraftPreview } from './text-preview.js';
 
 type PublicRoute = 'home' | 'analysis' | 'result' | 'unresolved' | 'ticket';
 type ReviewerRoute = 'dashboard' | 'queue' | 'detail' | 'sources';
@@ -156,8 +166,8 @@ function useRoute() {
     return () => window.removeEventListener('hashchange', update);
   }, []);
 
-  const navigate = useCallback((next: Route) => {
-    const hash = pathFor(next);
+  const navigate = useCallback((next: Route, reviewId?: string) => {
+    const hash = pathFor(next) + (reviewId ? `?reviewId=${encodeURIComponent(reviewId)}` : '');
     window.location.hash = hash;
     setLocation({ route: next, hash });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -318,6 +328,78 @@ function HomeScreen({
   >('idle');
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
+  const acceptedTextRef = useRef(initialText);
+
+  const syncHighlights = () => {
+    const textarea = textAreaRef.current;
+    const highlights = highlightRef.current;
+    if (!textarea || !highlights) return;
+    highlights.style.left = `${textarea.clientLeft}px`;
+    highlights.style.top = `${textarea.clientTop}px`;
+    highlights.style.width = `${textarea.clientWidth}px`;
+    highlights.style.height = `${textarea.clientHeight}px`;
+    highlights.scrollTop = textarea.scrollTop;
+    highlights.scrollLeft = textarea.scrollLeft;
+  };
+
+  useLayoutEffect(() => {
+    const textarea = textAreaRef.current;
+    if (!textarea) return;
+    const resize = () => {
+      const scrollTop = textarea.scrollTop;
+      textarea.style.height = '0px';
+      const cap = Math.max(128, Math.min(420, window.innerHeight * 0.45));
+      textarea.style.height = `${Math.max(128, Math.min(cap, textarea.scrollHeight))}px`;
+      textarea.scrollTop = scrollTop;
+      syncHighlights();
+    };
+    resize();
+    window.addEventListener('resize', resize);
+    let width = textarea.clientWidth;
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            if (width !== textarea.clientWidth) {
+              width = textarea.clientWidth;
+              resize();
+            }
+          });
+    observer?.observe(textarea);
+    let active = true;
+    void document.fonts?.ready.then(() => {
+      if (active) resize();
+    });
+    return () => {
+      active = false;
+      window.removeEventListener('resize', resize);
+      observer?.disconnect();
+    };
+  }, [text]);
+
+  const updateText = (next: string) => {
+    setNotice('');
+    if (next.length > MAX_DRAFT_LENGTH) {
+      setError(
+        'لم يُضف النص لأن الحد الأقصى ٣٠٠٠ حرف. اختصره ثم حاول مجددًا؛ بقي النص الحالي كما هو.',
+      );
+      return false;
+    }
+    if (!isSafeDraftText(next)) {
+      setError('لم يُضف النص لوجود محارف غير صالحة. أعد نسخه كنص عادي؛ بقي النص الحالي كما هو.');
+      return false;
+    }
+    if (next === acceptedTextRef.current) {
+      setError('');
+      return true;
+    }
+    setPreflight(null);
+    setPreflightStatus(next.trim().length >= 20 ? 'checking' : 'idle');
+    acceptedTextRef.current = next;
+    setText(next);
+    setError('');
+    return true;
+  };
 
   useEffect(() => {
     if (text.trim().length < 20) {
@@ -327,16 +409,17 @@ function HomeScreen({
     }
     const controller = new AbortController();
     let active = true;
+    setPreflight(null);
     setPreflightStatus('checking');
     const timer = window.setTimeout(() => {
       void requestDraftPreflight(text, controller.signal)
         .then((result) => {
-          if (!active) return;
+          if (!active || acceptedTextRef.current !== text) return;
           setPreflight(result);
           setPreflightStatus('ready');
         })
         .catch((reason: unknown) => {
-          if (!active) return;
+          if (!active || acceptedTextRef.current !== text) return;
           if (reason instanceof DOMException && reason.name === 'AbortError') return;
           setPreflight(null);
           setPreflightStatus('unavailable');
@@ -362,15 +445,22 @@ function HomeScreen({
       return;
     }
     setError('');
-    onReview(clean);
+    if (text.length > MAX_DRAFT_LENGTH) {
+      setError('الحد الأقصى للمراجعة ٣٠٠٠ حرف. اختصر النص ثم أعد المحاولة.');
+      return;
+    }
+    if (!isSafeDraftText(text)) {
+      setError('يتضمن النص محارف غير صالحة. أعد نسخه كنص عادي ثم حاول مجددًا.');
+      return;
+    }
+    onReview(text);
   };
 
   const pasteText = async () => {
     try {
       const clipboard = await navigator.clipboard.readText();
       if (!clipboard) throw new Error('empty');
-      setText(clipboard.slice(0, 3000));
-      setError('');
+      if (!updateText(clipboard)) return;
       setNotice('تم لصق النص.');
     } catch {
       setError('تعذر الوصول إلى الحافظة. الصق النص يدويًا داخل الحقل.');
@@ -398,22 +488,36 @@ function HomeScreen({
                   annotations={preflight?.annotations ?? []}
                   findings={preflight?.findings ?? []}
                 />
+                {'\u200b'}
               </div>
               <textarea
                 id="review-text"
                 ref={textAreaRef}
                 value={text}
-                maxLength={3000}
                 rows={4}
-                aria-describedby={preflightStatus !== 'ready' ? 'preflight-status' : undefined}
-                onScroll={(event) => {
-                  if (!highlightRef.current) return;
-                  highlightRef.current.scrollTop = event.currentTarget.scrollTop;
-                  highlightRef.current.scrollLeft = event.currentTarget.scrollLeft;
+                aria-invalid={Boolean(error)}
+                aria-describedby={
+                  [
+                    error ? 'composer-error' : '',
+                    preflightStatus !== 'ready' ? 'preflight-status' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ') || undefined
+                }
+                onScroll={syncHighlights}
+                onPaste={(event) => {
+                  event.preventDefault();
+                  const textarea = event.currentTarget;
+                  const pasted = event.clipboardData.getData('text/plain');
+                  const start = textarea.selectionStart;
+                  const next = text.slice(0, start) + pasted + text.slice(textarea.selectionEnd);
+                  if (!updateText(next)) return;
+                  queueMicrotask(() =>
+                    textarea.setSelectionRange(start + pasted.length, start + pasted.length),
+                  );
                 }}
                 onChange={(event) => {
-                  setText(event.target.value);
-                  setError('');
+                  updateText(event.target.value);
                 }}
                 placeholder="ألصق منشورك أو اكتب العبارة التي تريد التحقق منها…"
               />
@@ -445,6 +549,9 @@ function HomeScreen({
                   اللون يصف نوع الجزء، والخط السفلي يوضح حالة الفحص. المصدر المذكور هو إحالة كتبها
                   المستخدم، وليس مصدرًا معتمدًا تلقائيًا.
                 </p>
+                {preflight.warnings.includes('annotation_limit_reached') && (
+                  <p role="status">التصنيف الأولي المعروض جزئي؛ راجع بقية النص في التقرير.</p>
+                )}
                 <div className="verification-legend" aria-label="دليل حالة الفحص">
                   <span className="verification-key verification-key--info">
                     <CheckCircle size={15} /> تطابق أولي
@@ -482,7 +589,7 @@ function HomeScreen({
                 لصق نص
               </button>
               <span className="counter" dir="ltr">
-                {text.length} / 3000
+                {text.length} / {MAX_DRAFT_LENGTH}
               </span>
               <button className="composer-submit" type="submit" aria-label="ابدأ المراجعة">
                 <span>ابدأ المراجعة</span>
@@ -495,8 +602,7 @@ function HomeScreen({
               className="text-action"
               type="button"
               onClick={() => {
-                setText(DEMO_TEXT);
-                setError('');
+                updateText(DEMO_TEXT);
                 setNotice('تم تحميل مثال توضيحي.');
               }}
             >
@@ -514,8 +620,7 @@ function HomeScreen({
                   key={example.label}
                   type="button"
                   onClick={() => {
-                    setText(example.text);
-                    setError('');
+                    updateText(example.text);
                     setNotice(`تم تحميل مثال: ${example.label}`);
                   }}
                 >
@@ -525,7 +630,7 @@ function HomeScreen({
             </div>
           </details>
           {error && (
-            <p className="field-error" role="alert">
+            <p id="composer-error" className="field-error" role="alert">
               <WarningCircle size={18} /> {error}
             </p>
           )}
@@ -730,50 +835,115 @@ function AnalysisScreen({
   text,
   onCancel,
   onComplete,
+  initialReviewId,
 }: {
   text: string;
   onCancel: () => void;
-  onComplete: (receipt: DraftAnalysisReceipt) => void;
+  onComplete: (report: FoundationReport) => void;
+  initialReviewId: string | null;
 }) {
   const phases = [
     'فهم بنية النص',
     'اكتشاف الاقتباسات والادعاءات',
-    'مطابقة المصادر المعتمدة',
-    'تقييم دعم الدليل',
+    'استرجاع المصادر ومقارنة النقل',
+    'بناء التقرير مع بيان الحدود',
   ];
   const [phase, setPhase] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+  const runRef = useRef<OwnedReview | null>(null);
+  const pendingRunRef = useRef<Promise<OwnedReview> | null>(null);
+  const receiptRef = useRef<DraftAnalysisReceipt | null>(null);
+  const idempotencyRef = useRef(crypto.randomUUID());
+  const resumeRef = useRef(initialReviewId);
+  const cancelledRef = useRef(false);
+  const completeRef = useRef(onComplete);
+  completeRef.current = onComplete;
+  const controllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
-    const interval = window.setInterval(
-      () => setPhase((value) => Math.min(value + 1, phases.length - 1)),
-      550,
-    );
+    controllerRef.current = controller;
     setError('');
     setPhase(0);
-    const minimumDelay = new Promise((resolve) => window.setTimeout(resolve, 900));
-    void Promise.all([persistDraftForAnalysis(text, controller.signal), minimumDelay])
-      .then(([receipt]) => {
-        if (active) onComplete(receipt);
-      })
-      .catch((reason: unknown) => {
-        if (!active) return;
-        window.clearInterval(interval);
-        setError(analysisErrorMessage(reason));
-      });
+    const execute = async () => {
+      let run = runRef.current;
+      if (!run && resumeRef.current) run = await getOwnedReview(resumeRef.current);
+      if (!run) {
+        await requireFoundationReview();
+        if (cancelledRef.current || !active) return;
+        if (!receiptRef.current)
+          receiptRef.current = await persistDraftForAnalysis(text, controller.signal);
+        if (cancelledRef.current || !active) return;
+        setPhase(1);
+        pendingRunRef.current = createOwnedReview(
+          receiptRef.current.revisionId,
+          idempotencyRef.current,
+        );
+        run = await pendingRunRef.current;
+      }
+      runRef.current = run;
+      if (cancelledRef.current) return;
+      if (!active) return;
+      window.history.replaceState(
+        null,
+        '',
+        `${pathFor('analysis')}?reviewId=${encodeURIComponent(run.reviewId)}`,
+      );
+      const report = await awaitFoundationReport(
+        run,
+        controller.signal,
+        (current) => {
+          if (!active) return;
+          runRef.current = current;
+          setPhase(
+            current.status === 'queued'
+              ? 1
+              : ['retrieving', 'checking'].includes(current.status)
+                ? 2
+                : 3,
+          );
+        },
+        text || undefined,
+      );
+      if (active && !cancelledRef.current) completeRef.current(report);
+    };
+    void execute().catch((reason: unknown) => {
+      if (!active || controller.signal.aborted) return;
+      setError(analysisErrorMessage(reason));
+    });
     return () => {
       active = false;
       controller.abort();
-      window.clearInterval(interval);
     };
-  }, [attempt, onComplete, phases.length, text]);
+  }, [attempt, text]);
+
+  const cancel = async () => {
+    if (!runRef.current && !pendingRunRef.current) {
+      cancelledRef.current = true;
+      onCancel();
+      return;
+    }
+    cancelledRef.current = true;
+    controllerRef.current?.abort();
+    setCancelling(true);
+    try {
+      const run = runRef.current ?? (await pendingRunRef.current);
+      if (!run) throw new Error('REVIEW_NOT_CREATED');
+      await cancelOwnedReview(run.reviewId);
+      onCancel();
+    } catch (reason) {
+      cancelledRef.current = false;
+      setError(`تعذر تأكيد إلغاء المراجعة. ${analysisErrorMessage(reason)}`);
+      setCancelling(false);
+    }
+  };
 
   return (
     <div className="app-page">
-      <BackHeader onHome={onCancel} />
+      <BackHeader onHome={() => void cancel()} />
       <main className="analysis-main page-shell page-enter">
         <div className="analysis-orbit" aria-hidden="true">
           <Sparkle size={34} weight="fill" />
@@ -781,12 +951,14 @@ function AnalysisScreen({
         <p className="eyebrow">تحليل تلقائي في الخلفية</p>
         <h1>نراجع النص والمصدر والاستدلال</h1>
         <p className="hero-copy">
-          لا تحتاج إلى تصنيف أي عبارة. يتولى وكيل بصيرة التحليل ويعرض لك ما وجده.
+          لا تحتاج إلى تصنيف أي عبارة. نقارن النقل مع المصادر المتاحة، ونبيّن ما لم يُقيّم من
+          الاستدلال. قد تستغرق مراجعة الأدلة والبحث الإضافي بضع دقائق. يمكنك إلغاء المراجعة في أي
+          وقت.
         </p>
         <section className="analysis-card" aria-live="polite">
           <div className="analysis-text">
-            <span>النص الجاري تحليله</span>
-            <p>{text}</p>
+            <span>مقتطف من النص الجاري تحليله</span>
+            <p aria-label="مقتطف النص الجاري تحليله">{compactDraftPreview(text)}</p>
           </div>
           <div className="analysis-progress">
             {phases.map((item, index) => (
@@ -816,6 +988,7 @@ function AnalysisScreen({
               <p>{error}</p>
             </div>
             <button
+              disabled={cancelling}
               className="button button--outline"
               onClick={() => setAttempt((value) => value + 1)}
             >
@@ -827,8 +1000,12 @@ function AnalysisScreen({
           <p>
             <ShieldCheck size={19} /> النتائج ستفصل بين مطابقة النقل وكفاية الاستدلال.
           </p>
-          <button className="button button--ghost" onClick={onCancel}>
-            إلغاء والعودة للنص
+          <button
+            className="button button--ghost"
+            onClick={() => void cancel()}
+            disabled={cancelling}
+          >
+            {cancelling ? 'جار تأكيد الإلغاء' : 'إلغاء والعودة للنص'}
           </button>
         </div>
       </main>
@@ -2079,12 +2256,13 @@ function ReviewerSources() {
 export default function App({ clerkConfigured = false }: { clerkConfigured?: boolean }) {
   const { route, navigate } = useRoute();
   const [reviewText, setReviewText] = useState('');
-  const [analysisReceipt, setAnalysisReceipt] = useState<DraftAnalysisReceipt | null>(null);
+  const [foundationReport, setFoundationReport] = useState<FoundationReport | null>(null);
+  const reviewId = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('reviewId');
 
   const startReview = useCallback(
     (text: string) => {
       setReviewText(text);
-      setAnalysisReceipt(null);
+      setFoundationReport(null);
       navigate('analysis');
     },
     [navigate],
@@ -2092,14 +2270,14 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
 
   const startNewReview = useCallback(() => {
     setReviewText('');
-    setAnalysisReceipt(null);
+    setFoundationReport(null);
     navigate('home');
   }, [navigate]);
 
   const completeAnalysis = useCallback(
-    (receipt: DraftAnalysisReceipt) => {
-      setAnalysisReceipt(receipt);
-      navigate('result');
+    (report: FoundationReport) => {
+      setFoundationReport(report);
+      navigate('result', report.reviewId);
     },
     [navigate],
   );
@@ -2126,17 +2304,28 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
     return (
       <AnalysisScreen
         text={reviewText}
+        initialReviewId={reviewId}
         onCancel={() => navigate('home')}
         onComplete={completeAnalysis}
       />
     );
+  if (route === 'result')
+    if (reviewId)
+      return (
+        <FoundationResultScreen
+          key={reviewId}
+          reviewId={reviewId}
+          initialReport={foundationReport?.reviewId === reviewId ? foundationReport : null}
+          onHome={startNewReview}
+        />
+      );
   if (route === 'result')
     return (
       <ResultScreen
         onHome={startNewReview}
         onTicket={() => navigate('ticket')}
         onUnresolved={() => navigate('unresolved')}
-        receipt={analysisReceipt}
+        receipt={null}
       />
     );
   if (route === 'unresolved')

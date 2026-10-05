@@ -4,6 +4,8 @@ import { ClerkProvider } from '@clerk/react';
 import { arSA } from '@clerk/localizations';
 import App from './App.js';
 import './style.css';
+import './composer-refinements.css';
+import './report-refinements.css';
 
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY?.trim();
 const application = <App clerkConfigured={Boolean(publishableKey)} />;

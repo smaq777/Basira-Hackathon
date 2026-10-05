@@ -23,6 +23,10 @@ Browse the [documentation hub](docs/README.md) and [English–Arabic terminology
 
 ## Local development
 
+The default-off [source-review integration](docs/architecture/FOUNDATION_INTEGRATION.md)
+adds a persisted report path to this UI for configured local development. Its semantic
+indicator remains unassessed; staging is unchanged until owner-approved deployment.
+
 Use Node.js **24 LTS** and npm **11**. Foundation tests require no external credentials.
 
 ```bash
@@ -33,7 +37,7 @@ npm run dev:api
 npm run dev:web
 ```
 
-Web: `http://localhost:5173`. API: `http://localhost:3000`. The browser demo provides the approved Arabic public journey and a Clerk-protected reviewer workspace. Authorization defaults to an explicit reviewer allowlist; hackathon staging can temporarily admit any authenticated Clerk user so judges are not blocked. Anonymous users never receive reviewer access. Reviewer records are still labelled dummy data. Text moves directly into an automatic-analysis transition; there is no manual phrase-classification step. Guest sessions, documents, immutable revisions and idempotent review-run lifecycle records are implemented when a database is configured. The verification worker and evidence pipeline are not connected yet, so the UI labels illustrative results rather than presenting them as live verification.
+Web: `http://localhost:5173`. API: `http://localhost:3000`. The browser demo provides the approved Arabic public journey and a Clerk-protected reviewer workspace. Authorization defaults to an explicit reviewer allowlist; hackathon staging can temporarily admit any authenticated Clerk user so judges are not blocked. Anonymous users never receive reviewer access. Reviewer records are still labelled dummy data. Text moves directly into an automatic-analysis transition; there is no manual phrase-classification step. Guest sessions, documents, immutable revisions and idempotent review-run lifecycle records are implemented when a database is configured. With the source bridge disabled, real submissions show its unavailable state and the separate illustrative report remains labelled. Configured local development can persist source-backed reports; semantic verification remains unavailable.
 
 ```bash
 npm run build
