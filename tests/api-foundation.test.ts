@@ -387,3 +387,21 @@ it('keeps Firecrawl absent for preexisting source configurations with no web opt
     'openrouter',
   ]);
 });
+
+it('advertises both configured providers for the explicit Tinyfish-first route', async () => {
+  const { database, foundation } = fixture();
+  const base = await serve({
+    database,
+    foundation: {
+      ...foundation,
+      semanticPilot: true,
+      webDiscovery: true,
+      webProvider: 'tinyfish_first',
+    },
+  });
+  expect((await (await fetch(base + '/api/v1/capabilities')).json()).liveProviders).toEqual([
+    'openrouter',
+    'firecrawl',
+    'tinyfish',
+  ]);
+});

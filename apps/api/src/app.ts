@@ -89,6 +89,7 @@ type AppOptions = {
     liveTafsir?: boolean;
     semanticPilot?: boolean;
     webDiscovery?: boolean;
+    webProvider?: 'firecrawl' | 'tinyfish_first';
   };
   database?: BackendDatabase;
   production?: boolean;
@@ -188,6 +189,9 @@ export function createApp(options: AppOptions = {}) {
         ...(options.foundation?.liveTafsir ? ['tafsir_mcp'] : []),
         ...(options.foundation?.semanticPilot ? ['openrouter'] : []),
         ...(options.foundation?.webDiscovery ? ['firecrawl'] : []),
+        ...(options.foundation?.webDiscovery && options.foundation.webProvider === 'tinyfish_first'
+          ? ['tinyfish']
+          : []),
       ],
       provisionalSemanticAssessment: options.foundation?.semanticPilot ?? false,
       accounts: reviewerAuth.configured,

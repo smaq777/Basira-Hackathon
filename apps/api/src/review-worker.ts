@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { enrichedReportFits } from './evidence-budget.js';
 import {
   FoundationReportSchema,
   type FoundationReport,
@@ -31,8 +32,16 @@ export function createFoundationWorker(
   adapter: FoundationAdapter,
   store: ReviewStore,
   semantic?: Pick<SemanticAssessmentAdapter, 'assessWithEvidence'>,
-  options: { researchPreview?: boolean } = {},
+  options: { researchPreview?: boolean; semanticTimeoutMs?: number } = {},
 ): FoundationWorker {
+  const semanticTimeoutMs = options.semanticTimeoutMs ?? SEMANTIC_PHASE_TIMEOUT_MS;
+  if (
+    !Number.isInteger(semanticTimeoutMs) ||
+    semanticTimeoutMs < 1 ||
+    semanticTimeoutMs > (options.researchPreview ? 240000 : SEMANTIC_PHASE_TIMEOUT_MS)
+  )
+    throw new Error('INVALID_SEMANTIC_WORKER_BUDGET');
+  const leaseSeconds = semanticTimeoutMs > SEMANTIC_PHASE_TIMEOUT_MS ? 30 : 15;
   let stopped = false;
   let polling: ReturnType<typeof setInterval> | null = null;
   let current: Promise<boolean> | null = null;
@@ -47,11 +56,12 @@ export function createFoundationWorker(
       Math.max(1, Date.parse(lease.deadlineAt) - Date.now()),
     );
     let heartbeatRunning = false;
+    let stage = 'intake';
     const heartbeat = setInterval(() => {
       if (heartbeatRunning) return;
       heartbeatRunning = true;
       void store
-        .heartbeat(lease, 15)
+        .heartbeat(lease, leaseSeconds)
         .then((owned) => {
           if (!owned) activeController.abort();
         })
@@ -128,7 +138,7 @@ export function createFoundationWorker(
       if (semantic && applicability.status !== 'not_applicable') {
         // Preserve time for binding and persistence even when an optional provider stalls.
         const availableMs = Math.min(
-          SEMANTIC_PHASE_TIMEOUT_MS,
+          semanticTimeoutMs,
           Date.parse(lease.deadlineAt) - Date.now() - 5_000,
         );
         try {
@@ -169,6 +179,19 @@ export function createFoundationWorker(
             evidenceStateSha256: '0'.repeat(64),
             semanticAssessment: assessment,
           });
+          if (
+            !enrichedReportFits(
+              {
+                ...report,
+                intake: enriched,
+                themes: enrichedThemes,
+                improvementCards: enrichedCards,
+                semanticAssessment: assessment,
+              },
+              enriched.evidence,
+            )
+          )
+            throw new Error('OPTIONAL_REPORT_BYTE_BUDGET');
           if (assessment.status !== 'disabled') {
             intake = report.intake = enriched;
             themes = report.themes = enrichedThemes;
@@ -187,7 +210,11 @@ export function createFoundationWorker(
                 : 'تعذر استكمال التقييم الدلالي؛ نتائج النقل والمصادر ما زالت متاحة.';
             if (['partial', 'unavailable'].includes(assessment.status)) report.status = 'partial';
           }
-        } catch {
+        } catch (error) {
+          if (error instanceof Error && error.message === 'OPTIONAL_REPORT_BYTE_BUDGET')
+            report.limitations.push(
+              'تعذر استكمال تقييم المعاني لكثرة النصوص المرجعية؛ حُفظت نتائج النقل والمصادر الأصلية.',
+            );
           report.status = 'partial';
           report.interpretation.status = 'unavailable';
           report.interpretation.explanation =
@@ -205,6 +232,7 @@ export function createFoundationWorker(
           pipelineVersion: report.pipelineVersion,
         }),
       );
+      stage = 'report_validation';
       FoundationReportSchema.parse(report);
       for (const anchor of [
         ...themes.authoredThemes.flatMap((theme) => theme.anchors),
@@ -227,6 +255,7 @@ export function createFoundationWorker(
         )
       )
         throw new Error('INVALID_EDITORIAL_EVIDENCE');
+      stage = 'evidence_binding';
       if (!(await store.bindEvidence(lease, report.evidenceStateSha256)) || signal.aborted) return;
       const ids = new Map(intake.evidence.map((item) => [item.snapshotKey, randomUUID()]));
       const evidence: StoredEvidence[] = intake.evidence.map((item) => ({
@@ -268,6 +297,7 @@ export function createFoundationWorker(
           evidenceIds: finding.evidenceKey ? [ids.get(finding.evidenceKey)!] : [],
         };
       });
+      stage = 'report_persistence';
       await store.complete(lease, {
         reviewId: lease.reviewId,
         revisionId: lease.revisionId,
@@ -283,6 +313,18 @@ export function createFoundationWorker(
       // Leave the lease recoverable on graceful shutdown rather than failing the draft.
       if (stopped) return;
       const reason = error instanceof Error ? error.message : '';
+      // Only emit bounded machine codes; provider/SQL messages may contain private content.
+      console.error(
+        JSON.stringify({
+          event: 'foundation_review_failed',
+          stage,
+          code: /^[A-Z_]{1,80}$/u.test(reason) ? reason : 'UNCLASSIFIED_ERROR',
+          errorType:
+            error instanceof Error && ['Error', 'ZodError'].includes(error.name)
+              ? error.name
+              : 'Error',
+        }),
+      );
       const code =
         Date.now() >= Date.parse(lease.deadlineAt)
           ? 'deadline_exceeded'
@@ -303,7 +345,7 @@ export function createFoundationWorker(
     if (stopped) return false;
     if (current) return current;
     current = (async () => {
-      const lease = await store.acquire(null, 15);
+      const lease = await store.acquire(null, leaseSeconds);
       if (!lease) return false;
       await execute(lease);
       return true;

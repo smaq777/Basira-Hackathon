@@ -1022,6 +1022,37 @@ describe('bounded claim retrieval adapter', () => {
 });
 
 describe('retrieval source identity and family admission', () => {
+  it('admits source families atomically within durable byte headroom', async () => {
+    const large = (key: string, parent: string | null = null): SourceEvidence => ({
+      ...evidence(key, parent),
+      originalText: 'ع'.repeat(30000),
+      originalSha256: sha256('ع'.repeat(30000)),
+    });
+    const root = large('large-root');
+    const child = large('large-child', root.snapshotKey);
+    const other = large('large-other');
+    const result = await createClaimRetrievalAdapter({
+      corpusVersion: 'owned',
+      researchPreview: true,
+      corpus: { search: async () => [root, other], restore: async () => [root, child, other] },
+    }).retrieve(fixture(), [
+      {
+        id: `claim-${'c'.repeat(24)}`,
+        segmentId: 'author-1',
+        originalText: CLAIM,
+        startOffset: 0,
+        endOffset: CLAIM.length,
+        evidenceKeys: [],
+        provisional: true,
+      },
+    ]);
+    expect(result.claims[0]!.evidenceKeys).toEqual(['large-root', 'large-child']);
+    expect(result.evidence.map((row) => row.snapshotKey)).toEqual([
+      'owned-source',
+      'large-root',
+      'large-child',
+    ]);
+  });
   const claim = {
     id: `claim-${'b'.repeat(24)}`,
     segmentId: 'author-1',
@@ -1141,6 +1172,92 @@ describe('semantic gap-triggered web discovery', () => {
       }
       return response({ assessments: [value] }, body.model);
     });
+  it('rejects oversized discovered originals before reassessment and preserves first-pass findings', async () => {
+    const input = fixture();
+    const large = (key: string): SourceEvidence => ({
+      ...web(),
+      snapshotKey: key,
+      sourceUrl: `https://owned.example/${key}`,
+      originalText: 'ع'.repeat(30000),
+      originalSha256: sha256('ع'.repeat(30000)),
+    });
+    input.evidence.push(large('web-cache:large'));
+    const fetch = gapFetch();
+    const result = await createSemanticAssessmentAdapter(
+      options(fetch, {
+        researchPreview: true,
+        gapDiscovery: {
+          discover: async () => ({ evidence: [large('one'), large('two')], failureCodes: [] }),
+        },
+      }),
+    ).assessWithEvidence(input);
+    expect(result.report.trace.discovery).toMatchObject({
+      outcome: 'packet_budget_skipped',
+      addedKeys: [],
+      failureCodes: ['discovery_packet_byte_budget'],
+    });
+    expect(result.intake.evidence).toEqual(input.evidence);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it('treats cached and live originals at the same URL as one representation', async () => {
+    const input = fixture();
+    input.evidence.push({ ...web(), snapshotKey: 'web-cache:owned' });
+    const fetch = gapFetch();
+    const result = await createSemanticAssessmentAdapter(
+      options(fetch, {
+        researchPreview: true,
+        gapDiscovery: {
+          discover: async () => ({ evidence: [web()], failureCodes: [] }),
+        },
+      }),
+    ).assessWithEvidence(input);
+    expect(result.report.trace.discovery).toMatchObject({ outcome: 'no_evidence', addedKeys: [] });
+    expect(result.intake.evidence).toHaveLength(2);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it('retains novel pages while filtering a cache/live alias', async () => {
+    const input = fixture();
+    input.evidence.push({
+      ...web(),
+      snapshotKey: 'web-cache:owned',
+      sourceUrl: 'https://owned.example/other',
+    });
+    const alias = { ...web(), snapshotKey: 'web:alias', sourceUrl: 'https://owned.example/other' };
+    const result = await createSemanticAssessmentAdapter(
+      options(gapFetch(), {
+        researchPreview: true,
+        gapDiscovery: {
+          discover: async () => ({ evidence: [alias, web()], failureCodes: [] }),
+        },
+      }),
+    ).assessWithEvidence(input);
+    expect(result.report.trace.discovery).toMatchObject({
+      outcome: 'reassessed',
+      addedKeys: ['web-source'],
+    });
+    expect(result.intake.evidence).toHaveLength(3);
+  });
+  it('retains an updated original at the same URL', async () => {
+    const input = fixture();
+    input.evidence.push({
+      ...web(),
+      snapshotKey: 'web-cache:owned',
+      originalText: 'Earlier page text',
+      originalSha256: sha256('Earlier page text'),
+    });
+    const result = await createSemanticAssessmentAdapter(
+      options(gapFetch(), {
+        researchPreview: true,
+        gapDiscovery: {
+          discover: async () => ({ evidence: [web()], failureCodes: [] }),
+        },
+      }),
+    ).assessWithEvidence(input);
+    expect(result.report.trace.discovery).toMatchObject({
+      outcome: 'reassessed',
+      addedKeys: ['web-source'],
+    });
+  });
   it('performs one discovery for a validated semantic gap and reassesses the affected frozen packet', async () => {
     const fetch = gapFetch();
     const discover = vi.fn(async () => ({ evidence: [web()], failureCodes: [] }));
@@ -1250,7 +1367,7 @@ describe('semantic gap-triggered web discovery', () => {
     expect(
       (
         await createSemanticAssessmentAdapter(
-          options(fetch, { gapDiscovery, researchPreview: true, overallTimeoutMs: 75000 }),
+          options(fetch, { gapDiscovery, researchPreview: true, overallTimeoutMs: 240001 }),
         ).assessWithEvidence(fixture())
       ).report.errorCode,
     ).toBe('configuration_invalid');
@@ -1389,4 +1506,67 @@ it('skips paid gap acquisition visibly when canonical selection leaves fewer tha
   expect(result.report.assessments[0]!.status).toBe('not_established');
   expect(result.intake.evidence).toHaveLength(19);
   expect(discover).not.toHaveBeenCalled();
+});
+
+it('allows measured long first-pass and acquisition stages only under the explicit research profile', async () => {
+  vi.useFakeTimers();
+  const acquired: SourceEvidence = {
+    ...evidence('long-web'),
+    sourceRole: 'scholar_explanation',
+    sourceUrl: 'https://owned.example/source',
+    provenance: { representation: 'extracted_markdown' },
+  };
+  const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+    const { body, data } = requestData(init);
+    if (body.response_format.json_schema.name === 'extraction')
+      return response(proposal(), body.model);
+    if (body.response_format.json_schema.name === 'assessment') {
+      await new Promise((resolve) => setTimeout(resolve, 60000));
+      return response(
+        {
+          assessments: [
+            { ...finding(data.claims[0].claim.id), status: 'not_established', citations: [] },
+          ],
+        },
+        body.model,
+      );
+    }
+    return response(
+      {
+        assessments: [
+          {
+            ...finding(data.claims[0].claim.id),
+            citations: [{ evidenceKey: 'long-web', excerpt: SOURCE }],
+          },
+        ],
+      },
+      body.model,
+    );
+  });
+  const discover = vi.fn(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20000));
+    return { evidence: [acquired], failureCodes: [] };
+  });
+  try {
+    const pending = createSemanticAssessmentAdapter(
+      options(fetch, {
+        researchPreview: true,
+        overallTimeoutMs: 180000,
+        assessmentTimeoutMs: 90000,
+        gapDiscoveryTimeoutMs: 30000,
+        gapAssessmentTimeoutMs: 45000,
+        gapDiscovery: { discover },
+      }),
+    ).assessWithEvidence(fixture());
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(60000);
+    await vi.advanceTimersByTimeAsync(20000);
+    const result = await pending;
+    expect(result.report.status).toBe('completed');
+    expect(result.report.trace.discovery?.outcome).toBe('reassessed');
+    expect(result.report.assessments[0]!.status).toBe('supported');
+    expect(fetch).toHaveBeenCalledTimes(3);
+  } finally {
+    vi.useRealTimers();
+  }
 });

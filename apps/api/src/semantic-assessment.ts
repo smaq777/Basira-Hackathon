@@ -5,6 +5,7 @@ import type {
   FoundationIntake,
   SourceEvidence,
 } from '../../../packages/contracts/src/foundation.js';
+import { evidencePacketFits } from './evidence-budget.js';
 import {
   ClaimExtractionOutputSchema,
   EvidenceSupportOutputSchema,
@@ -48,6 +49,8 @@ export interface SemanticAssessmentOptions {
   allowedProviders?: readonly string[];
   overallTimeoutMs?: number;
   requestTimeoutMs?: number;
+  assessmentTimeoutMs?: number;
+  extractionTimeoutMs?: number;
   fetch?: typeof globalThis.fetch;
   now?: () => number;
   claimRetrieval?: ClaimRetrievalAdapter;
@@ -355,10 +358,21 @@ export function createSemanticAssessmentAdapter(
       if (
         !Number.isInteger(discoveryMs) ||
         discoveryMs < 1 ||
-        discoveryMs > 8000 ||
+        discoveryMs > (options.researchPreview ? 65000 : 8000) ||
         !Number.isInteger(gapAssessmentMs) ||
         gapAssessmentMs < 1 ||
-        gapAssessmentMs > 20000
+        gapAssessmentMs > (options.researchPreview ? 45000 : 20000)
+      )
+        return report('unavailable', 'configuration_invalid');
+      const assessmentMs = options.assessmentTimeoutMs ?? ASSESSMENT_TIMEOUT_MS;
+      const extractionMs = options.extractionTimeoutMs ?? EXTRACTION_TIMEOUT_MS;
+      if (
+        !Number.isInteger(extractionMs) ||
+        extractionMs < 1 ||
+        extractionMs > (options.researchPreview ? 20000 : EXTRACTION_TIMEOUT_MS) ||
+        !Number.isInteger(assessmentMs) ||
+        assessmentMs < 1 ||
+        assessmentMs > (options.researchPreview ? 90000 : ASSESSMENT_TIMEOUT_MS)
       )
         return report('unavailable', 'configuration_invalid');
       const overallMs = options.overallTimeoutMs ?? SEMANTIC_PHASE_TIMEOUT_MS;
@@ -366,9 +380,11 @@ export function createSemanticAssessmentAdapter(
       if (
         !Number.isInteger(overallMs) ||
         overallMs < 1 ||
-        overallMs > SEMANTIC_PHASE_TIMEOUT_MS ||
+        overallMs > (options.researchPreview ? 240000 : SEMANTIC_PHASE_TIMEOUT_MS) ||
         (requestMs !== undefined &&
-          (!Number.isInteger(requestMs) || requestMs < 1 || requestMs > ASSESSMENT_TIMEOUT_MS))
+          (!Number.isInteger(requestMs) ||
+            requestMs < 1 ||
+            requestMs > (options.researchPreview ? 90000 : ASSESSMENT_TIMEOUT_MS)))
       )
         return report('unavailable', 'configuration_invalid');
       let intake: FoundationIntake;
@@ -452,10 +468,10 @@ export function createSemanticAssessmentAdapter(
           controller.signal.addEventListener('abort', cancellation, { once: true });
           const stageCap =
             stage === 'extraction'
-              ? EXTRACTION_TIMEOUT_MS
+              ? extractionMs
               : stage === 'gap_assessment'
                 ? gapAssessmentMs
-                : ASSESSMENT_TIMEOUT_MS;
+                : assessmentMs;
           const stageMs = Math.min(requestMs ?? stageCap, stageCap);
           timer = setTimeout(() => controller.abort(), Math.min(stageMs, remaining));
         });
@@ -678,6 +694,11 @@ export function createSemanticAssessmentAdapter(
             claims = retrieved.claims.map((row) => SemanticClaimSchema.parse(row));
             retrievalTrace = retrieved.trace;
           } catch (error) {
+            const code =
+              error instanceof Error && /^RETRIEVAL_[A-Z_]{1,60}$/u.test(error.message)
+                ? error.message
+                : 'RETRIEVAL_UNAVAILABLE';
+            console.error(JSON.stringify({ event: 'semantic_retrieval_failed', code }));
             if (error instanceof PhaseError) throw error;
             throw new PhaseError(externalSignal?.aborted ? 'cancelled' : 'upstream_unavailable');
           } finally {
@@ -850,9 +871,26 @@ export function createSemanticAssessmentAdapter(
                   throw new PhaseError('invalid_intake');
               }
               const originalKeys = new Set(intake.evidence.map((row) => row.snapshotKey));
-              const additions = acquired.evidence.filter(
-                (row) => !originalKeys.has(row.snapshotKey),
+              // Cache and live deliveries can name the same page differently. They
+              // are one source representation, rather than independent evidence.
+              const representations = new Set(
+                intake.evidence
+                  .filter((row) => row.sourceUrl)
+                  .map((row) => `${row.sourceUrl}\n${row.originalSha256}`),
               );
+              const additions = acquired.evidence.filter((row) => {
+                const representation = row.sourceUrl
+                  ? `${row.sourceUrl}\n${row.originalSha256}`
+                  : undefined;
+                if (
+                  originalKeys.has(row.snapshotKey) ||
+                  (representation && representations.has(representation))
+                )
+                  return false;
+                originalKeys.add(row.snapshotKey);
+                if (representation) representations.add(representation);
+                return true;
+              });
               if (
                 additions.some(
                   (row) =>
@@ -870,7 +908,16 @@ export function createSemanticAssessmentAdapter(
                 claim.evidenceKeys.length + additions.length > 20
               )
                 throw new PhaseError('body_too_large');
-              if (!additions.length)
+              if (
+                additions.length &&
+                !evidencePacketFits(intake, [...intake.evidence, ...additions])
+              ) {
+                discovery.outcome = 'packet_budget_skipped';
+                discovery.failureCodes = [
+                  ...discovery.failureCodes,
+                  'discovery_packet_byte_budget',
+                ].slice(0, 9);
+              } else if (!additions.length)
                 discovery.outcome = acquired.failureCodes.length ? 'failed' : 'no_evidence';
               else {
                 const next = validateIntake(

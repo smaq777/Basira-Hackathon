@@ -5,6 +5,7 @@ import type {
 import type { SemanticClaim } from '../../../packages/contracts/src/semantic-assessment.js';
 import { SourceEvidenceSchema } from '../../../packages/contracts/src/foundation.js';
 import { canonical, sha256 } from './foundation.js';
+import { evidencePacketFits } from './evidence-budget.js';
 
 export interface ClaimRetrievalTrace {
   corpusVersion: string;
@@ -206,6 +207,13 @@ export function createClaimRetrievalAdapter(options: {
           const newEvidence = family.filter((row) => !evidence.has(row.snapshotKey));
           const nextClaimSize = keys.size + newClaimKeys.length;
           const nextEvidenceSize = evidence.size + newEvidence.length;
+          if (
+            newEvidence.length &&
+            !evidencePacketFits(intake, [...evidence.values(), ...newEvidence])
+          ) {
+            if (claim.evidenceKeys.includes(key)) throw new Error('RETRIEVAL_PACKET_TOO_LARGE');
+            continue;
+          }
           if (nextClaimSize > 20 || nextEvidenceSize > 80) {
             if (claim.evidenceKeys.includes(key)) throw new Error('RETRIEVAL_PACKET_TOO_LARGE');
             continue;

@@ -9,6 +9,7 @@ export function createWebGapDiscovery(options: {
   apiKey: string;
   policy: LoadedSourcePolicy;
   fetch?: typeof globalThis.fetch;
+  timeoutMs?: number;
 }): ClaimGapDiscovery {
   // Freeze the effective eligibility record together with its recorded policy hash.
   const policy = structuredClone(options.policy);
@@ -17,7 +18,7 @@ export function createWebGapDiscovery(options: {
         apiKey: options.apiKey,
         policies: policy.policies,
         fetch: options.fetch,
-        timeoutMs: 8000,
+        timeoutMs: options.timeoutMs ?? 8000,
         maxPages: 2,
       })
     : undefined;

@@ -6,6 +6,8 @@ Draft PR #59 now connects the current UI to persisted review reports, local quot
 
 The Neon research corpus has 62 originals; the larger local index has 6,236 Quran, 6,235 Tafsir and 31,811 hadith entries. Only four IslamicEval hadith originals are currently hosted. Benchmark answers/gold are evaluation material, not retrieval evidence. The trained role classifiers are not live. See [dataset/records audit](evidence/2026-10-05-islamiceval-records-audit.md).
 
+**Reusable acquisition update, 5 October:** Eligible public originals can now be automatically topic-classified by the small model and stored in a separate pending Neon research cache through migration 0010 and a dedicated least-privileged writer. Two real public pages passed persistent reuse, original-hash, expiry/revocation, and privacy checks; the frozen 62-passage corpus remains unchanged. Cached pages participate in initial retrieval, while remaining evidence gaps may use explicitly selected Tinyfish-first acquisition with Firecrawl fallback. All optional flags default off. The authorized cache profile uses 240/90/65/45-second phase ceilings within a 300-second review deadline; this is not a latency guarantee, scholarly approval, resolved publication rights, or production activation. See [cache evidence](evidence/2026-10-05-reusable-research-page-cache.md) and [setup](operations/SETUP.md#research-cache-and-discovery-profile--5-october).
+
 The tables below retain deployment/baseline context; this development evidence does not promote production, resolve source rights, or establish scholarly accuracy.
 
 **Hosted retrieval follow-up, 5 October:** The

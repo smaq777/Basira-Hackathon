@@ -951,7 +951,8 @@ function AnalysisScreen({
         <h1>نراجع النص والمصدر والاستدلال</h1>
         <p className="hero-copy">
           لا تحتاج إلى تصنيف أي عبارة. نقارن النقل مع المصادر المتاحة، ونبيّن ما لم يُقيّم من
-          الاستدلال.
+          الاستدلال. قد تستغرق مراجعة الأدلة والبحث الإضافي بضع دقائق. يمكنك إلغاء المراجعة في أي
+          وقت.
         </p>
         <section className="analysis-card" aria-live="polite">
           <div className="analysis-text">

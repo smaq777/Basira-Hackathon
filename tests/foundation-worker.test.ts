@@ -77,6 +77,28 @@ function fixture() {
   return { intake, lease, store, adapter };
 }
 
+it('logs persistence stage and machine code without arbitrary failure content', async () => {
+  const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  try {
+    for (const [message, code] of [
+      ['REPORT_TOO_LARGE', 'REPORT_TOO_LARGE'],
+      ['Private draft and credential content', 'UNCLASSIFIED_ERROR'],
+    ]) {
+      const { adapter, store } = fixture();
+      vi.mocked(store.complete).mockRejectedValue(new Error(message));
+      await createFoundationWorker(adapter, store).runOnce();
+      expect(JSON.parse(diagnostic.mock.calls.at(-1)![0])).toEqual({
+        event: 'foundation_review_failed',
+        stage: 'report_persistence',
+        code,
+        errorType: 'Error',
+      });
+    }
+  } finally {
+    diagnostic.mockRestore();
+  }
+});
+
 it('persists a revision-bound report with interpretation explicitly unassessed', async () => {
   const { lease, intake, store, adapter } = fixture();
   const worker = createFoundationWorker(adapter, store);
@@ -352,6 +374,46 @@ function semanticFixture(intake: FoundationIntake): SemanticAssessmentReport {
     limitations: [],
   };
 }
+
+it('preserves the original report when an optional semantic packet exceeds durable byte headroom', async () => {
+  const { intake, store, adapter, lease } = fixture();
+  const enriched = structuredClone(intake);
+  enriched.researchOnly = true;
+  enriched.evidence = Array.from({ length: 5 }, (_, index) => ({
+    snapshotKey: `cache-${index}`,
+    sourceId: `cache-${index}`,
+    sourceVersion: '1',
+    sourceRole: 'book_excerpt',
+    reference: 'Owned reference',
+    originalText: 'ع'.repeat(30000),
+    originalSha256: sha256('ع'.repeat(30000)),
+    work: 'Owned work',
+    author: null,
+    edition: null,
+    sourceUrl: `https://owned.example/${index}`,
+    approvalStatus: 'pending',
+    researchOnly: true,
+    parentSnapshotKey: null,
+    delivery: 'snapshot',
+    retrievalModes: ['lexical'],
+    provenance: {},
+  }));
+  const semantic = {
+    assessWithEvidence: vi
+      .fn()
+      .mockResolvedValue({ report: semanticFixture(enriched), intake: enriched }),
+  };
+  await createFoundationWorker(adapter, store, semantic, { researchPreview: true }).runOnce();
+  const persisted = vi.mocked(store.complete).mock.calls[0]![1];
+  expect(persisted.evidence).toEqual([]);
+  expect(persisted.result.semanticAssessment).toBeUndefined();
+  expect(persisted.result.status).toBe('partial');
+  expect(persisted.result.intake).toEqual(intake);
+  expect(persisted.result.limitations).toEqual(
+    expect.arrayContaining([expect.stringContaining('لكثرة النصوص المرجعية')]),
+  );
+  validateStoredReport(lease, persisted);
+});
 
 it('binds provisional semantic results into the durable report without scholarly approval', async () => {
   const { intake, store, adapter } = fixture();
@@ -630,6 +692,89 @@ it('persists source results before the worker deadline when the real semantic ad
   } finally {
     await worker.stop();
     timeout.mockRestore();
+    vi.useRealTimers();
+  }
+});
+
+it('renews a bounded research lease throughout a longer semantic wait', async () => {
+  vi.useFakeTimers();
+  const { intake, lease, store, adapter } = fixture();
+  lease.deadlineAt = new Date(Date.now() + 240000).toISOString();
+  const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation((delay) => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), delay);
+    return controller.signal;
+  });
+  const semantic = {
+    assessWithEvidence: vi.fn(
+      (_intake: FoundationIntake, signal?: AbortSignal) =>
+        new Promise<{ report: SemanticAssessmentReport; intake: FoundationIntake }>(
+          (resolve, reject) => {
+            const timer = setTimeout(
+              () => resolve({ report: semanticFixture(intake), intake }),
+              90000,
+            );
+            signal?.addEventListener(
+              'abort',
+              () => {
+                clearTimeout(timer);
+                reject(new Error('ABORTED'));
+              },
+              { once: true },
+            );
+          },
+        ),
+    ),
+  };
+  const worker = createFoundationWorker(adapter, store, semantic, {
+    researchPreview: true,
+    semanticTimeoutMs: 180000,
+  });
+  try {
+    const pending = worker.runOnce();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.acquire).toHaveBeenCalledWith(null, 30);
+    expect(timeout).toHaveBeenCalledWith(180000);
+    await vi.advanceTimersByTimeAsync(90000);
+    expect(await pending).toBe(true);
+    expect(store.heartbeat).toHaveBeenCalledTimes(22);
+    expect(store.heartbeat).toHaveBeenCalledWith(lease, 30);
+    expect(store.complete).toHaveBeenCalledOnce();
+    expect(store.fail).not.toHaveBeenCalled();
+  } finally {
+    await worker.stop();
+    timeout.mockRestore();
+    vi.useRealTimers();
+  }
+});
+
+it('keeps cancellation active during an extended semantic wait', async () => {
+  vi.useFakeTimers();
+  const { intake, lease, store, adapter } = fixture();
+  lease.deadlineAt = new Date(Date.now() + 240000).toISOString();
+  vi.mocked(store.heartbeat).mockResolvedValueOnce(false);
+  let observedSignal: AbortSignal | undefined;
+  const semantic = {
+    assessWithEvidence: vi.fn((_intake: FoundationIntake, signal?: AbortSignal) => {
+      observedSignal = signal;
+      return new Promise<{ report: SemanticAssessmentReport; intake: FoundationIntake }>(
+        (_resolve, reject) =>
+          signal?.addEventListener('abort', () => reject(new Error('ABORTED')), { once: true }),
+      );
+    }),
+  };
+  const worker = createFoundationWorker(adapter, store, semantic, {
+    researchPreview: true,
+    semanticTimeoutMs: 180000,
+  });
+  try {
+    const pending = worker.runOnce();
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(await pending).toBe(true);
+    expect(observedSignal?.aborted).toBe(true);
+    expect(store.complete).not.toHaveBeenCalled();
+  } finally {
+    await worker.stop();
     vi.useRealTimers();
   }
 });

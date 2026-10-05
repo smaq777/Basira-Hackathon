@@ -1,3 +1,4 @@
+import { semanticBudgetConfiguration } from './semantic-budget.js';
 import { createApp } from './app.js';
 import { createDatabase, databaseTls, DatabaseUnavailable } from './database.js';
 import { Pool } from 'pg';
@@ -12,6 +13,13 @@ import { createHostedCorpus } from './hosted-corpus.js';
 import { createClaimRetrievalAdapter } from './claim-retrieval.js';
 import { loadSourcePolicy } from './source-policy.js';
 import { createWebGapDiscovery } from './web-gap-discovery.js';
+import { createResearchPageCache } from './research-page-cache.js';
+import { createPageTopicClassifier } from './page-topic-classifier.js';
+import { withResearchPageCache } from './cached-gap-discovery.js';
+import { withResearchPageCorpus } from './cached-corpus.js';
+import { createTinyfishGapDiscovery } from './tinyfish-discovery.js';
+import { createCompositeGapDiscovery } from './composite-gap-discovery.js';
+import type { ClaimCorpusSearch } from './claim-retrieval.js';
 import {
   createOpenRouterQueryEmbedding,
   QUERY_EMBEDDING_MODEL,
@@ -45,10 +53,16 @@ async function initializeFoundation() {
   if (process.env.FOUNDATION_TAFSIR_LIVE === 'true' && !researchPreview)
     throw new Error('LIVE_SOURCE_ACQUISITION_REQUIRES_LOCAL_RESEARCH_PREVIEW');
   const semanticEnabled = process.env.FOUNDATION_SEMANTIC_ENABLED === 'true';
+  const semanticBudget = semanticBudgetConfiguration(process.env, researchPreview);
   if (semanticEnabled && !researchPreview)
     throw new Error('SEMANTIC_PILOT_REQUIRES_LOCAL_RESEARCH_PREVIEW');
   const retrievalEnabled = process.env.FOUNDATION_CLAIM_RETRIEVAL_ENABLED === 'true';
   const webDiscoveryEnabled = process.env.FOUNDATION_WEB_DISCOVERY_ENABLED === 'true';
+  const webCacheEnabled = process.env.FOUNDATION_WEB_CACHE_ENABLED === 'true';
+  const webProvider = process.env.FOUNDATION_WEB_PROVIDER ?? 'firecrawl';
+  if (!['firecrawl', 'tinyfish_first'].includes(webProvider))
+    throw new Error('WEB_DISCOVERY_PROVIDER_INVALID');
+  if (webCacheEnabled && !webDiscoveryEnabled) throw new Error('WEB_CACHE_REQUIRES_WEB_DISCOVERY');
   if (webDiscoveryEnabled && !retrievalEnabled)
     throw new Error('WEB_DISCOVERY_REQUIRES_CLAIM_RETRIEVAL');
   if (retrievalEnabled && !semanticEnabled)
@@ -73,6 +87,7 @@ async function initializeFoundation() {
     researchPreview,
   });
   let corpusPool: Pool | undefined;
+  let webCachePool: Pool | undefined;
   try {
     const intake = await adapter.analyze('تهيئة محرك المصادر المحلي.', randomUUID());
     const configured = process.env.CORPUS_VERSION?.trim();
@@ -82,6 +97,8 @@ async function initializeFoundation() {
     const store = createReviewStore(workerUrl);
     const reports = createReviewStore(connectionString);
     let claimRetrieval;
+    let baseCorpus: ClaimCorpusSearch | undefined;
+    let selectedCorpusVersion: string | undefined;
     if (retrievalEnabled) {
       const configuredUrl = process.env.FOUNDATION_CORPUS_DATABASE_URL;
       const corpusVersion = process.env.FOUNDATION_CORPUS_VERSION?.trim();
@@ -111,6 +128,8 @@ async function initializeFoundation() {
         },
       });
       if (!(await corpus.readiness()).ready) throw new Error('HOSTED_CORPUS_NOT_READY');
+      baseCorpus = corpus;
+      selectedCorpusVersion = corpusVersion;
       claimRetrieval = createClaimRetrievalAdapter({
         corpus,
         corpusVersion,
@@ -122,14 +141,72 @@ async function initializeFoundation() {
     if (webDiscoveryEnabled) {
       const apiKey = process.env.FIRECRAWL_API_KEY;
       if (!apiKey) throw new Error('FIRECRAWL_CONFIGURATION_REQUIRED');
+      const sourcePolicy = await loadSourcePolicy(
+        process.env.FOUNDATION_WEB_POLICY_PATH || undefined,
+      );
       gapDiscovery = createWebGapDiscovery({
         apiKey,
-        policy: await loadSourcePolicy(process.env.FOUNDATION_WEB_POLICY_PATH || undefined),
+        policy: sourcePolicy,
+        timeoutMs: Math.min(30_000, semanticBudget.gapDiscoveryTimeoutMs),
       });
+      if (webProvider === 'tinyfish_first') {
+        if (!process.env.TINYFISH_API_KEY) throw new Error('TINYFISH_CONFIGURATION_REQUIRED');
+        gapDiscovery = createCompositeGapDiscovery({
+          primary: createTinyfishGapDiscovery({
+            apiKey: process.env.TINYFISH_API_KEY,
+            policy: sourcePolicy,
+            timeoutMs: Math.min(30_000, semanticBudget.gapDiscoveryTimeoutMs),
+          }),
+          fallback: gapDiscovery,
+          timeoutMs: Math.min(30_000, semanticBudget.gapDiscoveryTimeoutMs),
+        });
+      }
+      if (webCacheEnabled) {
+        if (
+          !corpusPool ||
+          !process.env.FOUNDATION_WEB_CACHE_DATABASE_URL ||
+          !process.env.OPENROUTER_API_KEY
+        )
+          throw new Error('WEB_CACHE_CONFIGURATION_REQUIRED');
+        if (semanticBudget.gapDiscoveryTimeoutMs < 65_000)
+          throw new Error('WEB_CACHE_REQUIRES_EXTENDED_DISCOVERY_BUDGET');
+        const cacheUrl = new URL(process.env.FOUNDATION_WEB_CACHE_DATABASE_URL);
+        if (!['postgres:', 'postgresql:'].includes(cacheUrl.protocol))
+          throw new Error('WEB_CACHE_URL_INVALID');
+        cacheUrl.searchParams.delete('sslmode');
+        cacheUrl.searchParams.delete('channel_binding');
+        webCachePool = new Pool({
+          connectionString: cacheUrl.toString(),
+          ssl: databaseTls(process.env.FOUNDATION_CORPUS_TLS_MODE || 'verify-full'),
+          max: 2,
+          connectionTimeoutMillis: 5_000,
+          idleTimeoutMillis: 30_000,
+        });
+        const cache = createResearchPageCache({
+          readerPool: corpusPool,
+          writerPool: webCachePool,
+          policy: sourcePolicy,
+          classify: createPageTopicClassifier({ apiKey: process.env.OPENROUTER_API_KEY }),
+          embeddingSpace: {
+            modelId: QUERY_EMBEDDING_MODEL,
+            embed: createOpenRouterQueryEmbedding({ apiKey: process.env.OPENROUTER_API_KEY }),
+          },
+        });
+        gapDiscovery = withResearchPageCache(gapDiscovery, cache, {
+          timeoutMs: semanticBudget.gapDiscoveryTimeoutMs,
+        });
+        claimRetrieval = createClaimRetrievalAdapter({
+          corpus: withResearchPageCorpus(baseCorpus!, cache),
+          corpusVersion: selectedCorpusVersion!,
+          researchPreview,
+          reserveDiscoveryKeys: true,
+        });
+      }
     }
     const semantic = semanticEnabled
       ? createSemanticAssessmentAdapter({
           enabled: true,
+          ...semanticBudget,
           apiKey: process.env.OPENROUTER_API_KEY,
           extractor: { modelId: 'openai/gpt-6-luna', providerId: 'OpenAI', reasoningEffort: 'low' },
           assessor: {
@@ -144,7 +221,10 @@ async function initializeFoundation() {
           gapDiscovery,
         })
       : undefined;
-    const worker = createFoundationWorker(adapter, store, semantic, { researchPreview });
+    const worker = createFoundationWorker(adapter, store, semantic, {
+      researchPreview,
+      semanticTimeoutMs: semanticBudget.overallTimeoutMs,
+    });
     return {
       worker,
       reports,
@@ -152,10 +232,13 @@ async function initializeFoundation() {
       liveTafsir: process.env.FOUNDATION_TAFSIR_LIVE === 'true',
       semanticPilot: semanticEnabled,
       webDiscovery: webDiscoveryEnabled,
+      webProvider: webProvider as 'firecrawl' | 'tinyfish_first',
       corpusPool,
+      webCachePool,
     };
   } catch (error) {
     await corpusPool?.end();
+    await webCachePool?.end();
     await adapter.close();
     throw error;
   }
@@ -180,6 +263,7 @@ async function closeResources() {
     foundation?.worker.stop(),
     foundation?.reports.close(),
     foundation?.corpusPool?.end(),
+    foundation?.webCachePool?.end(),
     database.close(),
   ]);
 }
