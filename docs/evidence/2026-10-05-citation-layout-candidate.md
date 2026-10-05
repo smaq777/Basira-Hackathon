@@ -44,7 +44,9 @@ budget notice remains within the 85-item candidate schema. Targeted regression
 checks cover each defect, including faithfully quoted partial references.
 An independent Sol Medium pass repaired stale create/cancel response races after
 report replacement or a new generation. Final `npm run check` passed: 40 test
-files / 569 tests, typechecking, documentation, policy, formatting and build.
+files / 533 source tests, typechecking, documentation, policy, formatting and build.
+The test command excludes compiled `dist` artifacts: the earlier 40-file / 569
+run included 36 duplicate compiled contract tests; the source-only run has 37 files.
 The existing Vite bundle-size warning remains advisory.
 
 Durable candidates and substantive wording changes remain gated pending

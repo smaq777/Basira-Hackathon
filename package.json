@@ -14,7 +14,7 @@
     "db:migrate": "node scripts/migrate.mjs",
     "db:verify": "node scripts/verify-database.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --exclude \"**/dist/**\"",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "docs:check": "node scripts/check-docs.mjs",
