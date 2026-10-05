@@ -220,7 +220,8 @@ describe('Basirah web flow', () => {
     });
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const path = String(input);
-      if (path === '/api/v1/capabilities') return json({ foundationReview: true });
+      if (path === '/api/v1/capabilities')
+        return json({ foundationReview: true, guestDocuments: true });
       if (path === '/api/v1/documents') return pendingDocument;
       if (path === `/api/v1/revisions/${REVISION_ID}/extractions`)
         return json({ extraction: { candidates: [], warnings: [] } });
@@ -255,6 +256,7 @@ describe('Basirah web flow', () => {
     expect(JSON.parse(String(draft[1]?.body)).text).toBe(ORIGINAL_TEXT);
     expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
       '/api/v1/capabilities',
+      '/api/v1/capabilities',
       '/api/v1/documents',
       `/api/v1/revisions/${REVISION_ID}/extractions`,
       '/api/v1/reviews',
@@ -268,7 +270,7 @@ describe('Basirah web flow', () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) => {
       if (String(_input) === '/api/v1/capabilities')
         return Promise.resolve(
-          new Response(JSON.stringify({ foundationReview: true }), {
+          new Response(JSON.stringify({ foundationReview: true, guestDocuments: true }), {
             headers: { 'Content-Type': 'application/json' },
           }),
         );
@@ -295,6 +297,7 @@ describe('Basirah web flow', () => {
 
     expect(request.signal?.aborted).toBe(true);
     expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+      '/api/v1/capabilities',
       '/api/v1/capabilities',
       '/api/v1/documents',
     ]);
@@ -423,7 +426,7 @@ describe('Basirah web flow', () => {
 
     expect(screen.getByRole('navigation', { name: 'مساحة المراجع' })).not.toBeNull();
     expect(screen.getByRole('button', { name: /طلبات المراجعة/ })).not.toBeNull();
-    expect(screen.getByText('بيانات تجريبية')).not.toBeNull();
+    expect(screen.getByText('بيانات التذاكر المحمية')).not.toBeNull();
   });
 
   it('keeps public navigation separate from terminating the Clerk session', async () => {
@@ -449,22 +452,20 @@ describe('Basirah web flow', () => {
     expect(location.reload).toHaveBeenCalledOnce();
   });
 
-  it('shows a useful empty state when a reviewer search has no matches', async () => {
-    const user = userEvent.setup();
+  it('shows a useful empty state while the reviewer queue has no rows', () => {
     window.location.hash = '#/reviewer/queue';
     render(<ReviewerShell route="queue" navigate={vi.fn()} onSignOut={vi.fn()} />);
-
-    await user.type(screen.getByPlaceholderText('ابحث برقم الطلب أو موضوعه'), 'لا توجد نتيجة');
 
     expect(screen.getByText('لا توجد طلبات هنا')).not.toBeNull();
     expect(screen.getByText('جرّب تغيير التصفية أو البحث بكلمات أخرى.')).not.toBeNull();
   });
 
-  it('shows a recoverable reviewer error state', () => {
-    window.location.hash = '#/reviewer/queue?state=error';
+  it('shows a recoverable reviewer error state', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
+    window.location.hash = '#/reviewer/queue';
     render(<ReviewerShell route="queue" navigate={vi.fn()} onSignOut={vi.fn()} />);
 
-    expect(screen.getByRole('alert').textContent).toContain('تعذر تحميل الطلبات');
+    expect((await screen.findByRole('alert')).textContent).toContain('تعذر تحميل الطلبات');
     expect(screen.getByRole('button', { name: 'إعادة المحاولة' })).not.toBeNull();
   });
 
