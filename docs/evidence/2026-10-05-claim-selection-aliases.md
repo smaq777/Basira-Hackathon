@@ -48,3 +48,15 @@ reconsideration and canonical assessor delivery. Changed-packet paid comparison
 remains pending a new freeze and lead technical review; no improvement claim is
 made from these offline tests. Rollback is an application-code rollback to the
 previous selector; no database migration or source-record mutation is required.
+
+## Separate citation-inventory correction
+
+Bracketed references matching the intake manifest are excluded as bibliographic
+framing. Named Quran chapter/verse notation is recognized only when its numeric
+reference matches a Quran source in that manifest; Arabic digits and reference
+whitespace/diacritics have a comparison-only normalized key. Unmatched or ambiguous
+bracketed text is retained under existing inventory rules. Author brackets and
+parentheses containing conditions, negation or exceptions remain in the exact
+claim span. This is syntactic inventory handling, not semantic claim pruning or
+verification of the reference. Source originals and citation validators are
+unchanged. The correction is committed separately from the alias binding change.

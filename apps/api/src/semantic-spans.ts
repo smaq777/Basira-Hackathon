@@ -40,6 +40,27 @@ export function claimInventory(intake: FoundationIntake): ClaimInventory {
   const quotes = [
     ...intake.originalText.matchAll(/«[^«»]*»|﴿[^﴿﴾]*﴾|“[^“”]*”|"[^"\n]*"|\{[^{}]*\}/gu),
   ].map((match) => ({ start: match.index, end: match.index + match[0].length }));
+  // Recognized bracketed references are bibliographic framing, not assertions.
+  // Do not remove arbitrary brackets or parenthesized author qualifications.
+  const referenceKey = (text: string) =>
+    text
+      .replace(/[\u064b-\u065f\u0670ـ\s]/gu, '')
+      .replace(/[٠-٩]/gu, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
+  const references = new Set(intake.evidence.map((row) => referenceKey(row.reference)));
+  const quranReferences = new Set(
+    intake.evidence
+      .filter((row) => row.sourceRole === 'quran_text')
+      .map((row) => referenceKey(row.reference)),
+  );
+  const citationRanges = [...intake.originalText.matchAll(/\[([^\[\]\n]{1,120})\]/gu)]
+    .filter((match) => {
+      const key = referenceKey(match[1]!);
+      if (references.has(key)) return true;
+      const namedQuran = key.match(/^[\p{L}]+:([0-9]{1,3}:[0-9]{1,3})$/u);
+      return !!namedQuran && quranReferences.has(namedQuran[1]!);
+    })
+    .map((match) => ({ start: match.index, end: match.index + match[0].length }));
+  quotes.push(...citationRanges);
   // Parentheses are quotations only when introduced as reported source speech.
   // Parenthesized author conditions remain part of their assertion.
   const stack: number[] = [];
@@ -85,7 +106,9 @@ export function claimInventory(intake: FoundationIntake): ClaimInventory {
         excluded.push({
           startOffset: Math.max(sentenceStart, quote.start),
           endOffset: Math.min(sentenceEnd, quote.end),
-          reason: 'quotation',
+          reason: citationRanges.some((row) => row.start === quote.start && row.end === quote.end)
+            ? 'framing'
+            : 'quotation',
         });
         cursor = Math.max(cursor, quote.end);
       }

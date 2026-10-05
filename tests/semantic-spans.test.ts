@@ -407,3 +407,55 @@ describe('v1.7 assessment wire and coverage', () => {
     });
   });
 });
+
+describe('recognized bracketed citation inventory framing', () => {
+  it('excludes a manifest-bound named Quran reference while retaining the complete qualified author assertion', () => {
+    const original = {
+      ...source('نص المصدر الأصلي.'),
+      sourceRole: 'quran_text' as const,
+      reference: '31:15',
+    };
+    const text =
+      'لا يلزم طاعتهما في المعصية، ويلزم صحبتهما بالمعروف فيما لا إثم فيه. قال تعالى: ﴿نص المصدر الأصلي﴾ [لقمان:31:15].';
+    const row = intake(text, original);
+    const before = canonical(row);
+    const inventory = claimInventory(row);
+    expect(inventory.candidates).toHaveLength(1);
+    expect(inventory.candidates[0]!.originalText).toBe(
+      'لا يلزم طاعتهما في المعصية، ويلزم صحبتهما بالمعروف فيما لا إثم فيه',
+    );
+    expect(inventory.excluded).toContainEqual({
+      startOffset: text.indexOf('[لقمان'),
+      endOffset: text.indexOf('[لقمان') + '[لقمان:31:15]'.length,
+      reason: 'framing',
+    });
+    expect(canonical(row)).toBe(before);
+  });
+  it('supports exact references and Arabic digits without asserting unmatched references are claims or source support', () => {
+    const original = {
+      ...source('نص المصدر.'),
+      sourceRole: 'quran_text' as const,
+      reference: '31:15',
+    };
+    for (const reference of ['[31:15]', '[لقمان:٣١:١٥]'])
+      expect(
+        claimInventory(intake('قال تعالى: ﴿نص المصدر﴾ ' + reference, original)).candidates,
+      ).toEqual([]);
+    const unmatched = claimInventory(intake('قال تعالى: ﴿نص المصدر﴾ [لقمان:31:16]', original));
+    expect(
+      unmatched.excluded.some(
+        (row) => row.reason === 'framing' && row.startOffset === 'قال تعالى: ﴿نص المصدر﴾ '.length,
+      ),
+    ).toBe(false);
+  });
+  it.each([
+    'يجب حفظ الحقوق [إلا عند التعذر، فلا يلزم ذلك].',
+    'يجب حفظ الحقوق (إلا عند التعذر، فلا يلزم ذلك).',
+    'لا يلزم حفظ السجل [إذا كان فيه ضرر]، ويلزم حفظ الحقوق.',
+  ])('retains bracketed/parenthesized author qualifiers: %s', (text) => {
+    const inventory = claimInventory(intake(text));
+    expect(inventory.candidates).toHaveLength(1);
+    expect(inventory.candidates[0]!.originalText).toBe(text.slice(0, -1));
+    expect(inventory.excluded).toEqual([]);
+  });
+});
