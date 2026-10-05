@@ -1,6 +1,6 @@
 # Guest capacity feedback — 5 October 2026
 
-Related to [issue #79](https://github.com/smaq777/Basira-Hackathon/issues/79). This stacked implementation starts from issue #17's frozen `53c757f` and depends on [draft PR #92](https://github.com/smaq777/Basira-Hackathon/pull/92) and its reviewed cleaning dependency. It changes client handling and presentation only; server limits, authentication, ownership, existing reports and provider behavior remain unchanged.
+Related to [issue #79](https://github.com/smaq777/Basira-Hackathon/issues/79). This stacked implementation starts from issue #17's frozen `53c757f` and depends on [draft PR #92](https://github.com/smaq777/Basira-Hackathon/pull/92) and its reviewed cleaning dependency. Owner development `845d608` (PR #91) is preserve-merged: unavailable Foundation analysis with a saved revision still routes to its saved result/human-review path; fixed resource capacity remains a separate notice. It changes client handling and presentation only; server limits, authentication, ownership, existing reports and provider behavior remain unchanged.
 
 ## Problem and behavior
 

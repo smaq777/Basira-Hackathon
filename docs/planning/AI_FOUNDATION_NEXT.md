@@ -68,7 +68,7 @@ retrieval remains a separate acceptance requirement.
 ## Merge and testing order
 
 PRs #59, #70–#78 and #80 are merged; owner #88/#89 added ticket intake through
-migration 0014 at development `661fef89`. Reviewed cleaning draft #85 preserves
+migration 0014 at development `661fef89`; #91 added saved-result/human-ticket fallback at `845d608`. Reviewed cleaning draft #85 preserves
 those migrations and assigns unapplied deployment cleaning 0015. Historical failed
 experimental 0013 and successful isolated 0014 retain their original checksums.
 Corrected child validation, all eight selected joint-classifier calls, first-repeat

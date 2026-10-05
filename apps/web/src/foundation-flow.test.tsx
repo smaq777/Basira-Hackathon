@@ -292,20 +292,52 @@ describe('owned foundation review web flow', () => {
     expect(screen.queryByText('اكتملت المقارنة')).toBeNull();
   });
 
-  it('keeps unavailable connected review explicit and preserves a direct-review draft', async () => {
+  it('routes unavailable connected review to an honest result and preserves a direct-review draft', async () => {
     const fetchMock = mockReviewApi({ capability: false });
     render(<App />);
     fireEvent.change(screen.getByRole('textbox', { name: 'النص المراد مراجعته' }), {
       target: { value: ORIGINAL_TEXT },
     });
     await userEvent.click(screen.getByRole('button', { name: 'ابدأ المراجعة' }));
-    expect((await screen.findByRole('alert')).textContent).toContain('المراجعة المتصلة غير مفعّلة');
+    expect(
+      await screen.findByRole('heading', { name: 'حفظنا النص، ولم نصدر نتيجة غير موثقة' }),
+    ).not.toBeNull();
+    expect(window.location.hash).toBe(`#/result?revisionId=${REVISION_ID}`);
     expect(fetchMock.mock.calls.some(([path]) => path === '/api/v1/documents')).toBe(true);
-    expect(screen.getByRole('button', { name: /أحتاج مراجعة بشرية/ })).not.toBeNull();
-    await userEvent.click(screen.getByRole('button', { name: 'إلغاء والعودة للنص' }));
+    expect(screen.getByRole('button', { name: /إرسال النص للمراجعة البشرية/ })).not.toBeNull();
+    expect(screen.queryByText('اكتملت المقارنة')).toBeNull();
+    expect(screen.queryByText('لذلك يجب إخفاء كل صدقة ولا يجوز إعلانها.')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'العودة وتعديل النص' }));
     expect(
       (screen.getByRole('textbox', { name: 'النص المراد مراجعته' }) as HTMLTextAreaElement).value,
     ).toBe(ORIGINAL_TEXT);
+  });
+
+  it('keeps unrelated capability failures on the analysis screen for retry', async () => {
+    let capabilities = 0;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = String(input);
+      if (path === '/api/v1/capabilities') {
+        capabilities += 1;
+        if (capabilities === 1) return json({ guestDocuments: true, foundationReview: true });
+        return json({ code: 'REQUEST_FAILED' }, 503);
+      }
+      if (path === '/api/v1/documents')
+        return json({ documentId: 'doc', revisionId: REVISION_ID }, 201);
+      if (path.endsWith('/extractions'))
+        return json({ extraction: { candidates: [], warnings: [] } });
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    render(<App />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'النص المراد مراجعته' }), {
+      target: { value: ORIGINAL_TEXT },
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'ابدأ المراجعة' }));
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'خدمة التحليل غير متاحة مؤقتًا',
+    );
+    expect(screen.getByRole('button', { name: 'إعادة المحاولة' })).not.toBeNull();
+    expect(window.location.hash).toBe('#/analysis');
   });
 
   it('explicitly reanalyzes the identical saved text into a new owned revision and report', async () => {
