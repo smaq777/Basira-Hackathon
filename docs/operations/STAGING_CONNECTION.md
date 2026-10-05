@@ -24,8 +24,8 @@ records a failed connected Vercel journey and one limited Railway result:
   with 401. It showed zero literal quotation comparisons and the older generic
   results footer. This does not prove full Foundation research, quotation checking,
   source approval, rewrite or ticket readiness.
-- The latest observed Railway deployment for the same accepted revision was still
-  in progress. The revision of the currently served Railway app was **not proven**;
+- The latest observed Railway deployment for the same accepted revision was
+  `in_progress` at that check. The revision of the currently served Railway app was **not proven**;
   neither an asset name nor a successful result identifies that revision.
 
 The source inspection found no API rewrite in root `vercel.json`, a fixed staging
@@ -62,8 +62,10 @@ npx -y vercel@62.1.0 build --local-config=vercel.staging.json
 ```
 
 Before deploying, inspect the generated `.vercel/output/config.json` and require
-the API route to target the fixed staging service
-`https://api-staging-42bc.up.railway.app/api/:path*`. Stop if the generated route,
+an equivalent fixed mapping of `/api` paths to the same paths at
+`https://api-staging-42bc.up.railway.app`. Generated rules may express the wildcard
+as a regular expression and `$1`; they need not retain literal `:path*` syntax.
+Stop if the generated route,
 linked project or Preview environment differs from the reviewed plan. Then deploy
 that exact prebuilt output with the same configuration:
 
