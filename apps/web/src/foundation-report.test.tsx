@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, act } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   FoundationReportContent,
@@ -14,6 +14,7 @@ import {
 } from '../../../packages/contracts/src/semantic-assessment.js';
 import {
   comparisonHighlights,
+  materialReviewReasons,
   editorialNotes,
   interpretationPresentation,
   reportFindings,
@@ -25,10 +26,19 @@ import {
   SYNTHETIC_QUOTE,
 } from './foundation-report.fixtures.js';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('foundation report presentation', () => {
-  it('offers human review when evidence is incomplete, pending, or research-only', () => {
+  it('offers a ticket only after capability confirmation and distinguishes pending approval', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ reviewTickets: true }), {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
     const report = foundationReportFixture();
     expect(shouldOfferHumanReview(report)).toBe(true);
     const onTicket = vi.fn();
@@ -42,9 +52,13 @@ describe('foundation report presentation', () => {
     );
     expect(
       screen.getByRole('heading', {
-        name: 'لم نجد ما يكفي من المصادر الموثوقة لنتيجة دقيقة',
+        name: 'مواضع تحتاج مراجعة',
       }),
     ).not.toBeNull();
+    expect(screen.queryByRole('button', { name: /إرسال النص للمراجعة$/ })).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /إرسال النص للمراجعة$/ })).not.toBeNull(),
+    );
     fireEvent.click(screen.getByRole('button', { name: /إرسال النص للمراجعة$/ }));
     expect(onTicket).toHaveBeenCalledOnce();
   });
@@ -1063,4 +1077,222 @@ it('does not describe a successful empty cache query as unavailable', () => {
     ],
   };
   expect(retrievalLimitation(report)).toBeNull();
+});
+
+describe('material report reasons and ticket availability', () => {
+  const codes = (report: ReturnType<typeof foundationReportFixture>) =>
+    materialReviewReasons(report).map((row) => row.code);
+  function supported() {
+    const report = semanticBindingFixture();
+    report.semanticAssessment!.status = 'completed';
+    report.semanticAssessment!.errorCode = null;
+    report.semanticAssessment!.assessments[0]!.status = 'supported';
+    return report;
+  }
+  it('keeps a supported faithful excerpt separate from pending approval without missing-evidence assertions', () => {
+    const report = supported();
+    const before = JSON.stringify(report);
+    expect(codes(report)).toEqual(['source_approval_pending']);
+    expect(materialReviewReasons(report)[0]!.message).not.toMatch(/الدليل.*لا يكفي|لم يكتمل تقييم/);
+    expect(JSON.stringify(report)).toBe(before);
+  });
+  it('does not make a faithful quote-only excerpt incomplete merely from partial overall status', () => {
+    const report = foundationReportFixture();
+    report.interpretation.status = 'not_applicable';
+    report.semanticAssessment = supported().semanticAssessment;
+    report.semanticAssessment!.status = 'not_applicable';
+    report.semanticAssessment!.claims = [];
+    report.semanticAssessment!.assessments = [];
+    report.intake.evidence[0]!.approvalStatus = 'approved';
+    report.intake.evidence[0]!.researchOnly = false;
+    expect(codes(report)).toEqual([]);
+    report.intake.quotationFindings[0]!.status = 'normalized';
+    expect(codes(report)).toEqual([]);
+    report.intake.quotationFindings[0]!.status = 'exact';
+    report.intake.quotationFindings[0]!.matchedStart = null;
+    report.intake.quotationFindings[0]!.matchedEnd = null;
+    report.intake.quotationFindings = [];
+    expect(codes(report)).toEqual(['legacy_partial']);
+  });
+  it('preserves coexisting unresolved quotation, lack of support, and distinct approval reasons', () => {
+    const report = supported();
+    report.intake.quotationFindings[0]!.status = 'unresolved';
+    report.semanticAssessment!.assessments[0]!.status = 'not_established';
+    report.intake.evidence.push({
+      ...report.intake.evidence[0]!,
+      snapshotKey: 'rejected',
+      approvalStatus: 'rejected',
+    });
+    report.intake.evidence.push({
+      ...report.intake.evidence[0]!,
+      snapshotKey: 'revoked',
+      approvalStatus: 'revoked',
+    });
+    expect(codes(report)).toEqual([
+      'quotation_unresolved',
+      'claim_evidence_insufficient',
+      'source_approval_rejected',
+      'source_approval_revoked',
+      'source_approval_pending',
+    ]);
+    expect(new Set(codes(report)).size).toBe(codes(report).length);
+    report.intake.evidence = report.intake.evidence.slice(1);
+    expect(codes(report)).not.toContain('source_approval_pending');
+  });
+  it('distinguishes a verified wording difference and proposed mapping from an unassessed verdict', () => {
+    const report = supported();
+    report.interpretation.status = 'needs_confirmation';
+    report.intake.quotationFindings[0]!.status = 'mismatch';
+    const before = JSON.stringify(report);
+    expect(codes(report)).toEqual([
+      'quotation_different',
+      'inference_mapping_proposed',
+      'source_approval_pending',
+    ]);
+    expect(JSON.stringify(report)).toBe(before);
+    expect(
+      materialReviewReasons(report)
+        .map((row) => row.message)
+        .join(' '),
+    ).not.toMatch(/لم يكتمل تقييم|لم يُقيّم/);
+  });
+  it('does not invent an inference error for complete not-applicable writing without a comparison request', () => {
+    const report = foundationReportFixture();
+    report.status = 'completed';
+    report.interpretation.status = 'not_applicable';
+    report.intake.quotationFindings = [];
+    report.intake.evidence = [];
+    report.intake.segments = [];
+    expect(codes(report)).toEqual([]);
+  });
+  it('separates actual context, retrieval, provider, missing evidence and author coverage states', () => {
+    const report = supported();
+    report.intake.contextCoverage.push({
+      reference: 'owned',
+      requestedWorks: ['owned'],
+      availableWorks: [],
+      status: 'partial',
+      scholarlyContextComplete: false,
+    });
+    report.semanticAssessment!.trace.retrievalBudget = {
+      outcome: 'timeout',
+      configuredMs: 12000,
+      appliedMs: 12000,
+      assessmentReserveMs: 0,
+      elapsedMs: 12000,
+    };
+    report.semanticAssessment!.trace.claimCoverage = {
+      inventoryVersion: 'original-span-v1',
+      candidates: [],
+      excluded: [],
+      selectedIds: [],
+      unselectedIds: ['claim-' + 'c'.repeat(24)],
+      claimLimitReached: false,
+    };
+    report.semanticAssessment!.status = 'unavailable';
+    report.semanticAssessment!.errorCode = 'upstream_unavailable';
+    report.intake.evidence = [];
+    expect(codes(report)).toEqual([
+      'quotation_unresolved',
+      'source_context_partial',
+      'retrieval_limited',
+      'author_coverage_unreviewed',
+      'assessment_incomplete',
+      'source_not_identified',
+    ]);
+  });
+  it.each([false, undefined, 'true', null])(
+    'does not offer a ticket for unconfirmed capability %s',
+    async (value) => {
+      const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ reviewTickets: value }), {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      const onTicket = vi.fn();
+      const report = foundationReportFixture();
+      render(
+        <FoundationResultScreen
+          reviewId={report.reviewId}
+          initialReport={report}
+          onHome={() => undefined}
+          onTicket={onTicket}
+        />,
+      );
+      await waitFor(() => expect(fetch).toHaveBeenCalled());
+      await act(async () => {});
+      expect(screen.queryByRole('button', { name: /إرسال النص للمراجعة/ })).toBeNull();
+      expect(screen.queryByText(/مراجع مختص/)).toBeNull();
+      expect(onTicket).not.toHaveBeenCalled();
+      expect(fetch.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(
+        true,
+      );
+    },
+  );
+  it('keeps the report readable when capability lookup fails without automatic submission', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
+    const report = foundationReportFixture();
+    render(
+      <FoundationResultScreen
+        reviewId={report.reviewId}
+        initialReport={report}
+        onHome={() => undefined}
+        onTicket={() => undefined}
+      />,
+    );
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    await act(async () => {});
+    expect(screen.getByLabelText('النص الأصلي مع مواضع النقل').textContent).toBe(ORIGINAL_TEXT);
+    expect(screen.queryByRole('button', { name: /إرسال النص للمراجعة/ })).toBeNull();
+  });
+  it('ignores late old-review capability responses and cancels them on navigation', async () => {
+    let finishOld!: (value: Response) => void;
+    let finishNew!: (value: Response) => void;
+    const oldPromise = new Promise<Response>((resolve) => {
+      finishOld = resolve;
+    });
+    const newPromise = new Promise<Response>((resolve) => {
+      finishNew = resolve;
+    });
+    const fetch = vi.spyOn(globalThis, 'fetch').mockReturnValue(oldPromise);
+    const report = foundationReportFixture();
+    const onTicket = vi.fn();
+    const view = render(
+      <FoundationResultScreen
+        reviewId={report.reviewId}
+        initialReport={report}
+        onHome={() => undefined}
+        onTicket={onTicket}
+      />,
+    );
+    const oldSignals = fetch.mock.calls.map(([, init]) => init?.signal);
+    const next = { ...report, reviewId: '33333333-3333-4333-8333-333333333333' };
+    fetch.mockReturnValue(newPromise);
+    view.rerender(
+      <FoundationResultScreen
+        reviewId={next.reviewId}
+        initialReport={next}
+        onHome={() => undefined}
+        onTicket={onTicket}
+      />,
+    );
+    expect(oldSignals.every((signal) => signal?.aborted)).toBe(true);
+    await act(async () => {
+      finishOld(
+        new Response(JSON.stringify({ reviewTickets: true }), {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    });
+    expect(screen.queryByRole('button', { name: /إرسال النص للمراجعة/ })).toBeNull();
+    await act(async () => {
+      finishNew(
+        new Response(JSON.stringify({ reviewTickets: false }), {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    });
+    expect(screen.queryByRole('button', { name: /إرسال النص للمراجعة/ })).toBeNull();
+    expect(onTicket).not.toHaveBeenCalled();
+  });
 });

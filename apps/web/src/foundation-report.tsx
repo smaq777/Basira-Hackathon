@@ -15,9 +15,11 @@ import {
   createOwnedReview,
   getOwnedReview,
   persistDraftForAnalysis,
+  reviewTicketsAvailable,
 } from './api.js';
 import {
   comparisonHighlights,
+  materialReviewReasons,
   editorialNotes,
   interpretationPresentation,
   retrievalLimitation,
@@ -51,36 +53,7 @@ const roleColorClasses: Record<IntakeSegment['role'], string> = {
 const legendRoles = ['ayah', 'matn', 'isnad', 'claimed_source', 'unclassified'] as const;
 
 export function shouldOfferHumanReview(report: FoundationReport): boolean {
-  if (report.status !== 'completed') return true;
-  if (
-    report.intake.evidence.length === 0 ||
-    report.intake.evidence.some(
-      (source) => source.researchOnly || source.approvalStatus !== 'approved',
-    )
-  )
-    return true;
-  if (
-    report.intake.quotationFindings.some((finding) =>
-      ['partial', 'mismatch', 'unresolved'].includes(finding.status),
-    ) ||
-    report.intake.contextCoverage.some((coverage) => coverage.status !== 'complete_transport')
-  )
-    return true;
-  if (
-    ['needs_confirmation', 'not_assessed', 'unavailable', 'provisional'].includes(
-      report.interpretation.status,
-    )
-  )
-    return true;
-  if (
-    report.semanticAssessment &&
-    (!['completed', 'not_applicable'].includes(report.semanticAssessment.status) ||
-      report.semanticAssessment.assessments.some(
-        (assessment) => !['supported', 'not_applicable'].includes(assessment.status),
-      ))
-  )
-    return true;
-  return false;
+  return materialReviewReasons(report).length > 0;
 }
 
 function ComparedWords({
@@ -713,6 +686,27 @@ export function FoundationResultScreen({
   onTicket: () => void;
 }) {
   const [report, setReport] = useState(initialReport);
+  const [ticketAvailability, setTicketAvailability] = useState<{
+    reviewId: string;
+    available: boolean;
+  } | null>(null);
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    setTicketAvailability(null);
+    void reviewTicketsAvailable(controller.signal)
+      .then((available) => {
+        if (active && !controller.signal.aborted) setTicketAvailability({ reviewId, available });
+      })
+      .catch(() => {
+        if (active && !controller.signal.aborted)
+          setTicketAvailability({ reviewId, available: false });
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [reviewId]);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [loading, setLoading] = useState(initialReport === null);
@@ -729,7 +723,11 @@ export function FoundationResultScreen({
     };
   }, []);
   useEffect(() => {
-    if (initialReport && attempt === 0) return;
+    if (initialReport && attempt === 0) {
+      setReport(initialReport);
+      setLoading(false);
+      return;
+    }
     let active = true;
     const controller = new AbortController();
     setLoading(true);
@@ -763,6 +761,11 @@ export function FoundationResultScreen({
       controller.abort();
     };
   }, [reviewId, initialReport, attempt]);
+  const reviewReasons = report ? materialReviewReasons(report) : [];
+  const ticketAvailable =
+    report?.reviewId === reviewId &&
+    ticketAvailability?.reviewId === reviewId &&
+    ticketAvailability.available;
   const cancel = async () => {
     try {
       await cancelOwnedReview(reviewId);
@@ -854,7 +857,7 @@ export function FoundationResultScreen({
             >
               {rerunning ? 'جار بدء تحليل جديد' : 'إعادة تحليل النص'}
             </button>
-            {shouldOfferHumanReview(report) && (
+            {reviewReasons.length > 0 && (
               <section
                 className="foundation-review-escalation"
                 role="note"
@@ -862,16 +865,30 @@ export function FoundationResultScreen({
               >
                 <WarningCircle size={28} weight="fill" aria-hidden="true" />
                 <div>
-                  <h2 id="foundation-review-escalation-title">
-                    لم نجد ما يكفي من المصادر الموثوقة لنتيجة دقيقة
-                  </h2>
-                  <p>
-                    ننصح بإرسال النص للمراجعة. سيطّلع عليه مراجع مختص بالمحتوى الإسلامي، ويمكنك
-                    متابعة الرد الموثق باستخدام رقم التذكرة وبريدك الإلكتروني.
-                  </p>
-                  <button className="button button--primary" onClick={onTicket} type="button">
-                    <UsersThree size={20} /> إرسال النص للمراجعة
-                  </button>
+                  <h2 id="foundation-review-escalation-title">مواضع تحتاج مراجعة</h2>
+                  <ul>
+                    {reviewReasons.map((reason) => (
+                      <li key={reason.code}>{reason.message}</li>
+                    ))}
+                  </ul>
+                  {ticketAvailable && (
+                    <>
+                      <p>يمكنك إرسال النص والنتائج المتاحة للمراجعة باستخدام تذكرة.</p>
+                      <button
+                        className="button button--primary"
+                        onClick={() => {
+                          if (
+                            ticketAvailability?.reviewId === reviewId &&
+                            ticketAvailability.available
+                          )
+                            onTicket();
+                        }}
+                        type="button"
+                      >
+                        <UsersThree size={20} /> إرسال النص للمراجعة
+                      </button>
+                    </>
+                  )}
                 </div>
               </section>
             )}

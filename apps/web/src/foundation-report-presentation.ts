@@ -7,6 +7,126 @@ import type {
 import { assessClaimApplicability } from '../../../packages/contracts/src/claim-applicability.js';
 import type { ImprovementCard } from '../../../packages/contracts/src/themes.js';
 
+export type MaterialReviewReason = { code: string; message: string };
+
+/** Presentation only: never change source approval, relations or report status. */
+export function materialReviewReasons(report: FoundationReport): MaterialReviewReason[] {
+  const reasons: MaterialReviewReason[] = [];
+  const add = (code: string, message: string) => reasons.push({ code, message });
+  const findings = reportFindings(report);
+  if (findings.some((row) => row.group === 'unresolved'))
+    add(
+      'quotation_unresolved',
+      'لم تُحسم مطابقة بعض النقول أو نسبتها إلى المصدر. راجع المقارنة المحددة.',
+    );
+  if (findings.some((row) => row.group === 'different'))
+    add(
+      'quotation_different',
+      'ظهرت اختلافات في ألفاظ بعض النقول. قارنها بالنص المرجعي قبل تعديل المسودة.',
+    );
+  if (report.intake.contextCoverage.some((row) => row.status !== 'complete_transport'))
+    add(
+      'source_context_partial',
+      'السياق المتاح لبعض المصادر جزئي. راجع المصدر الكامل عند الحاجة.',
+    );
+  const retrieval = retrievalLimitation(report);
+  if (retrieval) add('retrieval_limited', retrieval);
+  const semantic = report.semanticAssessment;
+  if (
+    semantic?.assessments.some((row) =>
+      ['not_established', 'insufficient_context'].includes(row.status),
+    )
+  )
+    add(
+      'claim_evidence_insufficient',
+      'الدليل المعروض لا يكفي لتأييد بعض العبارات. راجع العبارة والدليل المرتبط بها.',
+    );
+  if (semantic?.assessments.some((row) => row.status === 'contradicted'))
+    add(
+      'claim_contradicted',
+      'تعارضت بعض العبارات مع الدليل المعروض أو شروطه. راجع التقييم المرتبط بكل عبارة.',
+    );
+  if (
+    semantic?.trace.claimCoverage?.unselectedIds.length ||
+    semantic?.errorCode === 'no_claims_extracted'
+  )
+    add(
+      'author_coverage_unreviewed',
+      'لم تُقيّم بعض عبارات الكاتب بعد. راجع معلومات التغطية والعبارات المحددة.',
+    );
+  if (semantic?.errorCode === 'invalid_claims')
+    add(
+      'claim_binding_unresolved',
+      'تعذر ربط بعض العبارات المقترحة بالنص والمصادر بصورة موثوقة. راجع النتائج المتاحة؛ العبارات المستبعدة لم تُقيّم.',
+    );
+  else if (
+    semantic?.status === 'unavailable' ||
+    (semantic?.status === 'partial' && semantic.errorCode !== 'no_claims_extracted')
+  )
+    add(
+      'assessment_incomplete',
+      'لم يكتمل تقييم الاستدلال. يمكنك مراجعة نتائج النقل والمصادر المتاحة.',
+    );
+  const applicable = report.interpretation.applicability ?? assessClaimApplicability(report.intake);
+  const notApplicable =
+    semantic?.status === 'not_applicable' ||
+    report.interpretation.status === 'not_applicable' ||
+    applicable.status === 'not_applicable';
+  if (
+    !notApplicable &&
+    !semantic?.assessments.length &&
+    (!semantic || semantic.status === 'disabled') &&
+    ['not_assessed', 'unavailable', 'provisional'].includes(report.interpretation.status)
+  )
+    add(
+      'inference_unassessed',
+      'لم يكتمل تقييم الاستدلال. تظل مقارنة النقل والمصادر متاحة بصورة مستقلة.',
+    );
+  if (!notApplicable && report.interpretation.status === 'needs_confirmation')
+    add(
+      'inference_mapping_proposed',
+      'ربط الاستنتاج بالنقل ما زال مقترحًا يحتاج مراجعة. راجع العبارة والمصدر المرتبط بها.',
+    );
+  if (report.intake.evidence.some((source) => source.approvalStatus === 'rejected'))
+    add(
+      'source_approval_rejected',
+      'رُفض اعتماد بعض المصادر المعروضة. راجع حالة المصدر قبل الاعتماد على نتيجته.',
+    );
+  if (report.intake.evidence.some((source) => source.approvalStatus === 'revoked'))
+    add(
+      'source_approval_revoked',
+      'سُحب اعتماد بعض المصادر المعروضة. راجع حالة المصدر والتقرير المحفوظ قبل الاعتماد عليه.',
+    );
+  if (
+    report.intake.evidence.some(
+      (source) =>
+        source.approvalStatus === 'pending' ||
+        (source.researchOnly && !['rejected', 'revoked'].includes(source.approvalStatus)),
+    )
+  )
+    add(
+      'source_approval_pending',
+      'اعتماد بعض المصادر لم يُؤكد بعد؛ النتيجة أولية وتحتاج مراجعة. راجع حالة المصدر وسياقه.',
+    );
+  if (!report.intake.evidence.length && (findings.length > 0 || (semantic?.claims.length ?? 0) > 0))
+    add(
+      'source_not_identified',
+      'لم يُحدد مصدر للمقارنة ضمن المصادر المتاحة. راجع النسبة أو المرجع المذكور.',
+    );
+  const explainedExcerptOnly =
+    report.status === 'partial' &&
+    notApplicable &&
+    findings.length > 0 &&
+    findings.every((row) => row.group === 'faithful') &&
+    findings.some((row) => row.presentation.extentKind === 'excerpt');
+  if (!reasons.length && report.status !== 'completed' && !explainedExcerptOnly)
+    add(
+      'legacy_partial',
+      'لم تكتمل بعض أجزاء المراجعة في هذا التقرير. راجع النتائج المتاحة وحدودها.',
+    );
+  return reasons;
+}
+
 type EditorialOccurrence = { id: string; text: string; hasAssessment: boolean };
 export function retrievalLimitation(report: FoundationReport): string | null {
   const trace = report.semanticAssessment?.trace;
@@ -295,6 +415,7 @@ export function quotationPresentation(finding: LiteralFinding, report: Foundatio
     label: labels[fidelity],
     explanation: explanations[fidelity],
     extent: extentLabels[extent],
+    extentKind: extent,
   };
 }
 
