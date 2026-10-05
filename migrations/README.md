@@ -1,5 +1,10 @@
 # Database migrations
 
+Migration `0013` adds separate insert-only source-content views and contiguous body
+windows after `0012`; original/v1 records remain unchanged. It adds no vectors or
+roles. The content-view flag defaults off and requires isolated validation. See
+[conservative cleaning evidence](../docs/evidence/2026-10-05-source-content-views.md).
+
 Migration `0011` adds insert-only retained-page metadata and pinned vectors with
 exact UTF16/codepoint parent bindings. It requires `0010` and isolated fresh/copy
 validation. Forward `0012` fixes empty-prefix UTF16 length discovered by a valid
@@ -59,3 +64,9 @@ production login. Migration `0009` records versioned corpus membership separatel
 from immutable source originals, allowing the same snapshot and compatible
 embedding configuration to be reused in another corpus version. Hosted claim
 retrieval requires both forward migrations. See the [persistent corpus evidence](../docs/evidence/2026-10-05-hosted-source-corpus.md).
+
+The cleaning experiment at `0c04dcf` applied an experimental
+`0013_source_content_views` on a separate child and retained a functional `42702`
+failure. That child and checksum stay unchanged. Current development owns
+`0013_secure_review_tickets`; cleaning uses deployment `0014_source_content_views`
+with the corrected range alias and requires fresh isolated validation.

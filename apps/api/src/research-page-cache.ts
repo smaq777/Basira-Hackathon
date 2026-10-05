@@ -4,11 +4,12 @@ import {
   SourceEvidenceSchema,
   type SourceEvidence,
 } from '../../../packages/contracts/src/foundation.js';
-import { sha256 } from './foundation.js';
+import { sha256, canonical } from './foundation.js';
 import { normalizeCorpusSearch } from './hosted-corpus.js';
 import type { LoadedSourcePolicy } from './source-policy.js';
 import { allowedWebUrl } from './web-discovery.js';
 import { sourceExtractionFailure } from './source-extraction-quality.js';
+import { SourceContentSelectionSchema } from '../../../packages/contracts/src/source-content.js';
 
 export const ResearchTopicSchema = z.enum([
   'aqidah',
@@ -28,8 +29,29 @@ export const PageClassificationSchema = z
     promptVersion: z.string().min(1).max(120),
     requestSha256: z.string().regex(/^[a-f0-9]{64}$/u),
     responseSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    contentSelection: SourceContentSelectionSchema.optional(),
+    contentViewStatus: z
+      .enum(['selected', 'original_retained_no_removal', 'original_retained_invalid_labels'])
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine((row) => {
+    const view = row.contentSelection;
+    if (!view)
+      return (
+        row.contentViewStatus === undefined ||
+        row.contentViewStatus === 'original_retained_invalid_labels'
+      );
+    return (
+      (row.contentViewStatus === 'selected' ||
+        row.contentViewStatus === 'original_retained_no_removal') &&
+      (row.contentViewStatus === 'selected') === view.removedBlocks.length > 0 &&
+      view.modelId === row.modelId &&
+      view.promptVersion === row.promptVersion &&
+      view.requestSha256 === row.requestSha256 &&
+      view.responseSha256 === row.responseSha256
+    );
+  });
 export type PageClassification = z.infer<typeof PageClassificationSchema>;
 export type ResearchPageCache = {
   store(
@@ -67,6 +89,18 @@ export function createResearchPageCache(options: {
   };
   passageIndex?: {
     search(query: string, vector: number[] | null, signal?: AbortSignal): Promise<SourceEvidence[]>;
+  };
+  contentViews?: {
+    store(
+      source: SourceEvidence,
+      selection: z.infer<typeof SourceContentSelectionSchema>,
+      signal?: AbortSignal,
+    ): Promise<unknown>;
+    enrich(
+      sources: readonly SourceEvidence[],
+      query: string,
+      signal?: AbortSignal,
+    ): Promise<SourceEvidence[]>;
   };
   ttlMs?: number;
   now?: () => number;
@@ -112,6 +146,7 @@ export function createResearchPageCache(options: {
   return {
     async store(inputs, signal) {
       const storedKeys: string[] = [];
+      const failureCodes: string[] = [];
       for (const input of inputs) {
         signal?.throwIfAborted();
         const e = SourceEvidenceSchema.parse(input);
@@ -122,6 +157,8 @@ export function createResearchPageCache(options: {
             'cachePassageHitsByQuery',
             'passageIndexCoverage',
             'passageIndexStatus',
+            'sourceContentSelection',
+            'sourceContentViewStatus',
           ].some((k) => Object.hasOwn(e.provenance, k))
         )
           throw Error('CACHE_TRANSIENT_PROVENANCE_FORBIDDEN');
@@ -222,6 +259,7 @@ export function createResearchPageCache(options: {
           'originMetadataStatus',
         ])
           if (e.provenance[name] !== undefined) provenance[name] = e.provenance[name];
+        const { contentSelection, contentViewStatus, ...topicClassification } = classification;
         const frozen = SourceEvidenceSchema.parse({
           snapshotKey: key,
           sourceId: e.sourceId,
@@ -243,7 +281,7 @@ export function createResearchPageCache(options: {
             ...provenance,
             cacheKind: 'public_research_page',
             topics: classification.topics,
-            topicClassification: classification,
+            topicClassification,
             machineLabelsOnly: true,
             scholarlyApproval: false,
             embeddingStatus,
@@ -275,7 +313,7 @@ export function createResearchPageCache(options: {
                 policy.sha256,
                 JSON.stringify(frozen),
                 classification.topics,
-                JSON.stringify(classification),
+                JSON.stringify(topicClassification),
                 normalizeCorpusSearch(e.originalText),
                 vector ? '[' + vector.join(',') + ']' : null,
                 vector ? options.embeddingSpace!.modelId : null,
@@ -296,8 +334,18 @@ export function createResearchPageCache(options: {
           signal,
         );
         storedKeys.push(key);
+        if (options.contentViews && contentViewStatus && contentViewStatus !== 'selected')
+          failureCodes.push('cache_content_view_' + contentViewStatus);
+        if (options.contentViews && contentSelection) {
+          try {
+            await options.contentViews.store(frozen, contentSelection, signal);
+          } catch {
+            signal?.throwIfAborted();
+            failureCodes.push('cache_content_view_unavailable');
+          }
+        }
       }
-      return { storedKeys, failureCodes: [] };
+      return { storedKeys, failureCodes };
     },
     async search(query, signal) {
       signal?.throwIfAborted();
@@ -399,7 +447,7 @@ export function createResearchPageCache(options: {
             },
           });
       }
-      return [...merged.values()].slice(0, 8).map((row) =>
+      const results = [...merged.values()].slice(0, 8).map((row) =>
         passages.status === 'rejected'
           ? {
               ...row,
@@ -410,6 +458,39 @@ export function createResearchPageCache(options: {
             }
           : row,
       );
+      if (!options.contentViews) return results;
+      try {
+        const enriched = await options.contentViews.enrich(results, query, signal);
+        if (
+          enriched.length !== results.length ||
+          enriched.some(
+            (e, i) =>
+              e.snapshotKey !== results[i]!.snapshotKey ||
+              e.originalSha256 !== results[i]!.originalSha256 ||
+              e.originalText !== results[i]!.originalText ||
+              e.sourceUrl !== results[i]!.sourceUrl ||
+              canonical(
+                Object.fromEntries(Object.entries(e).filter(([key]) => key !== 'provenance')),
+              ) !==
+                canonical(
+                  Object.fromEntries(
+                    Object.entries(results[i]!).filter(([key]) => key !== 'provenance'),
+                  ),
+                ),
+          )
+        )
+          throw Error('SOURCE_CONTENT_PARENT_RANK_CHANGED');
+        return enriched;
+      } catch {
+        signal?.throwIfAborted();
+        return results.map((row) => ({
+          ...row,
+          provenance: {
+            ...row.provenance,
+            sourceContentViewStatus: 'unavailable_original_fallback',
+          },
+        }));
+      }
     },
     async restore(keys, signal) {
       signal?.throwIfAborted();

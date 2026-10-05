@@ -4,6 +4,7 @@ import { createResearchPageCache } from '../apps/api/src/research-page-cache.js'
 import { parseSourcePolicy } from '../apps/api/src/source-policy.js';
 import { sha256 } from '../apps/api/src/foundation.js';
 import type { SourceEvidence } from '../packages/contracts/src/foundation.js';
+import { selectSourceContent, sourceBlocks } from '../apps/api/src/source-content-view.js';
 const policy = parseSourcePolicy({
   schemaVersion: 1,
   policyVersion: 'v1',
@@ -98,6 +99,61 @@ function fixture() {
   return { cache, rows, query, classify, readerPool };
 }
 describe('public research page cache', () => {
+  it.each(['original_retained_invalid_labels', 'original_retained_no_removal'] as const)(
+    'records %s while retaining exact topic-only parent metadata',
+    async (status) => {
+      const f = fixture(),
+        source = evidence(),
+        base = await f.classify();
+      const selection =
+        status === 'original_retained_no_removal'
+          ? selectSourceContent(
+              { ...source, sourceUrl: source.sourceUrl! },
+              sourceBlocks(source).map((b) => ({ blockId: b.blockId, label: 'article' })),
+              base,
+            ).selection
+          : undefined;
+      const store = vi.fn(async () => undefined);
+      const cache = createResearchPageCache({
+        readerPool: f.readerPool,
+        writerPool: f.readerPool,
+        policy,
+        classify: async () => ({
+          ...base,
+          contentViewStatus: status,
+          ...(selection ? { contentSelection: selection } : {}),
+        }),
+        contentViews: { store, enrich: async (sources) => [...sources] },
+      });
+      const result = await cache.store([source]);
+      expect(result.storedKeys).toHaveLength(1);
+      expect(result.failureCodes).toEqual(['cache_content_view_' + status]);
+      const parent = [...f.rows.values()][0]!.evidence;
+      expect(parent.originalText).toBe(source.originalText);
+      expect(parent.provenance.topicClassification).not.toHaveProperty('contentSelection');
+      expect(parent.provenance.topicClassification).not.toHaveProperty('contentViewStatus');
+      expect(parent.provenance).not.toHaveProperty('sourceContentSelection');
+      expect(store).toHaveBeenCalledTimes(selection ? 1 : 0);
+    },
+  );
+  it('retains legacy evidence with a fixed outcome when view lookup changes ranks or fails', async () => {
+    const f = fixture(),
+      sources = [evidence('Owned first parent'), evidence('Owned second parent')];
+    for (const e of sources) f.rows.set(e.snapshotKey, { evidence: e });
+    const cache = createResearchPageCache({
+      readerPool: f.readerPool,
+      writerPool: f.readerPool,
+      policy,
+      classify: f.classify,
+      contentViews: { store: async () => undefined, enrich: async (rows) => [...rows].reverse() },
+    });
+    const found = await cache.search('family');
+    expect(found.map((e) => e.snapshotKey)).toEqual(sources.map((e) => e.snapshotKey));
+    expect(
+      found.every((e) => e.provenance.sourceContentViewStatus === 'unavailable_original_fallback'),
+    ).toBe(true);
+    expect(sources.every((e) => e.provenance.sourceContentViewStatus === undefined)).toBe(true);
+  });
   it('preserves all eight legacy ranks and top-two unindexed title hits while enriching indexed parents', async () => {
     const f = fixture();
     const legacy = Array.from({ length: 8 }, (_, i) =>
@@ -165,6 +221,8 @@ describe('public research page cache', () => {
     'cachePassageHitsByQuery',
     'passageIndexCoverage',
     'passageIndexStatus',
+    'sourceContentSelection',
+    'sourceContentViewStatus',
   ])('rejects transient %s before shared admission without changing provenance', async (key) => {
     const f = fixture(),
       e = evidence();

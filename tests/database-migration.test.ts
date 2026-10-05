@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { databaseTls } from '../apps/api/src/database.js';
 
@@ -191,5 +191,16 @@ describe('secure human-review ticket migration', () => {
     expect(secureTicketMigration).toContain('reviewer_knowledge_candidate');
     expect(secureTicketMigration).toContain('approve_review_response_for_retrieval');
     expect(secureTicketMigration).toContain("'0013_secure_review_tickets'");
+  });
+});
+
+describe('deployment migration ordering', () => {
+  it('assigns one immutable migration to each numeric deployment position', () => {
+    const files = readdirSync('migrations').filter((file) => /^\d+_[a-z0-9_]+\.sql$/u.test(file));
+    const positions = files.map((file) => file.split('_', 1)[0]);
+    expect(new Set(positions).size).toBe(files.length);
+    expect(files).toContain('0013_secure_review_tickets.sql');
+    expect(files).toContain('0014_source_content_views.sql');
+    expect(files).not.toContain('0013_source_content_views.sql');
   });
 });
