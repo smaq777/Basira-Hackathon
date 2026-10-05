@@ -414,6 +414,7 @@ describe('recognized bracketed citation inventory framing', () => {
       ...source('نص المصدر الأصلي.'),
       sourceRole: 'quran_text' as const,
       reference: '31:15',
+      provenance: { surah_name: 'لُقمَان ' },
     };
     const text =
       'لا يلزم طاعتهما في المعصية، ويلزم صحبتهما بالمعروف فيما لا إثم فيه. قال تعالى: ﴿نص المصدر الأصلي﴾ [لقمان:31:15].';
@@ -436,6 +437,7 @@ describe('recognized bracketed citation inventory framing', () => {
       ...source('نص المصدر.'),
       sourceRole: 'quran_text' as const,
       reference: '31:15',
+      provenance: { surah_name: 'لُقمَان ' },
     };
     for (const reference of ['[31:15]', '[لقمان:٣١:١٥]'])
       expect(
@@ -458,4 +460,35 @@ describe('recognized bracketed citation inventory framing', () => {
     expect(inventory.candidates[0]!.originalText).toBe(text.slice(0, -1));
     expect(inventory.excluded).toEqual([]);
   });
+});
+
+it('retains wrong/missing Quran names and inline references without fragmenting author negation or conditions', () => {
+  const original = {
+    ...source('نص المصدر.'),
+    sourceRole: 'quran_text' as const,
+    reference: '31:15',
+    provenance: { surah_name_original: 'لقمان' },
+  };
+  const wrongName = 'قال تعالى: ﴿نص المصدر﴾ [البقرة:31:15].';
+  expect(
+    claimInventory(intake(wrongName, original)).candidates.some((row) =>
+      row.originalText.includes('البقرة:31:15'),
+    ),
+  ).toBe(true);
+  const missingName = { ...original, provenance: {} };
+  expect(
+    claimInventory(intake('قال تعالى: ﴿نص المصدر﴾ [لقمان:31:15].', missingName)).candidates.some(
+      (row) => row.originalText.includes('لقمان:31:15'),
+    ),
+  ).toBe(true);
+  for (const text of [
+    'طاعة الوالدين [31:15] لا تكون في المعصية مع الصحبة بالمعروف.',
+    'طاعة الوالدين [لقمان:31:15] لا تكون في المعصية إلا إذا زال المنع.',
+    'طاعة الوالدين [31:15]، فيما لا إثم فيه، تلزم مع الصحبة بالمعروف.',
+  ]) {
+    const inventory = claimInventory(intake(text, original));
+    expect(inventory.candidates).toHaveLength(1);
+    expect(inventory.candidates[0]!.originalText).toBe(text.slice(0, -1));
+    expect(inventory.excluded).toEqual([]);
+  }
 });

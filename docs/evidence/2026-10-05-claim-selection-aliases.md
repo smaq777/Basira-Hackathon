@@ -51,9 +51,11 @@ previous selector; no database migration or source-record mutation is required.
 
 ## Separate citation-inventory correction
 
-Bracketed references matching the intake manifest are excluded as bibliographic
-framing. Named Quran chapter/verse notation is recognized only when its numeric
-reference matches a Quran source in that manifest; Arabic digits and reference
+Standalone/trailing bracketed references matching the intake manifest are excluded
+as bibliographic framing. Named Quran chapter/verse notation must match the exact
+Quran source reference and supplied surah_name/surah_name_original metadata;
+wrong or missing names remain visible. Inline references followed by author prose
+remain inside the complete assertion rather than splitting its qualifications; Arabic digits and reference
 whitespace/diacritics have a comparison-only normalized key. Unmatched or ambiguous
 bracketed text is retained under existing inventory rules. Author brackets and
 parentheses containing conditions, negation or exceptions remain in the exact
@@ -64,8 +66,8 @@ unchanged. The correction is committed separately from the alias binding change.
 ## Offline verification
 
 The integrated issue branch passed the required repository check: 52 test files /
-699 tests, typecheck, documentation links, bounded policy checks, formatting and
-production build. The focused alias/inventory/assessment suite passed 106 tests;
+700 tests, typecheck, documentation links, bounded policy checks, formatting and
+production build. The focused alias/inventory/assessment suite passed 107 tests;
 full-flow cache passage and empty-recovery fixtures also use the new strict wire
 aliases while assessor citations remain canonical. No provider calls or database
 writes were made by these checks. The existing build chunk-size warning remains.

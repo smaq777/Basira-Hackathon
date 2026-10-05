@@ -47,17 +47,26 @@ export function claimInventory(intake: FoundationIntake): ClaimInventory {
       .replace(/[\u064b-\u065f\u0670ـ\s]/gu, '')
       .replace(/[٠-٩]/gu, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
   const references = new Set(intake.evidence.map((row) => referenceKey(row.reference)));
-  const quranReferences = new Set(
+  const namedQuranReferences = new Set(
     intake.evidence
       .filter((row) => row.sourceRole === 'quran_text')
-      .map((row) => referenceKey(row.reference)),
+      .flatMap((row) =>
+        ['surah_name', 'surah_name_original'].flatMap((field) => {
+          const name = row.provenance[field];
+          return typeof name === 'string' && name.trim()
+            ? [referenceKey(`${name}:${row.reference}`)]
+            : [];
+        }),
+      ),
   );
   const citationRanges = [...intake.originalText.matchAll(/\[([^\[\]\n]{1,120})\]/gu)]
     .filter((match) => {
+      // An inline reference must not cut a compound assertion before its qualifiers.
+      // Only a standalone/trailing bibliography at an explicit sentence boundary is removed.
+      const after = intake.originalText.slice(match.index + match[0].length);
+      if (!/^\s*(?:$|[.؛!?؟\n])/u.test(after)) return false;
       const key = referenceKey(match[1]!);
-      if (references.has(key)) return true;
-      const namedQuran = key.match(/^[\p{L}]+:([0-9]{1,3}:[0-9]{1,3})$/u);
-      return !!namedQuran && quranReferences.has(namedQuran[1]!);
+      return references.has(key) || namedQuranReferences.has(key);
     })
     .map((match) => ({ start: match.index, end: match.index + match[0].length }));
   quotes.push(...citationRanges);
