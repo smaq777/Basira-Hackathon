@@ -2,6 +2,7 @@ import type { TicketStore } from './ticket-store.js';
 import { decryptTicketContact } from './ticket-crypto.js';
 
 export type TicketMailer = {
+  sendReceipt(input: { email: string; name?: string; ticketCode: string }): Promise<void>;
   send(input: {
     email: string;
     name?: string;
@@ -31,30 +32,47 @@ export function createBrevoMailer(options: {
   fetch?: typeof fetch;
 }): TicketMailer {
   const request = options.fetch ?? fetch;
+  const sendMessage = async (body: Record<string, unknown>) => {
+    const response = await request('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'api-key': options.apiKey,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error(`BREVO_HTTP_${response.status}`);
+  };
   return {
+    async sendReceipt(input) {
+      const followUpUrl = `${options.publicAppUrl.replace(/\/$/u, '')}/#/follow-up`;
+      const safeName = input.name ? escapeHtml(input.name) : '';
+      const safeCode = escapeHtml(input.ticketCode);
+      const safeUrl = escapeHtml(followUpUrl);
+      await sendMessage({
+        sender: { email: options.senderEmail, name: options.senderName },
+        to: [{ email: input.email, ...(input.name ? { name: input.name } : {}) }],
+        subject: `تم إنشاء تذكرتك ${input.ticketCode}`,
+        textContent: `مرحبًا${input.name ? ` ${input.name}` : ''}،\n\nتم إنشاء تذكرتك ${input.ticketCode}. احتفظ بالرقم، ثم افتح ${followUpUrl} وأدخل رقم التذكرة مع البريد الإلكتروني نفسه لمتابعة المراجعة.\n\nبصيرة`,
+        htmlContent: `<div dir="rtl" lang="ar"><p>مرحبًا${safeName ? ` ${safeName}` : ''}،</p><p>تم إنشاء تذكرتك <strong>${safeCode}</strong>. احتفظ بهذا الرقم لمتابعة المراجعة.</p><p><a href="${safeUrl}">متابعة التذكرة في بصيرة</a> باستخدام رقم التذكرة والبريد الإلكتروني نفسه.</p><p>بصيرة</p></div>`,
+        tags: ['basirah-ticket-receipt'],
+      });
+    },
     async send(input) {
       const followUpUrl = `${options.publicAppUrl.replace(/\/$/u, '')}/#/follow-up`;
       const safeName = input.name ? escapeHtml(input.name) : '';
       const safeCode = escapeHtml(input.ticketCode);
       const safeUrl = escapeHtml(followUpUrl);
-      const response = await request('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
-        headers: {
-          accept: 'application/json',
-          'api-key': options.apiKey,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          sender: { email: options.senderEmail, name: options.senderName },
-          to: [{ email: input.email, ...(input.name ? { name: input.name } : {}) }],
-          subject: `اكتملت مراجعة تذكرتك ${input.ticketCode}`,
-          textContent: `مرحبًا${input.name ? ` ${input.name}` : ''}،\n\nاكتملت المراجعة البشرية للتذكرة ${input.ticketCode}. لمتابعة النتيجة، افتح ${followUpUrl} وأدخل رقم التذكرة مع البريد الإلكتروني نفسه.\n\nبصيرة`,
-          htmlContent: `<div dir="rtl" lang="ar"><p>مرحبًا${safeName ? ` ${safeName}` : ''}،</p><p>اكتملت المراجعة البشرية للتذكرة <strong>${safeCode}</strong>.</p><p><a href="${safeUrl}">افتح بصيرة</a> ثم أدخل رقم التذكرة مع البريد الإلكتروني نفسه لعرض النتيجة.</p><p>بصيرة</p></div>`,
-          tags: ['basirah-review-ticket'],
-        }),
-        signal: AbortSignal.timeout(10_000),
+      await sendMessage({
+        sender: { email: options.senderEmail, name: options.senderName },
+        to: [{ email: input.email, ...(input.name ? { name: input.name } : {}) }],
+        subject: `اكتملت مراجعة تذكرتك ${input.ticketCode}`,
+        textContent: `مرحبًا${input.name ? ` ${input.name}` : ''}،\n\nاكتملت المراجعة البشرية للتذكرة ${input.ticketCode}. لمتابعة النتيجة، افتح ${followUpUrl} وأدخل رقم التذكرة مع البريد الإلكتروني نفسه.\n\nبصيرة`,
+        htmlContent: `<div dir="rtl" lang="ar"><p>مرحبًا${safeName ? ` ${safeName}` : ''}،</p><p>اكتملت المراجعة البشرية للتذكرة <strong>${safeCode}</strong>.</p><p><a href="${safeUrl}">افتح بصيرة</a> ثم أدخل رقم التذكرة مع البريد الإلكتروني نفسه لعرض النتيجة.</p><p>بصيرة</p></div>`,
+        tags: ['basirah-review-ticket'],
       });
-      if (!response.ok) throw new Error(`BREVO_HTTP_${response.status}`);
     },
   };
 }
@@ -99,6 +117,9 @@ export function createTicketNotificationWorker(options: {
     },
     notify() {
       void drain();
+    },
+    async sendReceipt(input: { email: string; name?: string; ticketCode: string }) {
+      await options.mailer.sendReceipt(input);
     },
     async stop() {
       stopped = true;

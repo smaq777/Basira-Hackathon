@@ -1139,14 +1139,16 @@ function UnavailableResultScreen({
         <div className="prototype-disclosure" role="note">
           <Info size={21} />
           <p>
-            الإحالة البشرية تحفظ النص نفسه للمراجع. لن تُعامل أي ملاحظة أولية بوصفها نتيجة معتمدة
-            قبل أن يراجعها المختص وينشر رده.
+            لم نجد في المصادر الموثوقة المتاحة ما يكفي لإعطاء نتيجة دقيقة. ننصح بإرسال النص
+            للمراجعة؛ سيطّلع عليه مراجع مختص بالمحتوى الإسلامي، ويمكنك متابعة الرد الموثق برقم
+            التذكرة وبريدك الإلكتروني. لن تُعامل أي ملاحظة أولية بوصفها نتيجة معتمدة قبل أن يراجعها
+            المختص وينشر رده.
           </p>
         </div>
 
         <div className="result-actions">
           <button className="button button--primary" onClick={onTicket} type="button">
-            <UsersThree size={20} /> إرسال النص للمراجعة البشرية
+            <UsersThree size={20} /> إرسال النص للمراجعة
           </button>
           <button className="button button--outline" onClick={onHome} type="button">
             العودة وتعديل النص
@@ -1820,7 +1822,7 @@ function TicketScreen({
   return (
     <div className="app-page ticket-page">
       <BackHeader onHome={onHome} />
-      {saved && <Toast message="تم حفظ بيانات المتابعة لهذه التذكرة." />}
+      {saved && <Toast message="تم حفظ بيانات المتابعة وإرسال رقم التذكرة إلى بريدك." />}
       <main className="ticket-main page-shell page-enter">
         {loading && <p role="status">جار إنشاء تذكرة مرتبطة بتقريرك…</p>}
         {!reviewId && !revisionId && (

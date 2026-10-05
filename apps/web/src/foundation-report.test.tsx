@@ -2,7 +2,11 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { FoundationReportContent } from './foundation-report.js';
+import {
+  FoundationReportContent,
+  FoundationResultScreen,
+  shouldOfferHumanReview,
+} from './foundation-report.js';
 import type { QuotationComparison } from '../../../packages/contracts/src/foundation.js';
 import {
   SEMANTIC_PIPELINE_VERSION,
@@ -24,6 +28,46 @@ import {
 afterEach(cleanup);
 
 describe('foundation report presentation', () => {
+  it('offers human review when evidence is incomplete, pending, or research-only', () => {
+    const report = foundationReportFixture();
+    expect(shouldOfferHumanReview(report)).toBe(true);
+    const onTicket = vi.fn();
+    render(
+      <FoundationResultScreen
+        reviewId={report.reviewId}
+        initialReport={report}
+        onHome={() => undefined}
+        onTicket={onTicket}
+      />,
+    );
+    expect(
+      screen.getByRole('heading', {
+        name: 'لم نجد ما يكفي من المصادر الموثوقة لنتيجة دقيقة',
+      }),
+    ).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /إرسال النص للمراجعة$/ }));
+    expect(onTicket).toHaveBeenCalledOnce();
+  });
+
+  it('hides human review when a completed report has approved evidence and no open issue', () => {
+    const report = foundationReportFixture();
+    report.status = 'completed';
+    report.intake.researchOnly = false;
+    report.intake.evidence[0]!.researchOnly = false;
+    report.intake.evidence[0]!.approvalStatus = 'approved';
+    report.interpretation.status = 'not_applicable';
+    expect(shouldOfferHumanReview(report)).toBe(false);
+    render(
+      <FoundationResultScreen
+        reviewId={report.reviewId}
+        initialReport={report}
+        onHome={() => undefined}
+        onTicket={() => undefined}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /إرسال النص للمراجعة/ })).toBeNull();
+  });
+
   it('separates exact excerpt accuracy, its extent and unassessed inference', () => {
     const report = foundationReportFixture();
     render(<FoundationReportContent report={report} />);

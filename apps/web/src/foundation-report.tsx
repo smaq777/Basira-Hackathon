@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RewritePanel } from './rewrite.js';
 import { ArrowLeft } from '@phosphor-icons/react/ArrowLeft';
 import { UsersThree } from '@phosphor-icons/react/UsersThree';
+import { WarningCircle } from '@phosphor-icons/react/WarningCircle';
 import type {
   FoundationReport,
   IntakeSegment,
@@ -48,6 +49,39 @@ const roleColorClasses: Record<IntakeSegment['role'], string> = {
   unclassified: 'unknown',
 };
 const legendRoles = ['ayah', 'matn', 'isnad', 'claimed_source', 'unclassified'] as const;
+
+export function shouldOfferHumanReview(report: FoundationReport): boolean {
+  if (report.status !== 'completed') return true;
+  if (
+    report.intake.evidence.length === 0 ||
+    report.intake.evidence.some(
+      (source) => source.researchOnly || source.approvalStatus !== 'approved',
+    )
+  )
+    return true;
+  if (
+    report.intake.quotationFindings.some((finding) =>
+      ['partial', 'mismatch', 'unresolved'].includes(finding.status),
+    ) ||
+    report.intake.contextCoverage.some((coverage) => coverage.status !== 'complete_transport')
+  )
+    return true;
+  if (
+    ['needs_confirmation', 'not_assessed', 'unavailable', 'provisional'].includes(
+      report.interpretation.status,
+    )
+  )
+    return true;
+  if (
+    report.semanticAssessment &&
+    (!['completed', 'not_applicable'].includes(report.semanticAssessment.status) ||
+      report.semanticAssessment.assessments.some(
+        (assessment) => !['supported', 'not_applicable'].includes(assessment.status),
+      ))
+  )
+    return true;
+  return false;
+}
 
 function ComparedWords({
   text,
@@ -820,9 +854,27 @@ export function FoundationResultScreen({
             >
               {rerunning ? 'جار بدء تحليل جديد' : 'إعادة تحليل النص'}
             </button>
-            <button className="button button--outline foundation-refresh" onClick={onTicket}>
-              <UsersThree size={20} /> أحتاج مراجعة بشرية
-            </button>
+            {shouldOfferHumanReview(report) && (
+              <section
+                className="foundation-review-escalation"
+                role="note"
+                aria-labelledby="foundation-review-escalation-title"
+              >
+                <WarningCircle size={28} weight="fill" aria-hidden="true" />
+                <div>
+                  <h2 id="foundation-review-escalation-title">
+                    لم نجد ما يكفي من المصادر الموثوقة لنتيجة دقيقة
+                  </h2>
+                  <p>
+                    ننصح بإرسال النص للمراجعة. سيطّلع عليه مراجع مختص بالمحتوى الإسلامي، ويمكنك
+                    متابعة الرد الموثق باستخدام رقم التذكرة وبريدك الإلكتروني.
+                  </p>
+                  <button className="button button--primary" onClick={onTicket} type="button">
+                    <UsersThree size={20} /> إرسال النص للمراجعة
+                  </button>
+                </div>
+              </section>
+            )}
             <p>إعادة التحليل تنشئ تقريرًا جديدًا للنص نفسه بالمقارنة الحالية.</p>
             {rerunError && <p role="alert">تعذر بدء التحليل الجديد. {rerunError}</p>}
           </>
