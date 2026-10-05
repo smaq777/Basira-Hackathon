@@ -86,3 +86,13 @@ Successful re-selection cannot supply missing sources or establish support.
 This improvement makes an omission recoverable within a bound, not deterministic
 or complete. Rollback is the v1.8 implementation commit; retain the v1.7 reader
 entries when disabling the new path.
+
+## Independent review follow-up
+
+The lead reviewed the bounded request/deadline, resolver and historical-version
+changes. A valid empty selection now has a distinct Arabic UI explanation:
+`لم يُحسم تحديد الادعاءات`, with possible unreviewed coverage and retained source
+comparison. It is not described as a provider outage, an assertion-free text or
+a correctness judgment. Actual service failures retain their separate message.
+A rendered regression verifies this distinction while preserving quotation
+results. This follow-up is separate from the original 582-test implementation run.

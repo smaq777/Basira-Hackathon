@@ -533,6 +533,15 @@ export function interpretationPresentation(report: FoundationReport) {
           : 'قارن التقييم الآلي الادعاءات بالمصادر المعروضة. الربط والنتائج مقترحات للمراجعة، ولا تمثل اعتمادًا علميًا أو شرعيًا.',
     };
   if (
+    report.semanticAssessment?.status === 'partial' &&
+    report.semanticAssessment.errorCode === 'no_claims_extracted'
+  )
+    return {
+      label: 'لم يُحسم تحديد الادعاءات',
+      explanation:
+        'لم تحدد هذه المراجعة عبارة لتقييم الاستدلال عليها. قد توجد عبارات لم تُراجع؛ وهذا لا يعني صحة النص أو خطأه. تظل مقارنة النقل والمصادر متاحة، ويمكن إعادة التحليل.',
+    };
+  if (
     report.interpretation.status === 'unavailable' ||
     report.semanticAssessment?.status === 'unavailable' ||
     report.semanticAssessment?.status === 'partial'
