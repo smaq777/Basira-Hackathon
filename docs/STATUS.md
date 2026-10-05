@@ -19,6 +19,14 @@ stronger reasoning was not demonstrated. The
 rewrite-preservation, passage coverage, staging and judging evidence still needed.
 Neither the diagnostic nor green CI completes scientific or owner acceptance.
 
+**Source-free claim selection (#11):** Semantic v1.8 separates assertion selection
+from evidence support and records one bounded model re-selection after a valid
+empty result with remaining candidates. Both requests share the existing
+extraction phase budget; questions and classified quotation-only writing still
+bypass selection. A second empty result stays partial with unselected coverage;
+no inventory candidate becomes a claim automatically. See
+[diagnostic and limits](evidence/2026-10-05-claim-selection-recovery.md).
+
 **Active local research testing (#8):** The integrated app now uses the 86-passage
 Neon snapshot, verified in a newly completed durable UI report. Eleven additional
 approved-domain public originals were classified and added to the separate
@@ -29,13 +37,12 @@ This supersedes earlier inactive/62-passage local status below. Source approval,
 the planned 170-passage expansion, owner acceptance and shared staging deployment
 remain separate.
 
-**Source-free claim selection (#11):** Semantic v1.8 separates assertion selection
-from evidence support and records one bounded model re-selection after a valid
-empty result with remaining candidates. Both requests share the existing
-extraction phase budget; questions and classified quotation-only writing still
-bypass selection. A second empty result stays partial with unselected coverage;
-no inventory candidate becomes a claim automatically. See
-[diagnostic and limits](evidence/2026-10-05-claim-selection-recovery.md).
+**Optional citation/layout candidate (#38):** A default-off local research action
+now creates a separate candidate from the owned persisted report, preserves every
+original character, and adds only validated paragraph breaks and recorded
+citations. Copy reloads ownership/report/attempt binding and revalidates
+insertions. Storage is explicitly session-bound memory; source approval and
+substantive prose changes remain gated. See [evidence](evidence/2026-10-05-citation-layout-candidate.md).
 
 **Claim and passage follow-up (#11):** Semantic v1.7 binds model selections to a
 deterministic inventory of original author spans and sends bounded exact source

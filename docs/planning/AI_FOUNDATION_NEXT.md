@@ -26,9 +26,9 @@ continue isolated implementation and integrated local tests before acceptance.
   retaining absence of obligation and obligation, preserved the Ayah, displayed
   before/after and completed its copy action using a retained supported report.
   This does not establish general reliability or fresh extraction success.
-- PRs #59 and #70–#78 are ready for Saleh review and remain unmerged; passage
-  PR #80 is draft. Required exact-head checks passed for the published dependency
-  queue. Local activation is not shared staging, source approval or acceptance.
+- PRs #59 and #70–#78 are merged into `development`; passage PR #80 remains a
+  draft. Required checks passed for the merged dependency queue. Local activation
+  is not shared staging, source approval or acceptance.
 - The default-off [passage index](../evidence/2026-10-05-cache-passage-index.md)
   passed selected isolated SQL/least-privilege tests after forward migration
   `0012`. A frozen comparison retained the same 16 parents, indexed four with
@@ -65,12 +65,13 @@ retrieval remains a separate acceptance requirement.
 
 ## Merge and testing order
 
-PR #59 supplies the foundation. Review the bounded follow-ups in dependency order:
-#70 expansion plan, #71 staging routing, #72 original-span claims/passages, #73
-layout/citation action, #74 batch compiler/corpus pilot, #75 source-quality guard
-and #76 substantive rewrite including its modality follow-up, then #77 claim
-recovery and #78 routing evidence/priority plan. Passage PR #80 is independently implemented under #8 and remains draft pending
-corrected replay, isolated UI evidence and acceptance. Preserve merge commits; no squash, rebase or force-push.
+PR #59 supplies the foundation. The bounded follow-ups were merged in dependency
+order: #70 expansion plan, #71 staging routing, #72 original-span claims/passages,
+#73 layout/citation action, #74 batch compiler/corpus pilot, #75 source-quality
+guard, #76 substantive rewrite and modality follow-up, #77 claim recovery and #78
+routing evidence/priority plan. Passage PR #80 is independently implemented under
+#8 and remains draft pending isolated UI evidence and acceptance. Preserve merge
+commits; no squash, rebase or force-push.
 PRs and issue acceptance remain open until Saleh acts. CI success does not imply
 deployment or scientific acceptance.
 
