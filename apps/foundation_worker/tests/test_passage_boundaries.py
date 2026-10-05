@@ -56,6 +56,77 @@ class PassageBoundaryTests(unittest.TestCase):
         self.assertEqual(result['quotationFindings'], [])
         self.assertTrue(all(s['role'] == 'author_text' for s in result['segments']))
 
+    def test_actual_mixed_writing_locator_is_metadata_not_a_second_quote(self):
+        excerpt = 'وإن جاهداك على أن تشرك بي ما ليس لك به علم فلا تطعهما وصاحبهما في الدنيا معروفا'
+        intake = self.intake([('quran_text', 31, 15, 'لقمان', excerpt + ' واتبع سبيل من أناب إلي')])
+        text = 'إذا أمر الوالدان بمعصية، فلا يلزمنا طاعتهما فيها، ويلزمنا أن نصاحبهما بالمعروف فيما لا إثم فيه. قال تعالى: ﴿' + excerpt + '﴾ [لقمان: 31:15].'
+        result = intake.analyze(text, REVISION)
+        self.assertEqual(result['originalText'], text)
+        self.assertEqual(result['revisionSha256'], sha(text))
+        self.assertEqual(len(result['quotationFindings']), 1)
+        quote, finding, references = self.quotes(result)[0]
+        self.assertEqual(quote['originalText'], excerpt)
+        self.assertEqual(references, ['31:15'])
+        self.assertEqual(finding['status'], 'partial')
+        locator = next(s for s in result['segments'] if s['method'] == 'bound_quran_bibliographic_locator')
+        self.assertEqual(locator['originalText'], 'لقمان: 31:15')
+        self.assertEqual(locator['role'], 'claimed_source')
+        self.assertEqual(locator['sourceKeys'], quote['sourceKeys'])
+        self.assertNotIn('Quotation contains a source reference; confirm its passage boundaries before literal comparison.', result['warnings'])
+
+    def test_locator_formats_preserve_exact_unicode_offsets(self):
+        intake = self.intake([('quran_text', 31, 15, 'لقمان', 'نص مملوك واضح كامل')])
+        for locator in ['[لقمان: 31:15]', '(سورة لُقْمَان : ٣١：١٥)', '[31:15]', '(  لقمان 31 : 15  )']:
+            with self.subTest(locator=locator):
+                text = '😀 تنبيه: ' + locator + ' ثم لا يلزم هذا الشرط.'
+                result = intake.analyze(text, REVISION)
+                self.assertEqual(result['quotationFindings'], [])
+                segment = next(s for s in result['segments'] if s['method'] == 'bound_quran_bibliographic_locator')
+                self.assertEqual(text[segment['codePointStart']:segment['codePointEnd']], segment['originalText'])
+                self.assertEqual(segment['startOffset'], utf16_length(text[:segment['codePointStart']]))
+                self.assertEqual(segment['endOffset'], utf16_length(text[:segment['codePointEnd']]))
+                self.assertEqual(segment['sourceKeys'], ['owned-quran_text-31-15'])
+                self.assertTrue(any('ثم لا يلزم هذا الشرط' in s['originalText'] for s in result['segments'] if s['role'] == 'author_text'))
+
+    def test_unknown_conflicting_missing_and_malformed_locators_stay_visible(self):
+        intake = self.intake([('quran_text', 31, 15, 'لقمان', 'نص مملوك واضح كامل')])
+        for locator in ['[البقرة: 31:15]', '[مجهول: 31:15]', '[لقمان: 31:999]', '[لقمان: 31:15-16]', '[لقمان: 31:15)', '[لقمان: 31:15؛ لا طاعة في المعصية]']:
+            with self.subTest(locator=locator):
+                result = intake.analyze(locator, REVISION)
+                self.assertFalse(any(s['method'] == 'bound_quran_bibliographic_locator' for s in result['segments']))
+                self.assertTrue(result['quotationFindings'])
+                self.assertEqual(result['originalText'], locator)
+
+    def test_named_locator_without_source_name_metadata_stays_visible(self):
+        intake = self.intake([('quran_text', 31, 15, '', 'نص مملوك واضح كامل')])
+        result = intake.analyze('[لقمان:31:15]', REVISION)
+        self.assertFalse(any(s['method'] == 'bound_quran_bibliographic_locator' for s in result['segments']))
+        self.assertTrue(result['quotationFindings'])
+
+    def test_non_source_numeric_context_is_not_resolved_locator_metadata(self):
+        intake = self.intake([('quran_text', 31, 15, 'لقمان', 'نص مملوك واضح كامل')])
+        for text in ['نتيجة المباراة [31:15]', 'الوقت (31:15)', 'النسبة [٣١:١٥]', 'ratio (31:15)']:
+            with self.subTest(text=text):
+                result = intake.analyze(text, REVISION)
+                self.assertFalse(any(s['role'] == 'claimed_source' for s in result['segments']))
+                self.assertEqual(result['quotationFindings'], [])
+                self.assertEqual(result['evidence'], [])
+                self.assertEqual(result['originalText'], text)
+                self.assertTrue(any(text == s['originalText'] for s in result['segments'] if s['role'] == 'author_text'))
+
+    def test_author_qualifications_and_locator_inside_speech_are_not_suppressed(self):
+        intake = self.intake([('quran_text', 31, 15, 'لقمان', 'نص مملوك واضح كامل')])
+        for text in ['لا طاعة [في المعصية فقط] مع الصحبة بالمعروف.',
+                     '(لا يلزم ذلك إلا عند تحقق الشرط) والشرط مهم.',
+                     'قال الكاتب: «لا تتجاهل [لقمان: 31:15] ولا تحذف هذا الشرط».',
+                     'قال تعالى: ﴿لقمان: 31:15﴾']:
+            with self.subTest(text=text):
+                result = intake.analyze(text, REVISION)
+                self.assertFalse(any(s['method'] == 'bound_quran_bibliographic_locator' for s in result['segments']))
+                self.assertTrue(result['quotationFindings'])
+                self.assertEqual(result['originalText'], text)
+                self.assertTrue(any(s['role'] != 'claimed_source' and ('لا' in s['originalText'] or 'لقمان' in s['originalText']) for s in result['segments']))
+
     def test_shahada_without_source_framing_remains_authored_formula(self):
         intake = self.intake([('quran_text', 37, 35, 'تجريب', 'قول تجريبي أن لا إله إلا الله'),
                               ('quran_text', 47, 19, 'مثال', 'شرح تجريبي لا إله إلا الله')])
