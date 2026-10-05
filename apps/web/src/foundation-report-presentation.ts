@@ -148,18 +148,23 @@ function numericReference(reference: string): { surah: number; ayah: number } | 
 export function sourceRoleLabel(source: SourceEvidence): string {
   if (source.sourceRole === 'quran_text') return 'القرآن الكريم';
   if (source.sourceRole === 'hadith_matn') return 'حديث نبوي';
+  if (source.sourceRole === 'book_excerpt') return 'كتاب';
+  if (source.sourceRole === 'scholar_explanation') return 'شرح علمي';
   return source.sourceRole === 'tafsir_footnote' ? 'حاشية تفسير' : 'تفسير';
 }
 
 function humanWork(source: SourceEvidence): string {
   if (!/IslamicEval|research corpus|book\s*=|internal_id|https?:|sha256|mcp/iu.test(source.work))
     return source.work;
-  return source.sourceRole === 'hadith_matn' ? 'مصدر حديثي' : 'مرجع تفسير';
+  return sourceRoleLabel(source);
 }
 
 export function sourceCitation(source: SourceEvidence, evidence: SourceEvidence[] = []): string {
   const location = numericReference(source.reference);
-  if (location && source.sourceRole !== 'hadith_matn') {
+  if (
+    location &&
+    ['quran_text', 'tafsir_commentary', 'tafsir_footnote'].includes(source.sourceRole)
+  ) {
     const anchor = evidence.find(
       (row) => row.sourceRole === 'quran_text' && row.reference === source.reference,
     );

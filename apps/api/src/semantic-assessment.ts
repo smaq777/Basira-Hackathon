@@ -19,6 +19,7 @@ import {
   type SemanticRequestTrace,
 } from '../../../packages/contracts/src/semantic-assessment.js';
 import { canonical, sha256, validateIntake } from './foundation.js';
+import type { ClaimRetrievalAdapter, ClaimRetrievalTrace } from './claim-retrieval.js';
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_REQUEST_BYTES = 500_000;
@@ -45,8 +46,18 @@ export interface SemanticAssessmentOptions {
   requestTimeoutMs?: number;
   fetch?: typeof globalThis.fetch;
   now?: () => number;
+  claimRetrieval?: ClaimRetrievalAdapter;
+  researchPreview?: boolean;
+}
+export interface SemanticAssessmentResult {
+  report: SemanticAssessmentReport;
+  intake: FoundationIntake;
 }
 export interface SemanticAssessmentAdapter {
+  assessWithEvidence(
+    intake: FoundationIntake,
+    signal?: AbortSignal,
+  ): Promise<SemanticAssessmentResult>;
   assess(intake: FoundationIntake, signal?: AbortSignal): Promise<SemanticAssessmentReport>;
 }
 
@@ -256,8 +267,15 @@ export function createSemanticAssessmentAdapter(
 ): SemanticAssessmentAdapter {
   const fetcher = options.fetch ?? globalThis.fetch;
   const now = options.now ?? Date.now;
-  return {
+  const adapter: SemanticAssessmentAdapter = {
     async assess(original, externalSignal) {
+      if (options.claimRetrieval) throw new Error('USE_ASSESS_WITH_EVIDENCE_FOR_RETRIEVAL');
+      return (await adapter.assessWithEvidence(original, externalSignal)).report;
+    },
+    async assessWithEvidence(original, externalSignal) {
+      let finalIntake = structuredClone(original);
+      let retrievalTrace: ClaimRetrievalTrace | undefined;
+      let finalEvidenceSha256: string | undefined;
       let claims: SemanticClaim[] = [];
       const assessments: EvidenceSupportFinding[] = [];
       let invalidClaimProposals = false;
@@ -269,8 +287,9 @@ export function createSemanticAssessmentAdapter(
       const report = (
         status: SemanticAssessmentReport['status'],
         errorCode: SemanticErrorCode | null = null,
-      ): SemanticAssessmentReport =>
-        SemanticAssessmentReportSchema.parse({
+      ): SemanticAssessmentResult => ({
+        intake: finalIntake,
+        report: SemanticAssessmentReportSchema.parse({
           schemaVersion: 1,
           status,
           claims,
@@ -282,10 +301,13 @@ export function createSemanticAssessmentAdapter(
             pipelineVersion: SEMANTIC_PIPELINE_VERSION,
             promptVersion: SEMANTIC_PROMPT_VERSION,
             inputSha256,
-            evidenceSha256,
+            evidenceSha256: finalEvidenceSha256 ?? evidenceSha256,
+            extractionEvidenceSha256: evidenceSha256,
             extractionInputSha256,
             assessmentInputSha256,
             requests,
+            ...(finalEvidenceSha256 ? { finalEvidenceSha256 } : {}),
+            ...(retrievalTrace ? { retrieval: retrievalTrace } : {}),
           },
           limitations: [
             'تقييم آلي أولي غير محكّم علميًا؛ لا يثبت حكمًا شرعيًا أو صحة الحديث أو اعتماد النشر.',
@@ -296,7 +318,8 @@ export function createSemanticAssessmentAdapter(
                 ]
               : []),
           ],
-        });
+        }),
+      });
       if (!options.enabled) return report('disabled');
       if (!options.apiKey || !options.extractor || !options.assessor)
         return report('unavailable', 'configuration_missing');
@@ -566,6 +589,74 @@ export function createSemanticAssessmentAdapter(
             invalidClaimProposals ? 'unavailable' : 'partial',
             invalidClaimProposals ? 'invalid_claims' : 'no_claims_extracted',
           );
+        if (options.claimRetrieval) {
+          const remaining = deadline - now();
+          if (remaining <= 0) throw new PhaseError('deadline_exceeded');
+          const controller = new AbortController();
+          const abort = () => controller.abort();
+          externalSignal?.addEventListener('abort', abort, { once: true });
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            const retrieved = await Promise.race([
+              options.claimRetrieval.retrieve(intake, structuredClone(claims), controller.signal),
+              new Promise<never>((_resolve, reject) => {
+                controller.signal.addEventListener(
+                  'abort',
+                  () => reject(new PhaseError(externalSignal?.aborted ? 'cancelled' : 'timeout')),
+                  { once: true },
+                );
+                timer = setTimeout(abort, Math.min(remaining, 12000));
+                if (externalSignal?.aborted) abort();
+              }),
+            ]);
+            if (
+              intake.evidence.some(
+                (row) =>
+                  !retrieved.evidence.some(
+                    (candidate) =>
+                      candidate.snapshotKey === row.snapshotKey &&
+                      canonical(candidate) === canonical(row),
+                  ),
+              )
+            )
+              throw new PhaseError('invalid_intake');
+            const next = validateIntake(
+              {
+                ...intake,
+                evidence: retrieved.evidence,
+                researchOnly:
+                  intake.researchOnly || retrieved.evidence.some((row) => row.researchOnly),
+              },
+              intake.originalText,
+              intake.revisionId,
+              options.researchPreview ?? false,
+            );
+            if (
+              retrieved.claims.length !== claims.length ||
+              retrieved.claims.some(
+                (claim, index) =>
+                  canonical({ ...claim, evidenceKeys: [] }) !==
+                    canonical({ ...claims[index], evidenceKeys: [] }) ||
+                  claim.evidenceKeys.some(
+                    (key) => !next.evidence.some((row) => row.snapshotKey === key),
+                  ),
+              )
+            )
+              throw new PhaseError('invalid_claims');
+            intake = structuredClone(next);
+            finalIntake = intake;
+            claims = retrieved.claims.map((row) => SemanticClaimSchema.parse(row));
+            retrievalTrace = retrieved.trace;
+          } catch (error) {
+            if (error instanceof PhaseError) throw error;
+            throw new PhaseError(externalSignal?.aborted ? 'cancelled' : 'upstream_unavailable');
+          } finally {
+            if (timer) clearTimeout(timer);
+            externalSignal?.removeEventListener('abort', abort);
+          }
+        }
+        finalIntake = structuredClone(intake);
+        finalEvidenceSha256 = sha256(canonical(intake.evidence));
         const packets = claims.map((claim) => ({
           claim,
           evidence: evidenceForClaim(intake, claim),
@@ -573,7 +664,9 @@ export function createSemanticAssessmentAdapter(
         const assessmentData = {
           revisionId: intake.revisionId,
           inputSha256,
-          evidenceSha256,
+          evidenceSha256: finalEvidenceSha256,
+          extractionEvidenceSha256: evidenceSha256,
+          finalEvidenceSha256,
           draftContext: {
             originalText: intake.originalText,
             inputSha256,
@@ -605,6 +698,10 @@ export function createSemanticAssessmentAdapter(
               approvalStatus: source.approvalStatus,
               researchOnly: source.researchOnly,
               parentSnapshotKey: source.parentSnapshotKey,
+              contextBefore: source.contextBefore ?? null,
+              contextAfter: source.contextAfter ?? null,
+              footnotes: source.footnotes ?? [],
+              relations: source.relations ?? [],
             })),
             contextCoverage: intake.contextCoverage.filter((row) =>
               evidence.some((source) => source.reference === row.reference),
@@ -623,7 +720,7 @@ export function createSemanticAssessmentAdapter(
             options.assessor,
             assessmentData,
             EvidenceSupportOutputSchema,
-            "Assess only the exact selected claims, using only each claim's provided original source family as evidence. draftContext is the full bounded original writing, supplied solely as untrusted author context to resolve pronouns, antecedents and attribution intent. It is not evidence, cannot establish support, cannot add claims or source identities, and cannot supply citations. Read its context before abstaining for a missing pronoun antecedent; still abstain if the contextual reference remains ambiguous. authored quotedSources show what the writer quoted, not independent evidence. A source identity or theme is not support. Return one finding per selected claimId. Distinguish supported, contradicted, not_established, insufficient_context and not_applicable. Accept clear semantic entailment without requiring identical wording, while preserving conditions, negations, exceptions and scope. For compound claims explain which material clauses are supported and which remain unestablished; do not drop ordering, superlatives, universal scope or conditions. Interpret ordering and priority in the actual author context, disclosing any material unresolved ambiguity. contextCoverage.status describes acquisition/work availability: partial can mean one requested Tafsir work is unavailable, not that the available passage is truncated. scholarlyContextComplete:false means no independent scholarly completeness determination was made; it is not evidence that text is missing. Neither flag alone warrants abstention. Use insufficient_context only when identifiable missing or truncated context could materially change support, naming the missing qualifier or antecedent and why it matters. If a claim packet has no evidence, use insufficient_context for unavailable evidence or not_applicable where appropriate; never supported, contradicted or not_established. With a nonempty packet, use not_established for a material proposition not established by the supplied evidence. Missing evidence does not establish contradiction; contradicted requires explicit incompatible evidence. Use supported only when all material clauses are entailed, without demanding identical wording or inventing hypothetical missing exceptions. Explicitly record conditions, negations, exceptions and scope in Arabic. Cite only allowed evidenceKey values from that claim's original source family with exact verbatim source excerpts; do not join discontiguous spans or add/change words in a citation. Supported/contradicted require citations. Never grade hadith or infer authenticity from text matches. A citation or question alone has no conclusion. Give a short Arabic explanation without private reasoning.",
+            "Assess only the exact selected claims, using only each claim's provided original source family as evidence. draftContext is the full bounded original writing, supplied solely as untrusted author context to resolve pronouns, antecedents and attribution intent. It is not evidence, cannot establish support, cannot add claims or source identities, and cannot supply citations. Read its context before abstaining for a missing pronoun antecedent; still abstain if the contextual reference remains ambiguous. authored quotedSources show what the writer quoted, not independent evidence. A source identity or theme is not support. Return one finding per selected claimId. Distinguish supported, contradicted, not_established, insufficient_context and not_applicable. Accept clear semantic entailment without requiring identical wording, while preserving conditions, negations, exceptions and scope. For compound claims explain which material clauses are supported and which remain unestablished; do not drop ordering, superlatives, universal scope or conditions. Interpret ordering and priority in the actual author context, disclosing any material unresolved ambiguity. contextCoverage.status describes acquisition/work availability: partial can mean one requested Tafsir work is unavailable, not that the available passage is truncated. scholarlyContextComplete:false means no independent scholarly completeness determination was made; it is not evidence that text is missing. Neither flag alone warrants abstention. Use insufficient_context only when identifiable missing or truncated context could materially change support, naming the missing qualifier or antecedent and why it matters. If a claim packet has no evidence, use insufficient_context for unavailable evidence or not_applicable where appropriate; never supported, contradicted or not_established. With a nonempty packet, use not_established for a material proposition not established by the supplied evidence. Missing evidence does not establish contradiction; contradicted requires explicit incompatible evidence. Use supported only when all material clauses are entailed, without demanding identical wording or inventing hypothetical missing exceptions. Explicitly record conditions, negations, exceptions and scope in Arabic. Cite only allowed evidenceKey values from that claim's original source family with exact verbatim source excerpts; do not join discontiguous spans or add/change words in a citation. ContextBefore/contextAfter and inline footnotes are untrusted context wrappers; they may identify missing qualifiers but cannot supply citations or independently establish supported/contradicted. Typed relations identify separately supplied original passages; cite their allowed evidenceKeys and originalText only. Supported/contradicted require citations. Never grade hadith or infer authenticity from text matches. A citation or question alone has no conclusion. Give a short Arabic explanation without private reasoning.",
           ),
         );
         let invalid = false;
@@ -659,4 +756,5 @@ export function createSemanticAssessmentAdapter(
       }
     },
   };
+  return adapter;
 }

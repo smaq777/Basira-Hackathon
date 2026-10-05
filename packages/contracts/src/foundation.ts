@@ -7,7 +7,14 @@ export const SourceEvidenceSchema = z
     snapshotKey: z.string().min(1).max(160),
     sourceId: z.string().min(1).max(160),
     sourceVersion: z.string().min(1).max(120),
-    sourceRole: z.enum(['quran_text', 'hadith_matn', 'tafsir_commentary', 'tafsir_footnote']),
+    sourceRole: z.enum([
+      'quran_text',
+      'hadith_matn',
+      'tafsir_commentary',
+      'tafsir_footnote',
+      'book_excerpt',
+      'scholar_explanation',
+    ]),
     reference: z.string().min(1).max(500),
     originalText: z.string().min(1).max(30000),
     originalSha256: z.string().regex(/^[a-f0-9]{64}$/u),
@@ -24,6 +31,39 @@ export const SourceEvidenceSchema = z
       .min(1)
       .max(3),
     provenance: z.record(z.string(), z.unknown()),
+    contextBefore: z.string().max(30000).nullable().optional(),
+    contextAfter: z.string().max(30000).nullable().optional(),
+    footnotes: z
+      .array(
+        z
+          .object({
+            reference: z.string().min(1).max(500),
+            originalText: z.string().min(1).max(30000),
+            originalSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+          })
+          .strict(),
+      )
+      .max(80)
+      .optional(),
+    relations: z
+      .array(
+        z
+          .object({
+            targetSnapshotKey: z.string().min(1).max(160),
+            relationType: z.enum([
+              'explains',
+              'comments_on',
+              'quotes',
+              'context_before',
+              'context_after',
+              'footnote_of',
+            ]),
+            provenance: z.record(z.string(), z.unknown()),
+          })
+          .strict(),
+      )
+      .max(80)
+      .optional(),
   })
   .strict();
 export type SourceEvidence = z.infer<typeof SourceEvidenceSchema>;

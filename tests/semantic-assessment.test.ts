@@ -1,3 +1,4 @@
+import { createClaimRetrievalAdapter, claimQueries } from '../apps/api/src/claim-retrieval.js';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canonical, sha256 } from '../apps/api/src/foundation.js';
@@ -310,8 +311,8 @@ describe('bounded semantic assessment', () => {
     expect(prompt).not.toMatch(/scholar_explanation|book_excerpt/u);
     expect(result.scholarlyApproval).toBe(false);
     expect(result.trace).toMatchObject({
-      pipelineVersion: 'provisional-semantic-v1.4',
-      promptVersion: 'evidence-support-v1.4',
+      pipelineVersion: 'provisional-semantic-v1.5',
+      promptVersion: 'evidence-support-v1.5',
     });
     expect(intake).toEqual(before);
   });
@@ -867,4 +868,242 @@ describe('bounded semantic assessment', () => {
     expect(data.draft).toBe(text);
     expect(JSON.stringify(result)).not.toContain('owned-test-secret');
   });
+});
+
+describe('claim-driven evidence freeze', () => {
+  it('retrieves after exact extraction and binds the final packet without changing original quotation evidence', async () => {
+    const input = fixture();
+    const added = evidence('retrieved-source');
+    const events: string[] = [];
+    const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+      const { body, data } = requestData(init);
+      if (body.response_format.json_schema.name === 'extraction') {
+        events.push('extract');
+        return response(proposal(CLAIM, []), body.model);
+      }
+      events.push('assess');
+      expect(
+        data.claims[0].evidence.map((row: { evidenceKey: string }) => row.evidenceKey),
+      ).toEqual(['retrieved-source']);
+      const value = finding(data.claims[0].claim.id);
+      value.citations[0]!.evidenceKey = 'retrieved-source';
+      return response({ assessments: [value] }, body.model);
+    });
+    const adapter = createSemanticAssessmentAdapter(
+      options(fetch, {
+        researchPreview: true,
+        claimRetrieval: {
+          async retrieve(intake, claims) {
+            events.push('retrieve');
+            expect(claims[0]!.originalText).toBe(CLAIM);
+            return {
+              evidence: [...intake.evidence, added],
+              claims: claims.map((claim) => ({ ...claim, evidenceKeys: ['retrieved-source'] })),
+              trace: { corpusVersion: 'owned-2', mode: 'local_research', queries: [] },
+            };
+          },
+        },
+      }),
+    );
+    const result = await adapter.assessWithEvidence(input);
+    expect(events).toEqual(['extract', 'retrieve', 'assess']);
+    expect(result.report.status).toBe('completed');
+    expect(result.report.trace.extractionEvidenceSha256).toBe(sha256(canonical(input.evidence)));
+    expect(result.report.trace.evidenceSha256).toBe(sha256(canonical(result.intake.evidence)));
+    expect(result.report.trace.finalEvidenceSha256).toBe(sha256(canonical(result.intake.evidence)));
+    expect(result.intake.evidence).toHaveLength(2);
+    expect(input.evidence).toHaveLength(1);
+    expect(result.intake.quotationFindings).toEqual(input.quotationFindings);
+    await expect(adapter.assess(input)).rejects.toThrow('USE_ASSESS_WITH_EVIDENCE');
+  });
+  it('fails closed when retrieval alters a bound claim span', async () => {
+    const fetch = successfulFetch();
+    const result = await createSemanticAssessmentAdapter(
+      options(fetch, {
+        researchPreview: true,
+        claimRetrieval: {
+          async retrieve(intake, claims) {
+            return {
+              evidence: intake.evidence,
+              claims: claims.map((row) => ({ ...row, originalText: 'بديل' })),
+              trace: { corpusVersion: 'owned', mode: 'local_research', queries: [] },
+            };
+          },
+        },
+      }),
+    ).assessWithEvidence(fixture());
+    expect(result.report.errorCode).toBe('invalid_claims');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it('preserves quotation intake and skips assessment on retrieval outage', async () => {
+    const fetch = successfulFetch();
+    const input = fixture();
+    const result = await createSemanticAssessmentAdapter(
+      options(fetch, {
+        claimRetrieval: {
+          async retrieve() {
+            throw new Error('outage');
+          },
+        },
+      }),
+    ).assessWithEvidence(input);
+    expect(result.report.errorCode).toBe('upstream_unavailable');
+    expect(result.intake).toEqual(input);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('bounded claim retrieval adapter', () => {
+  const boundClaim = () => ({
+    id: `claim-${'a'.repeat(24)}`,
+    segmentId: 'author-1',
+    originalText: CLAIM,
+    startOffset: 0,
+    endOffset: CLAIM.length,
+    evidenceKeys: [],
+    provisional: true as const,
+  });
+  it('queries whole assertion and content terms and restores linked counterevidence without claiming support', async () => {
+    const direct = evidence('direct');
+    const qualifier = evidence('qualifier', 'direct');
+    const search = vi.fn(async () => [direct]);
+    const restore = vi.fn(async () => [qualifier]);
+    const adapter = createClaimRetrievalAdapter({
+      corpus: { search, restore },
+      corpusVersion: 'owned',
+      researchPreview: true,
+    });
+    const result = await adapter.retrieve(fixture(), [boundClaim()]);
+    expect(search).toHaveBeenCalledTimes(claimQueries(CLAIM).length);
+    expect(restore).toHaveBeenCalledWith(['direct'], expect.any(AbortSignal));
+    expect(result.claims[0]!.evidenceKeys).toEqual(['direct', 'qualifier']);
+    expect(result.trace.mode).toBe('local_research');
+    expect(result.evidence).toHaveLength(3);
+  });
+  it('excludes pending evidence in approved mode and rejects corrupt originals', async () => {
+    const candidate = evidence('pending');
+    const corpus = { search: async () => [candidate], restore: async () => [] };
+    const approved = await createClaimRetrievalAdapter({ corpus, corpusVersion: 'owned' }).retrieve(
+      fixture(),
+      [boundClaim()],
+    );
+    expect(approved.claims[0]!.evidenceKeys).toEqual([]);
+    candidate.originalText += 'تغيير';
+    await expect(
+      createClaimRetrievalAdapter({
+        corpus,
+        corpusVersion: 'owned',
+        researchPreview: true,
+      }).retrieve(fixture(), [boundClaim()]),
+    ).rejects.toThrow('RETRIEVAL_HASH_MISMATCH');
+  });
+  it('aborts before corpus operations and fails explicit packet overflow', async () => {
+    const search = vi.fn(async () =>
+      Array.from({ length: 12 }, (_row, index) => evidence(`key-${index}`)),
+    );
+    const corpus = {
+      search,
+      restore: async () =>
+        Array.from({ length: 12 }, (_row, index) => evidence(`restored-${index}`)),
+    };
+    const adapter = createClaimRetrievalAdapter({
+      corpus,
+      corpusVersion: 'owned',
+      researchPreview: true,
+      maxCandidatesPerClaim: 12,
+    });
+    await expect(
+      adapter.retrieve(fixture(), [boundClaim()], AbortSignal.abort()),
+    ).rejects.toThrow();
+    expect(search).not.toHaveBeenCalled();
+    const bounded = await adapter.retrieve(fixture(), [boundClaim()]);
+    expect(bounded.claims[0]!.evidenceKeys).toHaveLength(12);
+  });
+});
+
+describe('retrieval source identity and family admission', () => {
+  const claim = {
+    id: `claim-${'b'.repeat(24)}`,
+    segmentId: 'author-1',
+    originalText: CLAIM,
+    startOffset: 0,
+    endOffset: CLAIM.length,
+    evidenceKeys: ['owned-source'],
+    provisional: true as const,
+  };
+  it('preserves existing acquisition metadata when hosted route metadata differs', async () => {
+    const intake = fixture();
+    const hosted = {
+      ...intake.evidence[0]!,
+      delivery: 'live' as const,
+      retrievalModes: ['lexical', 'semantic'] as SourceEvidence['retrievalModes'],
+      contextBefore: null,
+      contextAfter: null,
+      footnotes: [],
+      relations: [],
+      provenance: { hosted: true },
+    };
+    const result = await createClaimRetrievalAdapter({
+      corpusVersion: 'owned',
+      researchPreview: true,
+      corpus: { search: async () => [hosted], restore: async () => [hosted] },
+    }).retrieve(intake, [claim]);
+    expect(result.evidence[0]).toEqual(intake.evidence[0]);
+    expect(result.trace.queries[0]!.modes).toEqual(['lexical', 'semantic']);
+    const changed = { ...hosted, work: 'Changed attribution' };
+    await expect(
+      createClaimRetrievalAdapter({
+        corpusVersion: 'owned',
+        researchPreview: true,
+        corpus: { search: async () => [changed], restore: async () => [] },
+      }).retrieve(intake, [claim]),
+    ).rejects.toThrow('RETRIEVAL_IDENTITY_COLLISION');
+  });
+  it('skips a restored family atomically when it would overflow a claim packet', async () => {
+    const root = evidence('large');
+    const children = Array.from({ length: 22 }, (_, index) => evidence(`child-${index}`, 'large'));
+    const result = await createClaimRetrievalAdapter({
+      corpusVersion: 'owned',
+      researchPreview: true,
+      corpus: { search: async () => [root], restore: async () => [root, ...children] },
+    }).retrieve(fixture(), [{ ...claim, evidenceKeys: [] }]);
+    expect(result.claims[0]!.evidenceKeys).toEqual([]);
+    expect(result.evidence).toHaveLength(1);
+  });
+});
+
+it('runs at most three searches concurrently, merges deterministically, and restores once', async () => {
+  let active = 0,
+    peak = 0;
+  const claims = Array.from({ length: 5 }, (_, index) => ({
+    id: `claim-${String(index).padStart(24, '0')}`,
+    segmentId: `author-${index}`,
+    originalText: `يحفظ الكاتب الحقوق ${index}`,
+    startOffset: 0,
+    endOffset: 20,
+    evidenceKeys: [],
+    provisional: true as const,
+  }));
+  const search = vi.fn(async (query: string) => {
+    active++;
+    peak = Math.max(peak, active);
+    await new Promise((resolve) => setTimeout(resolve, query.endsWith('0') ? 15 : 2));
+    active--;
+    return [evidence(`source-${query.slice(-1)}`)];
+  });
+  const restore = vi.fn(async () => []);
+  const result = await createClaimRetrievalAdapter({
+    corpus: { search, restore },
+    corpusVersion: 'owned',
+    researchPreview: true,
+  }).retrieve(fixture(), claims);
+  expect(peak).toBe(3);
+  expect(search).toHaveBeenCalledTimes(5);
+  expect(restore).toHaveBeenCalledTimes(1);
+  expect(result.claims.map((claim) => claim.evidenceKeys)).toEqual(
+    claims.map((_claim, index) => [`source-${index}`]),
+  );
+  expect(result.trace.queries.map((query) => query.claimId)).toEqual(
+    claims.map((claim) => claim.id),
+  );
 });

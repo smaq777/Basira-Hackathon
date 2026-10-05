@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.4';
-export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.4';
+export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.5';
+export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.5';
 
 const EvidenceKeys = z.array(z.string().min(1).max(160)).max(20);
 const Details = z.array(z.string().min(1).max(500)).max(6);
@@ -129,12 +129,14 @@ export const SemanticAssessmentReportSchema = z
           'provisional-semantic-v1.1',
           'provisional-semantic-v1.2',
           'provisional-semantic-v1.3',
+          'provisional-semantic-v1.4',
           SEMANTIC_PIPELINE_VERSION,
         ]),
         promptVersion: z.enum([
           'evidence-support-v1.1',
           'evidence-support-v1.2',
           'evidence-support-v1.3',
+          'evidence-support-v1.4',
           SEMANTIC_PROMPT_VERSION,
         ]),
         inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),
@@ -147,6 +149,33 @@ export const SemanticAssessmentReportSchema = z
           .string()
           .regex(/^[a-f0-9]{64}$/u)
           .nullable(),
+        extractionEvidenceSha256: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/u)
+          .optional(),
+        finalEvidenceSha256: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/u)
+          .optional(),
+        retrieval: z
+          .object({
+            corpusVersion: z.string().min(1).max(120),
+            mode: z.enum(['approved', 'local_research']),
+            queries: z
+              .array(
+                z
+                  .object({
+                    claimId: z.string().min(1).max(160),
+                    querySha256: z.string().regex(/^[a-f0-9]{64}$/u),
+                    modes: z.array(z.enum(['exact', 'lexical', 'semantic'])).max(3),
+                    candidateKeys: z.array(z.string().min(1).max(160)).max(12),
+                  })
+                  .strict(),
+              )
+              .max(15),
+          })
+          .strict()
+          .optional(),
         requests: z.array(SemanticRequestTraceSchema).max(3),
       })
       .strict(),

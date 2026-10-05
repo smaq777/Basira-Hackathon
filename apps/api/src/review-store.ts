@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
 import { Pool } from 'pg';
-import { SourceEvidenceSchema } from '../../../packages/contracts/src/foundation.js';
+import {
+  SourceEvidenceSchema,
+  type SourceEvidence,
+} from '../../../packages/contracts/src/foundation.js';
 import { databaseTls, OwnershipError } from './database.js';
 
 /** A lease is an application secret. Never return its token to the browser or logs. */
@@ -36,6 +39,10 @@ export type StoredEvidence = {
   delivery: 'live' | 'snapshot';
   retrievalModes: Array<'exact' | 'lexical' | 'semantic'>;
   provenance: Record<string, unknown>;
+  contextBefore?: SourceEvidence['contextBefore'];
+  contextAfter?: SourceEvidence['contextAfter'];
+  footnotes?: SourceEvidence['footnotes'];
+  relations?: SourceEvidence['relations'];
 };
 
 export type StoredFinding = {
@@ -132,6 +139,10 @@ export function validateStoredReport(lease: ReviewLease, report: DurableReviewRe
       delivery: item.delivery,
       retrievalModes: item.retrievalModes,
       provenance: item.provenance,
+      ...(item.contextBefore !== undefined ? { contextBefore: item.contextBefore } : {}),
+      ...(item.contextAfter !== undefined ? { contextAfter: item.contextAfter } : {}),
+      ...(item.footnotes !== undefined ? { footnotes: item.footnotes } : {}),
+      ...(item.relations !== undefined ? { relations: item.relations } : {}),
     });
     if (!Number.isFinite(Date.parse(item.retrievedAt))) throw new Error('INVALID_RETRIEVED_AT');
     if (!item.researchOnly && item.approvalStatus !== 'approved')

@@ -109,6 +109,26 @@ See the [real-writing regression evidence](../evidence/2026-10-04-real-writing-r
 
 ## Configuration and validation boundary
 
+The opt-in claim retrieval path extracts exact draft claims, queries the hosted
+corpus, restores attributable context and freezes the augmented source packet
+before assessment. Both the displayed report and durable evidence use the same
+final packet hash. Quotation matching keeps its original sources and findings.
+Books and scholar explanations have explicit roles, separate from Quran/Tafsir;
+typed cross-work links do not masquerade as same-edition parent passages.
+
+Set `FOUNDATION_CLAIM_RETRIEVAL_ENABLED=true` only in semantic research preview,
+with migrations through 0009, the dedicated `FOUNDATION_CORPUS_DATABASE_URL` reader
+and a populated `FOUNDATION_CORPUS_VERSION`. Corpus TLS defaults to certificate
+verification independently of a loopback report fixture. Query embeddings use
+the fixed OpenAI `text-embedding-3-small` 1,536-dimensional space; failed embedding
+calls leave exact/lexical retrieval available. Evidence remains pending until
+separately approved. See [hosted corpus evidence](../evidence/2026-10-05-hosted-source-corpus.md).
+
+The [controlled Firecrawl experiment](../evidence/2026-10-05-controlled-web-discovery.md)
+tests an additional acquisition path with domain/path restrictions. It is not
+enabled in the runtime or exposed through a new UI. Broader adjudication and
+source review precede promotion; rewriting remains gated.
+
 Default flags in `.env.example` leave the bridge disabled. Enabling requires
 migrations through 0007, a runtime login inheriting `basirah_runtime`, a separate worker
 login inheriting `basirah_worker`, Python 3.11+ with SQLite FTS5, and external

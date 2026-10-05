@@ -1,5 +1,6 @@
 import { createApp } from './app.js';
-import { createDatabase, DatabaseUnavailable } from './database.js';
+import { createDatabase, databaseTls, DatabaseUnavailable } from './database.js';
+import { Pool } from 'pg';
 import { createClerkReviewerAuth } from './reviewer-auth.js';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -7,6 +8,13 @@ import { createPythonAdapter } from './foundation.js';
 import { createReviewStore } from './review-store.js';
 import { createFoundationWorker } from './review-worker.js';
 import { createSemanticAssessmentAdapter } from './semantic-assessment.js';
+import { createHostedCorpus } from './hosted-corpus.js';
+import { createClaimRetrievalAdapter } from './claim-retrieval.js';
+import {
+  createOpenRouterQueryEmbedding,
+  QUERY_EMBEDDING_MODEL,
+  QUERY_EMBEDDING_DIMENSIONS,
+} from './query-embedding.js';
 
 const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
@@ -37,13 +45,19 @@ async function initializeFoundation() {
   const semanticEnabled = process.env.FOUNDATION_SEMANTIC_ENABLED === 'true';
   if (semanticEnabled && !researchPreview)
     throw new Error('SEMANTIC_PILOT_REQUIRES_LOCAL_RESEARCH_PREVIEW');
+  const retrievalEnabled = process.env.FOUNDATION_CLAIM_RETRIEVAL_ENABLED === 'true';
+  if (retrievalEnabled && !semanticEnabled)
+    throw new Error('CLAIM_RETRIEVAL_REQUIRES_SEMANTIC_PIPELINE');
   const python = process.env.FOUNDATION_PYTHON;
   const sourceDatabase = process.env.FOUNDATION_DATABASE;
   const workerUrl = process.env.REVIEW_WORKER_DATABASE_URL;
   if (!connectionString || !python || !sourceDatabase || !workerUrl)
     throw new Error('FOUNDATION_CONFIGURATION_INCOMPLETE');
   const readiness = await database.readiness();
-  if (!readiness.ready || !(Number(readiness.migrationVersion?.slice(0, 4)) >= 7))
+  if (
+    !readiness.ready ||
+    !(Number(readiness.migrationVersion?.slice(0, 4)) >= (retrievalEnabled ? 9 : 7))
+  )
     throw new Error('FOUNDATION_MIGRATION_REQUIRED');
   const adapter = createPythonAdapter({
     python,
@@ -53,6 +67,7 @@ async function initializeFoundation() {
     snapshotDirectory: process.env.FOUNDATION_SNAPSHOTS || undefined,
     researchPreview,
   });
+  let corpusPool: Pool | undefined;
   try {
     const intake = await adapter.analyze('تهيئة محرك المصادر المحلي.', randomUUID());
     const configured = process.env.CORPUS_VERSION?.trim();
@@ -61,6 +76,38 @@ async function initializeFoundation() {
     process.env.CORPUS_VERSION = intake.corpusVersion;
     const store = createReviewStore(workerUrl);
     const reports = createReviewStore(connectionString);
+    let claimRetrieval;
+    if (retrievalEnabled) {
+      const configuredUrl = process.env.FOUNDATION_CORPUS_DATABASE_URL;
+      const corpusVersion = process.env.FOUNDATION_CORPUS_VERSION?.trim();
+      if (!configuredUrl || !corpusVersion) throw new Error('HOSTED_CORPUS_CONFIGURATION_REQUIRED');
+      const corpusUrl = new URL(configuredUrl);
+      if (!['postgres:', 'postgresql:'].includes(corpusUrl.protocol))
+        throw new Error('HOSTED_CORPUS_URL_INVALID');
+      corpusUrl.searchParams.delete('sslmode');
+      corpusUrl.searchParams.delete('channel_binding');
+      corpusPool = new Pool({
+        connectionString: corpusUrl.toString(),
+        ssl: databaseTls(process.env.FOUNDATION_CORPUS_TLS_MODE || 'verify-full'),
+        max: 3,
+        connectionTimeoutMillis: 5_000,
+        idleTimeoutMillis: 30_000,
+      });
+      const corpus = createHostedCorpus({
+        pool: corpusPool,
+        corpusVersion,
+        researchPreview,
+        embeddingSpace: {
+          modelId: QUERY_EMBEDDING_MODEL,
+          dimensions: QUERY_EMBEDDING_DIMENSIONS,
+          embedQuery: createOpenRouterQueryEmbedding({
+            apiKey: process.env.OPENROUTER_API_KEY ?? '',
+          }),
+        },
+      });
+      if (!(await corpus.readiness()).ready) throw new Error('HOSTED_CORPUS_NOT_READY');
+      claimRetrieval = createClaimRetrievalAdapter({ corpus, corpusVersion, researchPreview });
+    }
     const semantic = semanticEnabled
       ? createSemanticAssessmentAdapter({
           enabled: true,
@@ -73,17 +120,21 @@ async function initializeFoundation() {
           },
           allowedModels: ['openai/gpt-6-luna', 'openai/gpt-6.1-sol'],
           allowedProviders: ['OpenAI'],
+          researchPreview,
+          claimRetrieval,
         })
       : undefined;
-    const worker = createFoundationWorker(adapter, store, semantic);
+    const worker = createFoundationWorker(adapter, store, semantic, { researchPreview });
     return {
       worker,
       reports,
       researchPreview,
       liveTafsir: process.env.FOUNDATION_TAFSIR_LIVE === 'true',
       semanticPilot: semanticEnabled,
+      corpusPool,
     };
   } catch (error) {
+    await corpusPool?.end();
     await adapter.close();
     throw error;
   }
@@ -107,6 +158,7 @@ async function closeResources() {
   await Promise.allSettled([
     foundation?.worker.stop(),
     foundation?.reports.close(),
+    foundation?.corpusPool?.end(),
     database.close(),
   ]);
 }

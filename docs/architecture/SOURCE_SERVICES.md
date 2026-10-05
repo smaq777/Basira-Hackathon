@@ -10,6 +10,14 @@ The local SQLite index is a transitional development source, not the hosted RAG
 target. An MCP is a delivery interface, not a substitute for provenance or storage.
 Exact quotation checks must remain available when a provider is unavailable.
 
+The [persistent Neon development corpus](../evidence/2026-10-05-hosted-source-corpus.md)
+now preserves 62 pending originals with compatible vectors and typed cross-work
+links. Its explicit research reader is isolated from the approved production
+runtime. Scholarly books and explanations keep their own source roles,
+attribution and captured originals; they are not recast as Tafsir commentary.
+Version membership is separate from immutable source snapshots. Context and
+footnote originals remain independently attributable within each evidence item.
+
 The user approved the listed source providers for project use. This does not
 invent an edition audit, redistribution permission, hadith grade or scholarly
 review of a conclusion. Existing `approvalStatus` describes the recorded digital

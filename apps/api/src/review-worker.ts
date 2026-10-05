@@ -8,7 +8,7 @@ import {
   catalogRelevantReferences,
   suggestImprovements,
 } from '../../../packages/contracts/src/themes.js';
-import { canonical, sha256, type FoundationAdapter } from './foundation.js';
+import { canonical, sha256, validateIntake, type FoundationAdapter } from './foundation.js';
 import {
   assessClaimApplicability,
   CLAIM_APPLICABILITY_VERSION,
@@ -30,7 +30,8 @@ export interface FoundationWorker {
 export function createFoundationWorker(
   adapter: FoundationAdapter,
   store: ReviewStore,
-  semantic?: SemanticAssessmentAdapter,
+  semantic?: Pick<SemanticAssessmentAdapter, 'assessWithEvidence'>,
+  options: { researchPreview?: boolean } = {},
 ): FoundationWorker {
   let stopped = false;
   let polling: ReturnType<typeof setInterval> | null = null;
@@ -84,8 +85,8 @@ export function createFoundationWorker(
       )
         throw new Error('INVALID_EVIDENCE');
       if (signal.aborted) return;
-      const themes = analyzeThemes(intake);
-      const improvementCards = suggestImprovements(intake, themes);
+      let themes = analyzeThemes(intake);
+      let improvementCards = suggestImprovements(intake, themes);
       const applicability = assessClaimApplicability(intake);
       const generatedAt = new Date().toISOString();
       const status =
@@ -132,22 +133,46 @@ export function createFoundationWorker(
         );
         try {
           if (availableMs < 1_000) throw new Error('SEMANTIC_DEADLINE');
-          const assessment = await semantic.assess(
+          const assessed = await semantic.assessWithEvidence(
             intake,
             AbortSignal.any([signal, AbortSignal.timeout(availableMs)]),
           );
+          const assessment = assessed.report;
+          const enriched = validateIntake(
+            assessed.intake,
+            intake.originalText,
+            intake.revisionId,
+            options.researchPreview === true,
+          );
           if (
             assessment.trace.inputSha256 !== lease.inputSha256 ||
-            assessment.trace.evidenceSha256 !== sha256(canonical(intake.evidence))
+            assessment.trace.evidenceSha256 !== sha256(canonical(enriched.evidence)) ||
+            enriched.revisionSha256 !== lease.inputSha256 ||
+            enriched.revisionId !== intake.revisionId ||
+            enriched.corpusVersion !== intake.corpusVersion ||
+            enriched.originalText !== intake.originalText ||
+            canonical(enriched.segments) !== canonical(intake.segments) ||
+            canonical(enriched.quotationFindings) !== canonical(intake.quotationFindings) ||
+            intake.evidence.some(
+              (source) => !enriched.evidence.some((row) => canonical(row) === canonical(source)),
+            )
           )
             throw new Error('SEMANTIC_BINDING');
+          const enrichedThemes = analyzeThemes(enriched);
+          const enrichedCards = suggestImprovements(enriched, enrichedThemes);
           // Validate the additive result before attaching it to the durable report.
           FoundationReportSchema.parse({
             ...report,
+            intake: enriched,
+            themes: enrichedThemes,
+            improvementCards: enrichedCards,
             evidenceStateSha256: '0'.repeat(64),
             semanticAssessment: assessment,
           });
           if (assessment.status !== 'disabled') {
+            intake = report.intake = enriched;
+            themes = report.themes = enrichedThemes;
+            improvementCards = report.improvementCards = enrichedCards;
             report.semanticAssessment = assessment;
             report.pipelineVersion += `/${assessment.trace.pipelineVersion}`;
             report.interpretation.status = assessment.assessments.length
@@ -223,6 +248,10 @@ export function createFoundationWorker(
         delivery: item.delivery,
         retrievalModes: item.retrievalModes,
         provenance: { ...item.provenance, snapshotKey: item.snapshotKey },
+        ...(item.contextBefore !== undefined ? { contextBefore: item.contextBefore } : {}),
+        ...(item.contextAfter !== undefined ? { contextAfter: item.contextAfter } : {}),
+        ...(item.footnotes !== undefined ? { footnotes: item.footnotes } : {}),
+        ...(item.relations !== undefined ? { relations: item.relations } : {}),
       }));
       const findings: StoredFinding[] = intake.quotationFindings.map((finding) => {
         const segment = intake.segments.find((item) => item.id === finding.segmentId)!;

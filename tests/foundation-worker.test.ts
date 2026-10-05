@@ -4,6 +4,7 @@ import { sha256, type FoundationAdapter } from '../apps/api/src/foundation.js';
 import { createFoundationWorker } from '../apps/api/src/review-worker.js';
 import { createSemanticAssessmentAdapter } from '../apps/api/src/semantic-assessment.js';
 import type { ReviewLease, ReviewStore } from '../apps/api/src/review-store.js';
+import { validateStoredReport } from '../apps/api/src/review-store.js';
 import { canonical } from '../apps/api/src/foundation.js';
 import {
   SEMANTIC_PIPELINE_VERSION,
@@ -354,7 +355,9 @@ function semanticFixture(intake: FoundationIntake): SemanticAssessmentReport {
 
 it('binds provisional semantic results into the durable report without scholarly approval', async () => {
   const { intake, store, adapter } = fixture();
-  const semantic = { assess: vi.fn().mockResolvedValue(semanticFixture(intake)) };
+  const semantic = {
+    assessWithEvidence: vi.fn().mockResolvedValue({ report: semanticFixture(intake), intake }),
+  };
   const worker = createFoundationWorker(adapter, store, semantic);
   await worker.runOnce();
   expect(store.fail).not.toHaveBeenCalled();
@@ -381,6 +384,60 @@ it('binds provisional semantic results into the durable report without scholarly
   await worker.stop();
 });
 
+it('persists retrieved scholarly context with the final evidence binding', async () => {
+  const { intake, lease, store, adapter } = fixture();
+  const originalText = 'نص مصدر تجريبي يشرح شرط الاستدلال.';
+  const augmented: FoundationIntake = {
+    ...intake,
+    evidence: [
+      {
+        snapshotKey: 'scholar-context',
+        sourceId: 'fixture',
+        sourceVersion: 'v1',
+        reference: 'page 1',
+        originalText,
+        originalSha256: sha256(originalText),
+        sourceRole: 'scholar_explanation',
+        work: 'Synthetic test work',
+        author: null,
+        edition: null,
+        sourceUrl: null,
+        approvalStatus: 'approved',
+        researchOnly: false,
+        parentSnapshotKey: null,
+        delivery: 'snapshot',
+        retrievalModes: ['lexical'],
+        provenance: {},
+        contextBefore: 'سياق سابق',
+        contextAfter: null,
+        footnotes: [],
+        relations: [],
+      },
+    ],
+  };
+  const semantic = {
+    assessWithEvidence: vi
+      .fn()
+      .mockResolvedValue({ report: semanticFixture(augmented), intake: augmented }),
+  };
+  const worker = createFoundationWorker(adapter, store, semantic);
+  await worker.runOnce();
+  expect(store.fail).not.toHaveBeenCalled();
+  const stored = vi.mocked(store.complete).mock.calls[0]![1];
+  expect(stored.evidence[0]).toMatchObject({
+    role: 'scholar_explanation',
+    contextBefore: 'سياق سابق',
+    footnotes: [],
+    relations: [],
+  });
+  expect((stored.result.intake as FoundationIntake).evidence).toEqual(augmented.evidence);
+  expect(stored.result.semanticAssessment).toMatchObject({
+    trace: { evidenceSha256: sha256(canonical(augmented.evidence)) },
+  });
+  expect(() => validateStoredReport(lease, stored)).not.toThrow();
+  await worker.stop();
+});
+
 it('allows a measured long assessment within the semantic budget and review deadline', async () => {
   vi.useFakeTimers();
   const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation((delay) => {
@@ -391,19 +448,24 @@ it('allows a measured long assessment within the semantic budget and review dead
   const { intake, lease, store, adapter } = fixture();
   lease.deadlineAt = new Date(Date.now() + 90_000).toISOString();
   const semantic = {
-    assess: vi.fn(
+    assessWithEvidence: vi.fn(
       (_intake: FoundationIntake, signal?: AbortSignal) =>
-        new Promise<SemanticAssessmentReport>((resolve, reject) => {
-          const timer = setTimeout(() => resolve(semanticFixture(intake)), 33_000);
-          signal?.addEventListener(
-            'abort',
-            () => {
-              clearTimeout(timer);
-              reject(new Error('ABORTED'));
-            },
-            { once: true },
-          );
-        }),
+        new Promise<{ report: SemanticAssessmentReport; intake: FoundationIntake }>(
+          (resolve, reject) => {
+            const timer = setTimeout(
+              () => resolve({ report: semanticFixture(intake), intake }),
+              33_000,
+            );
+            signal?.addEventListener(
+              'abort',
+              () => {
+                clearTimeout(timer);
+                reject(new Error('ABORTED'));
+              },
+              { once: true },
+            );
+          },
+        ),
     ),
   };
   const worker = createFoundationWorker(adapter, store, semantic);
@@ -433,10 +495,10 @@ it.each(['exception', 'stale_hash', 'unknown_citation'] as const)(
     if (kind === 'unknown_citation')
       result.assessments[0]!.citations = [{ evidenceKey: 'invented', excerpt: 'نص' }];
     const semantic = {
-      assess:
+      assessWithEvidence:
         kind === 'exception'
           ? vi.fn().mockRejectedValue(new Error('PRIVATE_PROVIDER_ERROR'))
-          : vi.fn().mockResolvedValue(result),
+          : vi.fn().mockResolvedValue({ report: result, intake }),
     };
     const worker = createFoundationWorker(adapter, store, semantic);
     await worker.runOnce();

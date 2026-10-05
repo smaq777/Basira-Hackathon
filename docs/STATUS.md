@@ -1,5 +1,17 @@
 # Current delivery status
 
+**Hosted retrieval follow-up, 5 October:** The
+[persistent Neon development corpus](evidence/2026-10-05-hosted-source-corpus.md)
+contains 62 attributed research passages and compatible embeddings with a
+dedicated read-only runtime login. Claim-driven retrieval and explicit book/scholar
+roles now augment the evidence packet before assessment and persistence. The
+[eight-case controlled web experiment](evidence/2026-10-05-controlled-web-discovery.md)
+found useful incremental context in five cases; two acquisition failures and one
+no-result control remain recorded. Firecrawl stays experimental without a new UI.
+Source approval, broader scholarly evaluation, production activation and
+AI-ReWrite remain gated. Historical baseline entries below describe their dated
+verification rather than the current development implementation.
+
 Baseline date: **3 October 2026**. See live issues and PR checks for subsequent progress.
 
 **Local implementation update, 4 October:** Issue #14 adds a default-off source-review
