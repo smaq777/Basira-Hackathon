@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { foundationActivation } from '../apps/api/src/foundation-activation.js';
+import { foundationRuntimeMode } from '../apps/api/src/hosted-foundation.js';
 
 const staging = {
   FOUNDATION_ENABLED: 'true',
@@ -92,6 +93,28 @@ describe('explicit foundation research activation', () => {
     expect(() => foundationActivation(staging, '127.0.0.1')).toThrow(
       'HOSTED_STAGING_ENVIRONMENT_MISMATCH',
     );
+  });
+  it('integrates the full staging mode while preserving the accepted read-only hosted demo', () => {
+    expect(foundationRuntimeMode(staging, '0.0.0.0')).toBe('hosted_research');
+    expect(() =>
+      foundationRuntimeMode({ ...staging, FOUNDATION_HOSTED_DEMO: 'true' }, '0.0.0.0'),
+    ).toThrow('FOUNDATION_RUNTIME_MODE_CONFLICT');
+    const demo = {
+      FOUNDATION_ENABLED: 'true',
+      FOUNDATION_HOSTED_DEMO: 'true',
+      FOUNDATION_SEMANTIC_ENABLED: 'true',
+      FOUNDATION_CLAIM_RETRIEVAL_ENABLED: 'true',
+      NODE_ENV: 'production',
+    };
+    expect(foundationRuntimeMode(demo, '0.0.0.0')).toBe('hosted_demo');
+    for (const key of [
+      'FOUNDATION_TAFSIR_LIVE',
+      'FOUNDATION_WEB_DISCOVERY_ENABLED',
+      'FOUNDATION_REWRITE_ENABLED',
+    ])
+      expect(() => foundationRuntimeMode({ ...demo, [key]: 'true' }, '0.0.0.0')).toThrow(
+        'HOSTED_DEMO_REQUIRES_READ_ONLY_RETRIEVAL',
+      );
   });
   it.each([
     [{ ...staging, RAILWAY_ENVIRONMENT_NAME: 'production' }, 'HOSTED_STAGING_ENVIRONMENT_MISMATCH'],

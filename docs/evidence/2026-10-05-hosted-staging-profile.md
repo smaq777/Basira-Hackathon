@@ -39,3 +39,14 @@ size warning. External check output is retained in
 
 Rollback disables Foundation or its individual providers. Existing reports and
 source records remain intact; no historical SQL or checksums need replacement.
+
+During implementation Saleh merged owner PR #97 (`f130560`), adding a read-only
+hosted draft adapter. Its source and UI disclosures, no-Python bootstrap and
+live MCP/web/cache/rewrite rejection are preserved in the integration merge.
+The full research profile is a separate `hosted_research` runtime mode, and
+selecting both profiles fails closed. The original 52-file / 708-test receipt
+predates this merge. The combined source passed its own full check: 53 files /
+719 tests, typecheck, docs/policy/format and build. Its receipt is
+`AI_Foundation/experiments/integration-lead-v1/HOSTED_PROFILE_OWNER97_CHECK_V2.log`.
+Additional controls preserve the accepted hosted-demo restrictions and reject
+simultaneous demo/research selection. No hosted environment or provider was activated.

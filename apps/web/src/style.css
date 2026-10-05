@@ -3567,6 +3567,41 @@ mark {
   margin-inline-end: 10px;
 }
 
+.foundation-review-escalation {
+  max-width: 820px;
+  margin-block-start: 22px;
+  border: 1px solid color-mix(in srgb, var(--amber) 52%, var(--line));
+  border-radius: 13px;
+  padding: clamp(17px, 3vw, 23px);
+  background: var(--amber-soft);
+  color: var(--amber-dark);
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  text-align: start;
+}
+
+.foundation-review-escalation > svg {
+  flex: 0 0 auto;
+  margin-block-start: 2px;
+}
+
+.foundation-review-escalation h2 {
+  margin: 0 0 7px;
+  color: var(--navy);
+  font-size: clamp(1.05rem, 2.2vw, 1.25rem);
+}
+
+.foundation-review-escalation p {
+  margin: 0 0 15px;
+  color: var(--navy-soft);
+  line-height: 1.9;
+}
+
+.foundation-review-escalation .button {
+  margin: 0;
+}
+
 @media (max-width: 800px) {
   .foundation-workspace {
     grid-template-columns: 1fr;
@@ -3577,6 +3612,16 @@ mark {
 }
 
 @media (max-width: 540px) {
+  .foundation-review-escalation {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .foundation-review-escalation .button {
+    width: 100%;
+    justify-content: center;
+  }
+
   .foundation-compare-texts {
     grid-template-columns: 1fr;
     gap: 20px;

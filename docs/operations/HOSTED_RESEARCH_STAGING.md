@@ -5,6 +5,13 @@ through the existing Basira UI on Railway staging. Defaults remain off. Saleh
 accepts dependencies, configures the selected service and deploys; this document
 does not claim a hosted run or grant production deployment authority.
 
+Owner PR #97 at development `f130560` adds a separate `FOUNDATION_HOSTED_DEMO`
+mode for pinned read-only RAG/model assessment without Python assets. That mode
+and its restrictions are preserved. This full staging profile uses the canonical
+Python/index path and can explicitly enable the existing Tafsir, web/cache and
+rewrite features. The two opt-ins are mutually exclusive. The hosted demo's
+quotation-unavailable disclosure remains; it is not canonical quotation verification.
+
 ## Activation boundary
 
 Choose `FOUNDATION_RESEARCH_PROFILE=hosted-staging` only on the intended Railway

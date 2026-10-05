@@ -250,7 +250,7 @@ describe('Basirah web flow', () => {
     ).not.toBeNull();
     expect(window.location.hash).toBe(`#/result?revisionId=${REVISION_ID}`);
     expect(screen.queryByText('اكتملت المقارنة')).toBeNull();
-    await user.click(screen.getByRole('button', { name: /إرسال النص للمراجعة البشرية/ }));
+    await user.click(screen.getByRole('button', { name: /إرسال النص للمراجعة/ }));
 
     expect(await screen.findByRole('heading', { name: 'تم إنشاء تذكرتك' })).not.toBeNull();
     expect(window.location.hash).toBe(`#/ticket?revisionId=${REVISION_ID}`);
