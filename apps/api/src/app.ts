@@ -138,6 +138,7 @@ type AppOptions = {
     reports: Pick<ReviewStore, 'ownedReport'>;
     researchPreview: boolean;
     hostedDemo?: boolean;
+    hostedProduction?: boolean;
     liveTafsir?: boolean;
     semanticPilot?: boolean;
     webDiscovery?: boolean;
@@ -273,6 +274,7 @@ export function createApp(options: AppOptions = {}) {
         Number(state.migrationVersion?.slice(0, 4)) >= 7,
       researchPreview: options.foundation?.researchPreview ?? false,
       hostedFoundationDemo: options.foundation?.hostedDemo ?? false,
+      hostedFoundationProduction: options.foundation?.hostedProduction ?? false,
       maximumTextLength: MAX_DRAFT_LENGTH,
       draftRewrite: Boolean(options.rewrite),
       draftRewriteMode: options.rewrite?.mode ?? null,

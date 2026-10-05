@@ -37,7 +37,7 @@ function fixture(exact: unknown[] = [], lexical: unknown[] = []) {
   return { pool, query, release };
 }
 describe('hosted evidence boundaries', () => {
-  it('reserves novel evidence capacity when references already fill the candidate bound', async () => {
+  it('returns only the resolved explicit source family and skips broad neighbors', async () => {
     const f = fixture(
       Array.from({ length: 8 }, (_, index) => row('anchor-' + index)),
       [row('novel-scholar', 'scholar_explanation')],
@@ -48,12 +48,43 @@ describe('hosted evidence boundaries', () => {
       researchPreview: true,
     });
     const results = await corpus.search('Owned assertion needing new evidence', ['anchor-0']);
-    expect(results.some((r) => r.sourceRole === 'scholar_explanation')).toBe(true);
+    expect(results.some((r) => r.sourceRole === 'scholar_explanation')).toBe(false);
     expect(results).toHaveLength(8);
+    expect(f.query.mock.calls.some(([sql]) => String(sql).includes('word_similarity'))).toBe(false);
     expect(f.query).toHaveBeenCalledWith('set local role basirah_research_runtime');
     expect(results[0]?.sourceId).toBe('original:source');
     expect(results[0]?.author).toBeNull();
     expect(results[0]?.edition).toBeNull();
+    expect(
+      f.query.mock.calls.some(([sql]) =>
+        String(sql).includes("case p.source_role when 'quran_text' then 0"),
+      ),
+    ).toBe(true);
+  });
+  it('drops an orphaned explicit child instead of failing report persistence', async () => {
+    const parent = row('quran-anchor');
+    const orphan = {
+      ...row('tafsir-orphan', 'tafsir_commentary'),
+      parent_snapshot_key: 'missing-quran-anchor',
+    };
+    const f = fixture([parent, orphan]);
+    const corpus = createHostedCorpus({
+      pool: f.pool,
+      corpusVersion: 'synthetic-v1',
+      researchPreview: true,
+    });
+    const results = await corpus.search('Quoted text', ['31:15']);
+    expect(results.map((result) => result.snapshotKey)).toEqual(['quran-anchor']);
+  });
+  it('does not substitute broad lexical neighbors for an unresolved explicit locator', async () => {
+    const f = fixture([], [row('unrelated-neighbor', 'scholar_explanation')]);
+    const corpus = createHostedCorpus({
+      pool: f.pool,
+      corpusVersion: 'synthetic-v1',
+      researchPreview: true,
+    });
+    await expect(corpus.search('Quoted text', ['2:271'])).resolves.toEqual([]);
+    expect(f.query.mock.calls.some(([sql]) => String(sql).includes('word_similarity'))).toBe(false);
   });
   it('rejects corrupted stored originals and always rolls back/releases', async () => {
     const f = fixture([], [{ ...row('tampered'), original_text: 'changed' }]);

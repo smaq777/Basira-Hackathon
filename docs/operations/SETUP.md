@@ -163,6 +163,19 @@ accepted `development` revision, explicit staging deployment markers, verified
 corpus TLS, and at least encrypted Railway-private report-database transport. It is
 rejected on `main`/production rather than exposing pending research material there.
 
+The owner-authorized Railway production profile uses
+`FOUNDATION_HOSTED_PRODUCTION=true`. It is bound to Railway `production`, the
+selected `FOUNDATION_PRODUCTION_SERVICE_ID`, `main`, the exact deployed SHA and
+`verify-full` report/corpus TLS. The profile can use the schema-pinned Tafsir MCP
+with `FOUNDATION_TAFSIR_LIVE=true` and bounded read-only web discovery with
+`FOUNDATION_WEB_DISCOVERY_ENABLED=true`. Provider credentials remain server-only.
+Owner-authorized hosted profiles can also enable `FOUNDATION_WEB_CACHE_ENABLED`,
+`FOUNDATION_WEB_CACHE_PASSAGES_ENABLED` and
+`FOUNDATION_WEB_CACHE_CONTENT_VIEWS_ENABLED`. Those writes use the separate
+least-privileged cache-writer URL, verified TLS, source policy and bounded SQL/model
+budgets; they add retained public-page sidecars and RAG passages without changing
+canonical source approval. Author rewrite remains disabled in hosted production.
+
 Enable `FOUNDATION_ENABLED`, `FOUNDATION_SEMANTIC_ENABLED`, `FOUNDATION_CLAIM_RETRIEVAL_ENABLED`, `FOUNDATION_WEB_DISCOVERY_ENABLED`, and `FOUNDATION_WEB_CACHE_ENABLED` only for an authorized research run. Keep the local Python executable/index, report runtime login, and separate worker login configured as described in `.env.example`. The report database needs migration 0007 for source review and at least 0009 for claim retrieval. The separate Neon corpus/cache database needs the populated versioned corpus and migration `0010_research_page_cache`. Apply checked-in migrations only to the explicitly selected isolated development database with its direct migration credential; never place owner credentials in runtime configuration.
 
 `FOUNDATION_CORPUS_DATABASE_URL` uses the existing least-privileged research reader and `FOUNDATION_CORPUS_VERSION` selects the frozen corpus. `FOUNDATION_WEB_CACHE_DATABASE_URL` uses a separate cache writer login: only cache SELECT/INSERT and verification/expiry updates, no canonical-corpus changes or source approval. Both use `FOUNDATION_CORPUS_TLS_MODE`, default `verify-full`. Provider keys remain server-only in the owning external environment: `OPENROUTER_API_KEY`, `FIRECRAWL_API_KEY`, and, when selected, `TINYFISH_API_KEY`.

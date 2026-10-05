@@ -7,8 +7,10 @@ import { Pool } from 'pg';
 import { createClerkReviewerAuth } from './reviewer-auth.js';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
-import { createPythonAdapter } from './foundation.js';
+import { createPythonAdapter, type FoundationAdapter } from './foundation.js';
 import { createHostedDraftAdapter, foundationRuntimeMode } from './hosted-foundation.js';
+import { withLiveTafsirMcp } from './tafsir-mcp.js';
+import { withExactQuranApi } from './quran-api.js';
 import { createReviewStore } from './review-store.js';
 import { createFoundationWorker } from './review-worker.js';
 import { createSemanticAssessmentAdapter } from './semantic-assessment.js';
@@ -84,14 +86,16 @@ async function initializeFoundation() {
   if (runtimeMode === 'disabled') return undefined;
   const researchPreview = ['local_research', 'hosted_research'].includes(runtimeMode);
   const hostedDemo = runtimeMode === 'hosted_demo';
-  const researchEvidence = researchPreview || hostedDemo;
+  const hostedProduction = runtimeMode === 'hosted_production';
+  const hostedRuntime = hostedDemo || hostedProduction;
+  const researchEvidence = researchPreview || hostedRuntime;
   // This opt-in uses only numeric verse references and the pinned Tafsir adapter.
   // Both research profiles retain provisional source/edition status.
-  if (process.env.FOUNDATION_TAFSIR_LIVE === 'true' && !researchPreview)
+  if (process.env.FOUNDATION_TAFSIR_LIVE === 'true' && !researchPreview && !hostedRuntime)
     throw new Error('LIVE_SOURCE_ACQUISITION_REQUIRES_RESEARCH_PREVIEW');
   const semanticEnabled = process.env.FOUNDATION_SEMANTIC_ENABLED === 'true';
   const semanticBudget = semanticBudgetConfiguration(process.env, researchEvidence);
-  if (semanticEnabled && !researchEvidence)
+  if (semanticEnabled && !researchEvidence && !hostedProduction)
     throw new Error('SEMANTIC_PILOT_REQUIRES_RESEARCH_PROFILE');
   const retrievalEnabled = process.env.FOUNDATION_CLAIM_RETRIEVAL_ENABLED === 'true';
   const webDiscoveryEnabled = process.env.FOUNDATION_WEB_DISCOVERY_ENABLED === 'true';
@@ -121,7 +125,7 @@ async function initializeFoundation() {
     !connectionString ||
     !workerUrl ||
     (researchPreview && (!python || !sourceDatabase)) ||
-    (hostedDemo && !hostedCorpusVersion)
+    (hostedRuntime && !hostedCorpusVersion)
   )
     throw new Error('FOUNDATION_CONFIGURATION_INCOMPLETE');
   const readiness = await database.readiness();
@@ -130,26 +134,10 @@ async function initializeFoundation() {
     !(Number(readiness.migrationVersion?.slice(0, 4)) >= (retrievalEnabled ? 9 : 7))
   )
     throw new Error('FOUNDATION_MIGRATION_REQUIRED');
-  const adapter = hostedDemo
-    ? createHostedDraftAdapter(hostedCorpusVersion!)
-    : createPythonAdapter({
-        python: python!,
-        script: resolve('apps/foundation_worker/intake_bridge.py'),
-        cwd: resolve('apps/foundation_worker'),
-        database: sourceDatabase!,
-        snapshotDirectory: process.env.FOUNDATION_SNAPSHOTS || undefined,
-        researchPreview,
-      });
+  let adapter: FoundationAdapter | undefined;
   let corpusPool: Pool | undefined;
   let webCachePool: Pool | undefined;
   try {
-    const intake = await adapter.analyze('تهيئة محرك المصادر المحلي.', randomUUID());
-    const configured = process.env.CORPUS_VERSION?.trim();
-    if (configured && configured !== 'unconfigured' && configured !== intake.corpusVersion)
-      throw new Error('FOUNDATION_CORPUS_VERSION_MISMATCH');
-    process.env.CORPUS_VERSION = intake.corpusVersion;
-    const store = createReviewStore(workerUrl);
-    const reports = createReviewStore(connectionString);
     let claimRetrieval;
     let baseCorpus: ClaimCorpusSearch | undefined;
     let selectedCorpusVersion: string | undefined;
@@ -182,10 +170,14 @@ async function initializeFoundation() {
         },
       });
       if (!(await corpus.readiness()).ready) throw new Error('HOSTED_CORPUS_NOT_READY');
-      baseCorpus = corpus;
+      const explicitCorpus = hostedRuntime ? withExactQuranApi(corpus) : corpus;
+      baseCorpus =
+        hostedRuntime && process.env.FOUNDATION_TAFSIR_LIVE === 'true'
+          ? withLiveTafsirMcp(explicitCorpus)
+          : explicitCorpus;
       selectedCorpusVersion = corpusVersion;
       claimRetrieval = createClaimRetrievalAdapter({
-        corpus,
+        corpus: baseCorpus,
         corpusVersion,
         researchPreview: researchEvidence,
         reserveDiscoveryKeys: webDiscoveryEnabled,
@@ -288,6 +280,23 @@ async function initializeFoundation() {
         });
       }
     }
+    adapter = hostedRuntime
+      ? createHostedDraftAdapter(hostedCorpusVersion!, baseCorpus, !hostedProduction)
+      : createPythonAdapter({
+          python: python!,
+          script: resolve('apps/foundation_worker/intake_bridge.py'),
+          cwd: resolve('apps/foundation_worker'),
+          database: sourceDatabase!,
+          snapshotDirectory: process.env.FOUNDATION_SNAPSHOTS || undefined,
+          researchPreview,
+        });
+    const intake = await adapter.analyze('تهيئة محرك المصادر المحلي.', randomUUID());
+    const configured = process.env.CORPUS_VERSION?.trim();
+    if (configured && configured !== 'unconfigured' && configured !== intake.corpusVersion)
+      throw new Error('FOUNDATION_CORPUS_VERSION_MISMATCH');
+    process.env.CORPUS_VERSION = intake.corpusVersion;
+    const store = createReviewStore(workerUrl);
+    const reports = createReviewStore(connectionString);
     const semantic = semanticEnabled
       ? createSemanticAssessmentAdapter({
           enabled: true,
@@ -316,6 +325,7 @@ async function initializeFoundation() {
       runtimeMode,
       researchPreview,
       hostedDemo,
+      hostedProduction,
       liveTafsir: process.env.FOUNDATION_TAFSIR_LIVE === 'true',
       semanticPilot: semanticEnabled,
       webDiscovery: webDiscoveryEnabled,
@@ -326,7 +336,7 @@ async function initializeFoundation() {
   } catch (error) {
     await corpusPool?.end();
     await webCachePool?.end();
-    await adapter.close();
+    await adapter?.close();
     throw error;
   }
 }
