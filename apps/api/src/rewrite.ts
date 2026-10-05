@@ -11,8 +11,14 @@ import {
 import { isSafeDraftText, MAX_DRAFT_LENGTH } from '../../../packages/contracts/src/draft-text.js';
 import { canonical, sha256, validateIntake } from './foundation.js';
 import { readableSourceCitation } from '../../../packages/contracts/src/source-citation.js';
+import {
+  authorRewriteInput,
+  validateAuthorRewrite,
+  validateAuthorVerification,
+  type RewriteVerifier,
+} from './substantive-rewrite.js';
 
-function protectedRanges(report: FoundationReport) {
+export function protectedRanges(report: FoundationReport) {
   const text = report.intake.originalText;
   const ranges = report.intake.segments
     .filter((s) => s.role !== 'author_text')
@@ -41,7 +47,9 @@ function protectedRanges(report: FoundationReport) {
 
 export type RewriteContext = { report: FoundationReport; attempt: number };
 export type RewriteGenerator = (
-  input: ReturnType<typeof rewriteInput>,
+  input: ReturnType<typeof rewriteInput> & {
+    authorClaims?: ReturnType<typeof authorRewriteInput>['authorClaims'];
+  },
   signal: AbortSignal,
 ) => Promise<unknown>;
 export class RewriteError extends Error {
@@ -138,6 +146,7 @@ export function validateRewrite(report: FoundationReport, raw: unknown) {
   const parsed = RewriteOperationsSchema.safeParse(raw);
   if (!parsed.success) throw new RewriteError('REWRITE_INVALID_CANDIDATE');
   const operations = parsed.data;
+  if (operations.replacements?.length) throw new RewriteError('REWRITE_INVALID_CANDIDATE');
   const input = rewriteInput(report);
   const insertions = new Map<number, string[]>();
   const retained: RewriteOperations = { paragraphBreaks: [], citations: [] };
@@ -224,11 +233,17 @@ function unresolved(report: FoundationReport) {
 /** Explicitly transient research prototype: no restart recovery or database persistence. */
 export function createRewriteService(
   generate: RewriteGenerator,
-  options: { now?: () => number; ttlMs?: number; timeoutMs?: number } = {},
+  options: {
+    now?: () => number;
+    ttlMs?: number;
+    timeoutMs?: number;
+    verifier?: RewriteVerifier;
+  } = {},
 ) {
   const now = options.now ?? Date.now;
   const ttlMs = options.ttlMs ?? 10 * 60_000;
-  const timeoutMs = options.timeoutMs ?? 30_000;
+  const timeoutMs = options.timeoutMs ?? (options.verifier ? 90_000 : 30_000);
+  const mode = options.verifier ? 'supported_author_wording' : 'citation_and_layout_only';
   const records = new Map<
     string,
     {
@@ -237,6 +252,7 @@ export function createRewriteService(
       binding: string;
       controller: AbortController;
       candidate: RewriteCandidate;
+      verification?: { raw: unknown; hash: string };
     }
   >();
   const prune = () => {
@@ -261,6 +277,7 @@ export function createRewriteService(
     return row;
   };
   return {
+    mode,
     create(
       owner: string,
       key: string,
@@ -296,12 +313,19 @@ export function createRewriteService(
         unresolved: unresolved(context.report),
         errorCode: null,
         expiresAt: new Date(now() + ttlMs).toISOString(),
-        mode: 'citation_and_layout_only',
+        mode,
         scholarlyApproval: false,
         storage: 'session_bound_memory',
       };
       const controller = new AbortController();
-      const row = { owner, key, binding: binding(context), controller, candidate };
+      const row: {
+        owner: string;
+        key: string;
+        binding: string;
+        controller: AbortController;
+        candidate: RewriteCandidate;
+        verification?: { raw: unknown; hash: string };
+      } = { owner, key, binding: binding(context), controller, candidate };
       records.set(candidate.id, row);
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       timer.unref();
@@ -309,12 +333,28 @@ export function createRewriteService(
       void Promise.race([
         Promise.resolve().then(async () => {
           signal.throwIfAborted();
-          const output = await generate(rewriteInput(context.report), signal);
+          const input = options.verifier
+            ? authorRewriteInput(context.report)
+            : rewriteInput(context.report);
+          const output = await generate(input, signal);
           signal.throwIfAborted();
           const fresh = await reload();
           signal.throwIfAborted();
           if (row.binding !== binding(fresh)) throw new RewriteError('REWRITE_STALE_REPORT');
-          return validateRewrite(fresh.report, output);
+          const valid = options.verifier
+            ? validateAuthorRewrite(fresh.report, output)
+            : validateRewrite(fresh.report, output);
+          if (options.verifier && valid.operations.replacements?.length) {
+            const verifierInput = authorRewriteInput(fresh.report);
+            const raw = await options.verifier(verifierInput, valid.operations, signal);
+            signal.throwIfAborted();
+            const hash = validateAuthorVerification(verifierInput, valid.operations, raw);
+            const after = await reload();
+            signal.throwIfAborted();
+            if (row.binding !== binding(after)) throw new RewriteError('REWRITE_STALE_REPORT');
+            row.verification = { raw, hash };
+          }
+          return valid;
         }),
         new Promise<never>((_resolve, reject) => {
           signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
@@ -361,7 +401,20 @@ export function createRewriteService(
     copy(owner: string, id: string, context: RewriteContext) {
       const row = owned(owner, id, context);
       if (row.candidate.status !== 'validated') throw new RewriteError('REWRITE_NOT_VALIDATED');
-      const checked = validateRewrite(context.report, row.candidate.operations);
+      const checked = options.verifier
+        ? validateAuthorRewrite(context.report, row.candidate.operations)
+        : validateRewrite(context.report, row.candidate.operations);
+      if (
+        options.verifier &&
+        checked.operations.replacements?.length &&
+        (!row.verification ||
+          validateAuthorVerification(
+            authorRewriteInput(context.report),
+            checked.operations,
+            row.verification.raw,
+          ) !== row.verification.hash)
+      )
+        throw new RewriteError('REWRITE_NOT_VALIDATED');
       if (checked.text !== row.candidate.text) throw new RewriteError('REWRITE_STALE_REPORT');
       return checked.text;
     },
@@ -391,7 +444,7 @@ export function createRewriteService(
         unresolved: [],
         errorCode: 'cancelled',
         expiresAt: new Date(now() + ttlMs).toISOString(),
-        mode: 'citation_and_layout_only',
+        mode,
         scholarlyApproval: false,
         storage: 'session_bound_memory',
       };

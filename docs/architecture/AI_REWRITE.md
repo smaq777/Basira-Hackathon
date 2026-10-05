@@ -1,10 +1,42 @@
 # Evidence-bound AI-ReWrite proposal
 
-Status: citation/layout research slice implemented behind a default-off local flag;
-substantive wording changes remain proposed and disabled. Related: #38, #13, #18,
+Status: supported author wording and citation/layout research slices implemented
+behind a default-off local flag. Related: #38, #13, #18,
 #68. Preserve the 3,000-character review scope and original revision.
 
-## Implemented first slice
+## Implemented supported author wording — 5 October
+
+The local action «تحسين الصياغة وإضافة التوثيق» now accepts replacements only for
+exact server-owned author claim spans whose persisted semantic finding is
+supported. Classified source spans, complete quotation wrappers, unsupported
+claims and unselected text are preserved. The generator cannot replace the whole
+draft, correct a contradicted claim by changing its meaning, invent a reference,
+or overwrite the original revision. Changes must alter wording beyond punctuation.
+
+After deterministic identity, range, source, quotation and length checks, a
+separate pinned model request verifies mutual meaning preservation and support of
+every revised material clause from the same immutable evidence. Conditions,
+negations, exceptions and scope each have an independent required check. Exact
+passage citations are required. A false, missing, malformed, unavailable or
+ambiguous check rejects the whole candidate. This is provisional model validation;
+it is not independent scholarly adjudication or a calibrated semantic guarantee.
+
+Copy reloads the owned report and current attempt, reconstructs the candidate,
+and revalidates the stored verifier output and its input/operations hash. The
+90-second shared task deadline covers generation, verification and report reload.
+Provider failure or cancellation never exposes generated text for validated copy.
+Both requests currently use Luna low: the fixed-packet comparison found no
+relation improvement from configured Sol medium, whose receipts reported zero
+reasoning tokens. A separate request is independent of the generator's answer,
+but using the same model does not provide independent human judgment.
+
+The UI shows original and replacement wording, source labels and unresolved
+coverage. It explicitly says only displayed supported spans were improved and
+all remaining text was preserved. Ten-minute session-bound memory, ownership,
+idempotency, cancellation, default-off production controls and manual acceptance
+remain as described below. See [new evidence](../evidence/2026-10-05-substantive-rewrite.md).
+
+## Historical citation/layout first slice
 
 The current button is «تنسيق النص وإضافة التوثيق». It selects paragraph breaks and
 actual recorded citations, creates a separate candidate, and offers copy only
@@ -49,7 +81,7 @@ From a completed review, «تحسين النص وتوثيقه» creates a separa
 
 If no adequate evidence exists, offer editorial wording or identify the unresolved passage; do not promise evidence strengthening. If the candidate fails validation, retain the original, explain the failed check in Arabic, and allow retry only within bounded limits. Do not display a success/approval badge for a generated draft.
 
-## Generation contract
+## Proposed broader generation contract — separately gated
 
 - Input: original revision/hash; selected supported findings; their exact evidence IDs and original excerpts; known conditions/negations/exceptions/scope; citation metadata; unresolved findings; approved style rules.
 - Output: candidate text, changed original spans with reasons, exact citation IDs, unresolved items, and revision/report binding. No invented source, author, page, hadith number, authenticity grade or scholarly approval.

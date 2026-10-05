@@ -29,6 +29,40 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it('shows substantive before/after wording and limits the claimed coverage to changed supported spans', async () => {
+  const user = userEvent.setup();
+  const originalText = 'كلام الكاتب فيه معنى مدعوم ولكنه يحتاج صياغه';
+  const replacementText = 'تحتاج عبارة الكاتب المدعومة إلى تحسين الصياغة.';
+  const ready = {
+    ...candidate,
+    mode: 'supported_author_wording',
+    status: 'validated',
+    text: replacementText,
+    operations: {
+      paragraphBreaks: [],
+      citations: [],
+      replacements: [
+        { claimId: 'author', originalText, replacementText, evidenceKeys: ['source'] },
+      ],
+    },
+  };
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
+    String(input) === '/api/v1/capabilities'
+      ? json({ draftRewrite: true, draftRewriteMode: 'supported_author_wording' })
+      : json({ candidate: ready }),
+  );
+  const view = render(<RewritePanel report={report} />);
+  await user.click(await screen.findByRole('button', { name: 'تحسين الصياغة وإضافة التوثيق' }));
+  await screen.findByRole('button', { name: 'نسخ النص المقترح' });
+  expect(view.container.querySelector('del')?.textContent).toBe(originalText);
+  expect(view.container.querySelector('ins')?.textContent).toBe(replacementText);
+  expect(
+    screen.getByText(
+      'حُسّنت العبارات المعروضة في المقارنة فقط. بقيت بقية العبارات، بما فيها غير المدعومة أو غير المراجعة، كما وردت.',
+    ),
+  ).not.toBeNull();
+});
+
 it('offers copy only after validation and requests a fresh server copy check before clipboard access', async () => {
   const user = userEvent.setup();
   const clipboard = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
