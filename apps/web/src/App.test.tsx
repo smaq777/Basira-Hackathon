@@ -312,8 +312,10 @@ describe('Basirah web flow', () => {
       '/api/v1/capabilities',
       '/api/v1/reviews',
       `/api/v1/reviews/${REVIEW_ID}/report`,
-      '/api/v1/capabilities',
+      '/api/v1/capabilities', // existing rewrite availability
+      '/api/v1/capabilities', // strict ticket presentation availability
     ]);
+    expect(screen.queryByRole('button', { name: /إرسال النص للمراجعة/ })).toBeNull();
   });
 
   it('aborts the in-flight analysis request when the user leaves the analysis route', async () => {

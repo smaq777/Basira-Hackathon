@@ -312,6 +312,18 @@ function ownedReview(body: unknown): OwnedReview {
   return run as OwnedReview;
 }
 
+/** Fail closed for presentation; server still enforces ticket authorization. */
+export async function reviewTicketsAvailable(signal?: AbortSignal): Promise<boolean> {
+  const body = await requestJson('/api/v1/capabilities', { method: 'GET' }, signal);
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    !Array.isArray(body) &&
+    'reviewTickets' in body &&
+    body.reviewTickets === true
+  );
+}
+
 export async function requireFoundationReview(): Promise<void> {
   const body = await requestJson('/api/v1/capabilities', { method: 'GET' });
   if (

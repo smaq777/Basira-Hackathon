@@ -10,6 +10,7 @@ import {
   getFoundationReport,
   awaitFoundationReport,
   requireFoundationReview,
+  reviewTicketsAvailable,
   requireAnalysisCapability,
   requestDraftPreflight,
 } from './api.js';
@@ -282,5 +283,36 @@ describe('documented capacity responses', () => {
     expect(isResourceCapacityError(network)).toBe(false);
     expect(analysisErrorMessage(burst)).toContain('انتظر');
     expect(analysisErrorMessage(network)).toContain('الاتصال');
+  });
+});
+
+describe('strict ticket presentation capability', () => {
+  afterEach(() => vi.restoreAllMocks());
+  it.each([
+    [{ reviewTickets: true }, true],
+    [{ reviewTickets: false }, false],
+    [{}, false],
+    [{ reviewTickets: 'true' }, false],
+    [null, 'reject'],
+    [[], 'reject'],
+    ['true', 'reject'],
+  ])('requires literal true in the selected API response %#', async (body, expected) => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(body));
+    if (expected === 'reject')
+      await expect(reviewTicketsAvailable()).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    else await expect(reviewTicketsAvailable()).resolves.toBe(expected);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls[0]![1]!.method).toBe('GET');
+  });
+  it('forwards caller cancellation without creating a session or retrying the lookup', async () => {
+    const controller = new AbortController();
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new DOMException('Aborted', 'AbortError'));
+    const result = reviewTicketsAvailable(controller.signal);
+    controller.abort();
+    await expect(result).rejects.toBeDefined();
+    expect(fetch.mock.calls[0]![1]!.signal!.aborted).toBe(true);
+    expect(fetch).toHaveBeenCalledOnce();
   });
 });
