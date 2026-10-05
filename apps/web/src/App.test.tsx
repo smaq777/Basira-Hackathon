@@ -220,7 +220,8 @@ describe('Basirah web flow', () => {
     });
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const path = String(input);
-      if (path === '/api/v1/capabilities') return json({ foundationReview: true });
+      if (path === '/api/v1/capabilities')
+        return json({ foundationReview: true, guestDocuments: true });
       if (path === '/api/v1/documents') return pendingDocument;
       if (path === `/api/v1/revisions/${REVISION_ID}/extractions`)
         return json({ extraction: { candidates: [], warnings: [] } });
@@ -255,6 +256,7 @@ describe('Basirah web flow', () => {
     expect(JSON.parse(String(draft[1]?.body)).text).toBe(ORIGINAL_TEXT);
     expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
       '/api/v1/capabilities',
+      '/api/v1/capabilities',
       '/api/v1/documents',
       `/api/v1/revisions/${REVISION_ID}/extractions`,
       '/api/v1/reviews',
@@ -267,7 +269,7 @@ describe('Basirah web flow', () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) => {
       if (String(_input) === '/api/v1/capabilities')
         return Promise.resolve(
-          new Response(JSON.stringify({ foundationReview: true }), {
+          new Response(JSON.stringify({ foundationReview: true, guestDocuments: true }), {
             headers: { 'Content-Type': 'application/json' },
           }),
         );
@@ -294,6 +296,7 @@ describe('Basirah web flow', () => {
 
     expect(request.signal?.aborted).toBe(true);
     expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+      '/api/v1/capabilities',
       '/api/v1/capabilities',
       '/api/v1/documents',
     ]);

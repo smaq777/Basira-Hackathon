@@ -99,7 +99,19 @@ async function requestJson(
       headers: { 'Content-Type': 'application/json', ...init.headers },
       signal: controller.signal,
     });
-    const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
+    const isJson = /^application\/json(?:\s*;|$)/iu.test(
+      response.headers.get('Content-Type') ?? '',
+    );
+    if (!isJson) {
+      if (response.status === 404 || response.ok)
+        throw new BasirahApiError('API_ROUTE_UNAVAILABLE', response.status);
+      throw new BasirahApiError('REQUEST_FAILED', response.status);
+    }
+    const body = (await response.json().catch(() => {
+      throw new BasirahApiError('INVALID_RESPONSE', response.status);
+    })) as ApiErrorBody;
+    if (typeof body !== 'object' || body === null || Array.isArray(body))
+      throw new BasirahApiError('INVALID_RESPONSE', response.status);
     if (!response.ok) throw new BasirahApiError(body.code ?? 'REQUEST_FAILED', response.status);
     return body;
   } catch (error) {
@@ -117,6 +129,20 @@ async function requestJson(
 
 async function createSession(signal?: AbortSignal): Promise<void> {
   await requestJson('/api/v1/sessions', { method: 'POST', body: '{}' }, signal);
+}
+
+export async function requireAnalysisCapability(
+  capability: 'guestDocuments' | 'foundationReview',
+  signal?: AbortSignal,
+): Promise<void> {
+  const body = await requestJson('/api/v1/capabilities', { method: 'GET' }, signal);
+  if (typeof body !== 'object' || body === null || !('guestDocuments' in body))
+    throw new BasirahApiError('INVALID_RESPONSE', 0);
+  if (!(capability in body) || (body as Record<string, unknown>)[capability] !== true)
+    throw new BasirahApiError(
+      capability === 'foundationReview' ? 'FOUNDATION_UNAVAILABLE' : 'ANALYSIS_UNAVAILABLE',
+      0,
+    );
 }
 
 async function createDocument(
@@ -147,6 +173,7 @@ export async function persistDraftForAnalysis(
   text: string,
   signal?: AbortSignal,
 ): Promise<DraftAnalysisReceipt> {
+  await requireAnalysisCapability('guestDocuments', signal);
   let document: { documentId: string; revisionId: string };
   try {
     document = await createDocument(text, signal);
@@ -184,6 +211,10 @@ export async function persistDraftForAnalysis(
 
 export function analysisErrorMessage(error: unknown): string {
   if (error instanceof BasirahApiError) {
+    if (error.code === 'API_ROUTE_UNAVAILABLE')
+      return 'خدمة التحليل غير مرتبطة بهذه الواجهة حاليًا. بقي نصك كما هو؛ حاول لاحقًا.';
+    if (error.code === 'ANALYSIS_UNAVAILABLE')
+      return 'خدمة حفظ المسودة غير متاحة حاليًا. بقي نصك كما هو؛ حاول لاحقًا.';
     if (error.status === 401) return 'انتهت جلسة المسودة. عد إلى النص وابدأ مراجعة جديدة.';
     if (error.status === 404 && error.code === 'REVIEW_NOT_FOUND')
       return 'لم نجد هذه المراجعة في جلستك الحالية. عد إلى النص وابدأ مراجعة جديدة.';
