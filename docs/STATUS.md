@@ -2,6 +2,14 @@
 
 ## Latest development evidence — 5 October
 
+**Source-free claim selection (#11):** Semantic v1.8 separates assertion selection
+from evidence support and records one bounded model re-selection after a valid
+empty result with remaining candidates. Both requests share the existing
+extraction phase budget; questions and classified quotation-only writing still
+bypass selection. A second empty result stays partial with unselected coverage;
+no inventory candidate becomes a claim automatically. See
+[diagnostic and limits](evidence/2026-10-05-claim-selection-recovery.md).
+
 **Active local research testing (#8):** The integrated app now uses the 86-passage
 Neon snapshot, verified in a newly completed durable UI report. Eleven additional
 approved-domain public originals were classified and added to the separate

@@ -449,6 +449,21 @@ it('explains an unavailable claim extraction without implying that source eviden
   expect(screen.queryByText('لا يوجد استنتاج قابل للتقييم في هذا النص')).toBeNull();
 });
 
+it('distinguishes a valid empty selection from service failure without declaring the writing correct or claim-free', () => {
+  const report = semanticBindingFixture();
+  report.interpretation.status = 'unavailable';
+  report.semanticAssessment!.status = 'partial';
+  report.semanticAssessment!.errorCode = 'no_claims_extracted';
+  report.semanticAssessment!.claims = [];
+  report.semanticAssessment!.assessments = [];
+  render(<FoundationReportContent report={report} />);
+  expect(screen.getByText('لم يُحسم تحديد الادعاءات')).not.toBeNull();
+  expect(screen.getByText(/قد توجد عبارات لم تُراجع/)).not.toBeNull();
+  expect(screen.getByText('نقل مطابق حرفيًا')).not.toBeNull();
+  expect(screen.queryByText('تعذر استكمال التقييم الدلالي')).toBeNull();
+  expect(screen.queryByText('لا يوجد استنتاج قابل للتقييم في هذا النص')).toBeNull();
+});
+
 it('preserves partial assessments and explains that unverifiable proposed statements were skipped', () => {
   const report = semanticBindingFixture();
   const view = render(<FoundationReportContent report={report} />);
