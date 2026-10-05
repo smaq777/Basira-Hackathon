@@ -210,7 +210,13 @@ function unresolved(report: FoundationReport) {
       )
     )
       rows.push(claim.originalText);
-  if (!report.semanticAssessment || report.semanticAssessment.status !== 'completed')
+  const noAuthorAssessmentNeeded =
+    report.interpretation.status === 'not_applicable' ||
+    report.semanticAssessment?.status === 'not_applicable';
+  if (
+    !noAuthorAssessmentNeeded &&
+    (!report.semanticAssessment || report.semanticAssessment.status !== 'completed')
+  )
     rows.unshift('لم يكتمل تقييم دعم الادعاءات؛ ترتيب النص وتوثيق النقل لا يثبت صحة الاستدلال.');
   return rows.slice(0, 85).map((s) => s.slice(0, 500));
 }
