@@ -2,6 +2,12 @@
 
 ## Latest development evidence — 5 October
 
+**Copied-role bootstrap (#81):** An explicit migration-runner compatibility profile
+validates and reuses an existing safe research group role without changing
+historical SQL/checksums or other role grants. It records a separate atomic
+execution receipt. [Runbook](operations/COPIED_ROLE_BOOTSTRAP.md). Actual isolated
+full-chain validation is pending; this does not change shared configuration.
+
 **Passage index (#8, related #11):** A separate default-off implementation adds
 offline bounded vector backfill and per-claim verified retained-page delivery.
 [Evidence](evidence/2026-10-05-cache-passage-index.md) records actual isolated SQL,

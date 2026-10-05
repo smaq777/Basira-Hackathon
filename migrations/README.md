@@ -1,5 +1,9 @@
 # Database migrations
 
+An explicit [copied-role bootstrap](../docs/operations/COPIED_ROLE_BOOTSTRAP.md)
+addresses existing cluster roles under #81 without editing historical SQL or
+checksums. Its separate atomic receipt records the compatibility execution path.
+
 Migration `0014` lets an owned current revision enter the same secure human-review
 queue when automated analysis is unavailable. It keeps report-backed tickets
 compatible, exposes the original submission to authorized reviewers, and does
