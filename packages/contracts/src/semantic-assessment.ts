@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { SourceContentSelectionSchema } from './source-content.js';
+const CacheChunkerVersion = z.enum(['cache-sentence-context-v1', 'exact-content-block-context-v1']);
 
 export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.8';
 export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.8';
@@ -59,7 +61,8 @@ export const CachePassagePreferenceSchema = z
     evidenceKey: z.string().min(1).max(160),
     originalSha256: z.string().regex(/^[a-f0-9]{64}$/u),
     querySha256: z.string().regex(/^[a-f0-9]{64}$/u),
-    chunkerVersion: z.literal('cache-sentence-context-v1'),
+    chunkerVersion: CacheChunkerVersion,
+    contentSelection: SourceContentSelectionSchema.optional(),
     hits: z
       .array(
         z
@@ -67,7 +70,7 @@ export const CachePassagePreferenceSchema = z
             passageId: z.string().regex(/^cache-passage:[a-f0-9]{48}$/u),
             originalSha256: z.string().regex(/^[a-f0-9]{64}$/u),
             passageSha256: z.string().regex(/^[a-f0-9]{64}$/u),
-            chunkerVersion: z.literal('cache-sentence-context-v1'),
+            chunkerVersion: CacheChunkerVersion,
             startOffset: z.number().int().nonnegative(),
             endOffset: z.number().int().positive(),
           })
@@ -77,7 +80,7 @@ export const CachePassagePreferenceSchema = z
       .max(3),
     coverage: z
       .object({
-        chunkerVersion: z.literal('cache-sentence-context-v1'),
+        chunkerVersion: CacheChunkerVersion,
         passageCount: z.number().int().positive().max(32),
         coveredUtf16Units: z.number().int().positive().max(30000),
         totalUtf16Units: z.number().int().positive().max(30000),
