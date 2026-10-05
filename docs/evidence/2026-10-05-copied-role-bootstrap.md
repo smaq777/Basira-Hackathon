@@ -14,6 +14,14 @@ documentation, policy, formatting and build. Initial missing declaration/strict
 fixture typing failures were corrected before the source freeze; their logs are
 retained. These checks do not themselves prove SQL operation or hosted readiness.
 
+Owner development `c33f83c8b8c3a6e06d466d5c12d13c9f8952c9ac` was subsequently
+preserved by merge commit `46fd2354384dbb8a88b5946b3ab8f359403f4321`.
+The bootstrap source and historical migrations did not change in that merge.
+Full checks passed again: 51 files / 662 tests, type checking, documentation,
+policy, formatting and build (`FULL_CHECK_OWNER_C33_V3.log`). The extra test is
+from the owner's ticket-notification work. The actual SQL evidence below remains
+bound to the earlier recorded source freeze, rather than claiming a new SQL run.
+
 ## Actual PostgreSQL validation
 
 Official pgvector `v0.8.7`, source `f37c13f68b57d2c3472b2214fbcff699d6d34876`,
