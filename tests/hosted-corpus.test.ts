@@ -37,7 +37,7 @@ function fixture(exact: unknown[] = [], lexical: unknown[] = []) {
   return { pool, query, release };
 }
 describe('hosted evidence boundaries', () => {
-  it('reserves novel evidence capacity when references already fill the candidate bound', async () => {
+  it('returns only the resolved explicit source family and skips broad neighbors', async () => {
     const f = fixture(
       Array.from({ length: 8 }, (_, index) => row('anchor-' + index)),
       [row('novel-scholar', 'scholar_explanation')],
@@ -48,8 +48,9 @@ describe('hosted evidence boundaries', () => {
       researchPreview: true,
     });
     const results = await corpus.search('Owned assertion needing new evidence', ['anchor-0']);
-    expect(results.some((r) => r.sourceRole === 'scholar_explanation')).toBe(true);
+    expect(results.some((r) => r.sourceRole === 'scholar_explanation')).toBe(false);
     expect(results).toHaveLength(8);
+    expect(f.query.mock.calls.some(([sql]) => String(sql).includes('word_similarity'))).toBe(false);
     expect(f.query).toHaveBeenCalledWith('set local role basirah_research_runtime');
     expect(results[0]?.sourceId).toBe('original:source');
     expect(results[0]?.author).toBeNull();
