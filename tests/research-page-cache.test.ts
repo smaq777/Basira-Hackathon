@@ -98,6 +98,22 @@ function fixture() {
   return { cache, rows, query, classify };
 }
 describe('public research page cache', () => {
+  it.each([
+    'cachePassageHits',
+    'cachePassageQuerySha256',
+    'cachePassageHitsByQuery',
+    'passageIndexCoverage',
+    'passageIndexStatus',
+  ])('rejects transient %s before shared admission without changing provenance', async (key) => {
+    const f = fixture(),
+      e = evidence();
+    e.provenance[key] = 'report-local';
+    const before = structuredClone(e);
+    await expect(f.cache.store([e])).rejects.toThrow('CACHE_TRANSIENT_PROVENANCE_FORBIDDEN');
+    expect(f.query).not.toHaveBeenCalled();
+    expect(f.classify).not.toHaveBeenCalled();
+    expect(e).toEqual(before);
+  });
   it('persists exact originals with machine topics, strips private provenance, and reuses without classifying again', async () => {
     const f = fixture(),
       e = evidence();

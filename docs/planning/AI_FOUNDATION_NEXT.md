@@ -7,6 +7,19 @@ continue isolated implementation and integrated local tests before acceptance.
 
 ## Verified current state
 
+Latest handoff: claim recovery v1.8 reached actual Neon/cache retrieval in a source-free
+weak-hadith UI fixture. Another mixed-author run returned `invalid_claims`; expanding
+retrieval did not repair that selection failure. Rewrite v2 subsequently delivered
+explicit `فلا يلزمنا` / `يلزمنا` wording with unchanged Ayah and copy-success evidence.
+The earlier ambiguous modality acceptance and cross-model dissent remain retained.
+PRs #59 and #70–#78 are ready for Saleh review after exact-head checks, still unmerged.
+
+The next implementation is the default-off [retained-page passage index](../evidence/2026-10-05-cache-passage-index.md).
+Its isolated validation retains all 16 legacy parent identities while indexing only
+four. Actual composed rankings must include an unindexed-parent control: putting
+passage parents ahead of legacy parents can demote a strong unindexed legacy hit.
+Full-parent report compaction and durable capacity remain separate work.
+
 - The integrated loopback app uses an 86-passage Neon research snapshot, live
   Tafsir acquisition, claim retrieval, model assessment and optional approved-URL
   discovery/cache. A newly completed report verifies actual corpus use.
