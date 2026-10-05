@@ -25,6 +25,7 @@ url.searchParams.delete('channel_binding');
 const tlsMode = process.env.DATABASE_TLS_MODE?.trim() || 'verify-full';
 if (!['verify-full', 'require', 'disable'].includes(tlsMode))
   throw new Error('DATABASE_TLS_MODE must be verify-full, require, or disable');
+const ca = process.env.DATABASE_CA_CERT?.replace(/\\n/gu, '\n').trim();
 const client = new Client({
   connectionString: url.toString(),
   ssl:
@@ -32,6 +33,7 @@ const client = new Client({
       ? false
       : {
           rejectUnauthorized: tlsMode === 'verify-full',
+          ...(ca ? { ca } : {}),
         },
   application_name: 'basirah-migrator',
 });

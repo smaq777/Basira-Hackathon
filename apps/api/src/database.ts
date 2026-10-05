@@ -158,15 +158,16 @@ function securedConnectionString(value: string): string {
 export function databaseTls(
   mode = process.env.DATABASE_TLS_MODE,
   environment: NodeJS.ProcessEnv = process.env,
-): false | { rejectUnauthorized: boolean } {
+): false | { rejectUnauthorized: boolean; ca?: string } {
   const selected = mode?.trim() || 'verify-full';
+  const ca = environment.DATABASE_CA_CERT?.replace(/\\n/gu, '\n').trim();
   const productionDeployment =
     environment.BASIRAH_DEPLOYMENT_ENVIRONMENT === 'production' ||
     environment.RAILWAY_ENVIRONMENT_NAME === 'production';
   if (productionDeployment && selected !== 'verify-full')
     throw new Error('Production database connections require DATABASE_TLS_MODE=verify-full');
-  if (selected === 'verify-full') return { rejectUnauthorized: true };
-  if (selected === 'require') return { rejectUnauthorized: false };
+  if (selected === 'verify-full') return { rejectUnauthorized: true, ...(ca ? { ca } : {}) };
+  if (selected === 'require') return { rejectUnauthorized: false, ...(ca ? { ca } : {}) };
   if (selected === 'disable') return false;
   throw new Error('DATABASE_TLS_MODE must be verify-full, require, or disable');
 }
