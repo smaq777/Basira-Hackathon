@@ -77,24 +77,11 @@ export function foundationRuntimeMode(
   const activation = foundationActivation(environment, host);
   if (!localResearch && !hostedDemo && !hostedProduction)
     throw new Error('FOUNDATION_RUNTIME_MODE_REQUIRED');
-  if (
-    hostedDemo &&
-    [
-      environment.FOUNDATION_WEB_DISCOVERY_ENABLED,
-      environment.FOUNDATION_WEB_CACHE_ENABLED,
-      environment.FOUNDATION_WEB_CACHE_PASSAGES_ENABLED,
-      environment.FOUNDATION_REWRITE_ENABLED,
-    ].some((value) => value === 'true')
-  )
+  if (hostedDemo && [environment.FOUNDATION_REWRITE_ENABLED].some((value) => value === 'true'))
     throw new Error('HOSTED_DEMO_REQUIRES_READ_ONLY_RETRIEVAL');
   if (
     hostedProduction &&
-    [
-      environment.FOUNDATION_WEB_CACHE_ENABLED,
-      environment.FOUNDATION_WEB_CACHE_PASSAGES_ENABLED,
-      environment.FOUNDATION_WEB_CACHE_CONTENT_VIEWS_ENABLED,
-      environment.FOUNDATION_REWRITE_ENABLED,
-    ].some((value) => value === 'true')
+    [environment.FOUNDATION_REWRITE_ENABLED].some((value) => value === 'true')
   )
     throw new Error('HOSTED_PRODUCTION_REQUIRES_READ_ONLY_ACQUISITION');
   if (

@@ -169,9 +169,12 @@ selected `FOUNDATION_PRODUCTION_SERVICE_ID`, `main`, the exact deployed SHA and
 `verify-full` report/corpus TLS. The profile can use the schema-pinned Tafsir MCP
 with `FOUNDATION_TAFSIR_LIVE=true` and bounded read-only web discovery with
 `FOUNDATION_WEB_DISCOVERY_ENABLED=true`. Provider credentials remain server-only.
-Durable web-cache writes, cached-passage mutation, content-view writes and rewrite
-remain disabled in this profile; production discovery is attached to the immutable
-review packet with its actual provenance and does not alter the canonical corpus.
+Owner-authorized hosted profiles can also enable `FOUNDATION_WEB_CACHE_ENABLED`,
+`FOUNDATION_WEB_CACHE_PASSAGES_ENABLED` and
+`FOUNDATION_WEB_CACHE_CONTENT_VIEWS_ENABLED`. Those writes use the separate
+least-privileged cache-writer URL, verified TLS, source policy and bounded SQL/model
+budgets; they add retained public-page sidecars and RAG passages without changing
+canonical source approval. Author rewrite remains disabled in hosted production.
 
 Enable `FOUNDATION_ENABLED`, `FOUNDATION_SEMANTIC_ENABLED`, `FOUNDATION_CLAIM_RETRIEVAL_ENABLED`, `FOUNDATION_WEB_DISCOVERY_ENABLED`, and `FOUNDATION_WEB_CACHE_ENABLED` only for an authorized research run. Keep the local Python executable/index, report runtime login, and separate worker login configured as described in `.env.example`. The report database needs migration 0007 for source review and at least 0009 for claim retrieval. The separate Neon corpus/cache database needs the populated versioned corpus and migration `0010_research_page_cache`. Apply checked-in migrations only to the explicitly selected isolated development database with its direct migration credential; never place owner credentials in runtime configuration.
 
