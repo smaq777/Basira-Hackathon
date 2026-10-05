@@ -1,5 +1,19 @@
 # Local development setup
 
+## Optional citation/layout candidate
+
+Set `FOUNDATION_REWRITE_ENABLED=true` only in an already configured loopback
+foundation research preview with `FOUNDATION_RESEARCH_PREVIEW=true`,
+`FOUNDATION_ENABLED=true`, and the owning `OPENROUTER_API_KEY`. It defaults off;
+production startup rejects activation. The result page reads server capabilities
+before showing «تنسيق النص وإضافة التوثيق». It provides separate, automatically
+validated citation/paragraph candidates with a fresh owned copy check. Every
+original character remains unchanged, so this slice cannot strengthen an argument
+or correct a quotation. Pending source status is retained. Candidate storage is
+session-bound process memory with a ten-minute TTL; no durable recovery is claimed.
+See [architecture](../architecture/AI_REWRITE.md) and
+[software evidence](../evidence/2026-10-05-citation-layout-candidate.md).
+
 ## Prerequisites
 
 - Node.js 24 LTS and npm 11. The root `.nvmrc` and `package.json` declare this version range.
@@ -46,6 +60,15 @@ origins in `CLERK_AUTHORIZED_PARTIES` and keep public guest
 review independent from reviewer authentication. Use the browser origin (`http://localhost:5173`
 for Vite), not the proxied API port. Production origins must be HTTPS; malformed origins abort
 startup instead of weakening token binding or the response CSP.
+
+Human-review tickets require migration `0013_secure_review_tickets` and `TICKETS_ENABLED=true`.
+Configure a base64 32-byte `TICKET_DATA_KEY` and a separate random `TICKET_LOOKUP_PEPPER` of at least
+32 characters. Both are server-only and environment-specific. The public follow-up route always
+requires both the non-sequential ticket code and normalized email, is rate limited, and returns the
+same not-found shape for a wrong code or wrong email. Configure all Brevo variables together only
+after its sender is verified; otherwise reviewer publishing remains durable while email delivery is
+disabled. A published response is not active RAG evidence until a separate reviewer action records
+its source reference and provenance.
 
 ## Commands
 

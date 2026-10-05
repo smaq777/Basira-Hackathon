@@ -9,6 +9,7 @@ import {
   getFoundationReport,
   awaitFoundationReport,
   requireFoundationReview,
+  requireAnalysisCapability,
   requestDraftPreflight,
 } from './api.js';
 import { buildDemoPreflight } from '../../api/src/preflight.js';
@@ -46,6 +47,7 @@ describe('same-origin draft analysis client', () => {
   it('creates a guest session only after the API rejects a missing session', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ guestDocuments: true }))
       .mockResolvedValueOnce(jsonResponse({ code: 'INVALID_OR_EXPIRED_SESSION' }, 401))
       .mockResolvedValueOnce(jsonResponse({ sessionId: 'session', expiresAt: 'later' }, 201))
       .mockResolvedValueOnce(jsonResponse({ documentId: 'doc', revisionId: 'rev' }, 201))
@@ -59,9 +61,10 @@ describe('same-origin draft analysis client', () => {
       candidateCount: 1,
       warnings: ['ambiguous'],
     });
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/v1/sessions');
-    expect(fetchMock.mock.calls[3]?.[0]).toBe('/api/v1/revisions/rev/extractions');
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/capabilities');
+    expect(fetchMock.mock.calls[2]?.[0]).toBe('/api/v1/sessions');
+    expect(fetchMock.mock.calls[4]?.[0]).toBe('/api/v1/revisions/rev/extractions');
     for (const [, init] of fetchMock.mock.calls)
       expect((init as RequestInit).credentials).toBe('same-origin');
   });
@@ -69,12 +72,13 @@ describe('same-origin draft analysis client', () => {
   it('reuses a valid ownership cookie without replacing the session', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ guestDocuments: true }))
       .mockResolvedValueOnce(jsonResponse({ documentId: 'doc', revisionId: 'rev' }, 201))
       .mockResolvedValueOnce(jsonResponse({ extraction: { candidates: [], warnings: [] } }));
 
     await persistDraftForAnalysis('نص عربي صالح للمراجعة');
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls.some(([url]) => url === '/api/v1/sessions')).toBe(false);
   });
 
@@ -106,13 +110,14 @@ describe('same-origin draft analysis client', () => {
   it('sends the exact draft and creates the bound review with an idempotency key', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ guestDocuments: true }))
       .mockResolvedValueOnce(jsonResponse({ documentId: 'doc', revisionId: REVISION_ID }, 201))
       .mockResolvedValueOnce(jsonResponse({ extraction: { candidates: [], warnings: [] } }))
       .mockResolvedValueOnce(jsonResponse(ownedReviewFixture('queued'), 202));
     const receipt = await persistDraftForAnalysis(ORIGINAL_TEXT);
     await createOwnedReview(receipt.revisionId, 'stable-key');
-    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)).text).toBe(ORIGINAL_TEXT);
-    expect(fetchMock.mock.calls[2]?.[1]?.headers).toMatchObject({
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)).text).toBe(ORIGINAL_TEXT);
+    expect(fetchMock.mock.calls[3]?.[1]?.headers).toMatchObject({
       'Idempotency-Key': 'stable-key',
     });
   });
@@ -183,5 +188,63 @@ describe('same-origin draft analysis client', () => {
         ),
       ).rejects.toMatchObject({ code: `REVIEW_${status.toUpperCase()}` });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [404, 'text/plain', 'NOT_FOUND'],
+    [200, 'text/html', '<html>frontend shell</html>'],
+  ])('detects a missing API route (%s) before sending the draft', async (status, type, body) => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(body, { status, headers: { 'Content-Type': type } }));
+    await expect(persistDraftForAnalysis('نص عربي صالح للمراجعة')).rejects.toMatchObject({
+      code: 'API_ROUTE_UNAVAILABLE',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('GET');
+  });
+
+  it('distinguishes an older reachable backend from foundation availability', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      jsonResponse({ guestDocuments: true }),
+    );
+    await expect(requireAnalysisCapability('guestDocuments')).resolves.toBeUndefined();
+    await expect(requireAnalysisCapability('foundationReview')).rejects.toMatchObject({
+      code: 'FOUNDATION_UNAVAILABLE',
+    });
+  });
+
+  it('does not persist a draft when storage is unavailable', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse({ guestDocuments: false, foundationReview: false }));
+    await expect(persistDraftForAnalysis('نص عربي صالح للمراجعة')).rejects.toMatchObject({
+      code: 'ANALYSIS_UNAVAILABLE',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves API JSON resource errors instead of treating them as routing failures', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ code: 'NOT_FOUND' }, 404));
+    await expect(requireAnalysisCapability('guestDocuments')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      status: 404,
+    });
+  });
+
+  it('classifies malformed capabilities as an invalid response, not a network failure', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(null));
+    await expect(requireAnalysisCapability('guestDocuments')).rejects.toMatchObject({
+      code: 'INVALID_RESPONSE',
+    });
+  });
+
+  it('explains missing routing and missing foundation setup separately', () => {
+    expect(analysisErrorMessage(new BasirahApiError('API_ROUTE_UNAVAILABLE', 404))).toContain(
+      'غير مرتبطة',
+    );
+    expect(analysisErrorMessage(new BasirahApiError('FOUNDATION_UNAVAILABLE', 0))).toContain(
+      'غير مفعّلة',
+    );
   });
 });

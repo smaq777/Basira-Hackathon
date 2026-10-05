@@ -1,5 +1,7 @@
 import { semanticBudgetConfiguration } from './semantic-budget.js';
 import { createApp } from './app.js';
+import { createRewriteService } from './rewrite.js';
+import { createRewriteGenerator } from './rewrite-provider.js';
 import { createDatabase, databaseTls, DatabaseUnavailable } from './database.js';
 import { Pool } from 'pg';
 import { createClerkReviewerAuth } from './reviewer-auth.js';
@@ -25,6 +27,8 @@ import {
   QUERY_EMBEDDING_MODEL,
   QUERY_EMBEDDING_DIMENSIONS,
 } from './query-embedding.js';
+import { createTicketStore } from './ticket-store.js';
+import { createBrevoMailer, createTicketNotificationWorker } from './ticket-notifications.js';
 
 const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
@@ -34,6 +38,35 @@ const connectionString = process.env.DATABASE_URL;
 if (process.env.NODE_ENV === 'production' && !connectionString)
   throw new Error('DATABASE_URL is required in production');
 const database = connectionString ? createDatabase(connectionString) : new DatabaseUnavailable();
+const ticketsEnabled = process.env.TICKETS_ENABLED === 'true';
+if (ticketsEnabled && !connectionString) throw new Error('TICKETS_REQUIRE_DATABASE');
+const ticketDataKey = process.env.TICKET_DATA_KEY?.trim();
+const ticketLookupPepper = process.env.TICKET_LOOKUP_PEPPER?.trim();
+if (ticketsEnabled && (!ticketDataKey || !ticketLookupPepper))
+  throw new Error('TICKETS_REQUIRE_DATA_KEY_AND_LOOKUP_PEPPER');
+const ticketStore = ticketsEnabled ? createTicketStore(connectionString!) : undefined;
+const brevoValues = [
+  process.env.BREVO_API_KEY,
+  process.env.BREVO_SENDER_EMAIL,
+  process.env.BREVO_SENDER_NAME,
+  process.env.PUBLIC_APP_URL,
+].map((value) => value?.trim());
+if (brevoValues.some(Boolean) && !brevoValues.every(Boolean))
+  throw new Error('BREVO_EMAIL_CONFIGURATION_INCOMPLETE');
+if (brevoValues.every(Boolean) && !ticketsEnabled) throw new Error('BREVO_EMAIL_REQUIRES_TICKETS');
+const notificationWorker =
+  ticketStore && ticketDataKey && brevoValues.every(Boolean)
+    ? createTicketNotificationWorker({
+        store: ticketStore,
+        dataKey: ticketDataKey,
+        mailer: createBrevoMailer({
+          apiKey: brevoValues[0]!,
+          senderEmail: brevoValues[1]!,
+          senderName: brevoValues[2]!,
+          publicAppUrl: brevoValues[3]!,
+        }),
+      })
+    : undefined;
 const reviewerAuth = createClerkReviewerAuth();
 const clerkFrontendApiOrigin = process.env.CLERK_FRONTEND_API_ORIGIN?.trim();
 if (reviewerAuth.configured !== Boolean(clerkFrontendApiOrigin))
@@ -247,23 +280,48 @@ const foundation = await initializeFoundation().catch(async (error: unknown) => 
   await database.close();
   throw error;
 });
+const rewriteEnabled = process.env.FOUNDATION_REWRITE_ENABLED === 'true';
+if (
+  rewriteEnabled &&
+  (!foundation?.researchPreview ||
+    process.env.NODE_ENV === 'production' ||
+    !['127.0.0.1', '::1'].includes(host))
+)
+  throw new Error('REWRITE_REQUIRES_LOCAL_RESEARCH_PREVIEW');
+const rewrite = rewriteEnabled
+  ? createRewriteService(createRewriteGenerator(process.env.OPENROUTER_API_KEY ?? ''))
+  : undefined;
 const server = createApp({
+  rewrite,
   database,
   reviewerAuth,
   clerkFrontendApiOrigin,
   foundation,
+  tickets:
+    ticketStore && ticketDataKey && ticketLookupPepper
+      ? {
+          store: ticketStore,
+          dataKey: ticketDataKey,
+          lookupPepper: ticketLookupPepper,
+          notifications: notificationWorker,
+        }
+      : undefined,
 }).listen(port, host, () => {
   foundation?.worker.start();
+  notificationWorker?.start();
   console.info(
     `Basirah API listening on port ${port}; source review ${foundation ? 'enabled' : 'unavailable'}; provisional semantic pilot ${foundation?.semanticPilot ? 'enabled' : 'disabled'}.`,
   );
 });
 async function closeResources() {
+  rewrite?.close();
   await Promise.allSettled([
     foundation?.worker.stop(),
     foundation?.reports.close(),
     foundation?.corpusPool?.end(),
     foundation?.webCachePool?.end(),
+    notificationWorker?.stop(),
+    ticketStore?.close(),
     database.close(),
   ]);
 }

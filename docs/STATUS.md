@@ -2,6 +2,13 @@
 
 ## Latest development evidence — 5 October
 
+**Optional citation/layout candidate (#38):** A default-off local research action
+now creates a separate candidate from the owned persisted report, preserves every
+original character, and adds only validated paragraph breaks and recorded
+citations. Copy reloads ownership/report/attempt binding and revalidates
+insertions. Storage is explicitly session-bound memory; source approval and
+substantive prose changes remain gated. See [evidence](evidence/2026-10-05-citation-layout-candidate.md).
+
 **Claim and passage follow-up (#11):** Semantic v1.7 binds model selections to a
 deterministic inventory of original author spans and sends bounded exact source
 passages with immutable hashes and UTF16 offsets, including late-page context.
@@ -31,6 +38,14 @@ no-result control remain recorded. Firecrawl stays experimental without a new UI
 Source approval, broader scholarly evaluation, production activation and
 AI-ReWrite remain gated. Historical baseline entries below describe their dated
 verification rather than the current development implementation.
+
+**Staging connection diagnostic, 5 October:** [Issue #69 evidence](evidence/2026-10-05-staging-api-routing.md)
+verified that the reported Vercel frontend returns 404 for API routes while the
+Railway staging API is reachable at migration 0005 and does not advertise
+`foundationReview`. A separately selected staging proxy configuration and clearer
+client readiness/errors are implemented for review. Deployment and PR #59's
+connected source-report readiness remain separate gates; follow the
+[staging runbook](operations/STAGING_CONNECTION.md).
 
 Baseline date: **3 October 2026**. See live issues and PR checks for subsequent progress.
 
