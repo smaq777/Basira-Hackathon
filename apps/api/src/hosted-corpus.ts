@@ -77,6 +77,13 @@ function evidence(
     relations: row.relations,
   });
 }
+
+function parentClosed(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  const keys = new Set(rows.map((row) => String(row.snapshot_key)));
+  return rows.filter(
+    (row) => row.parent_snapshot_key === null || keys.has(String(row.parent_snapshot_key)),
+  );
+}
 /** Role-scoped corpus reader. Pending passages require the explicit development research role. */
 export function createHostedCorpus(options: HostedCorpusOptions): ClaimCorpusSearch & {
   readiness(): Promise<{ ready: boolean; passages: number; embeddings: number }>;
@@ -161,12 +168,15 @@ export function createHostedCorpus(options: HostedCorpusOptions): ClaimCorpusSea
         ];
         let exactRows: Record<string, unknown>[] = [];
         if (exact.length) {
-          exactRows = (
-            await client.query(
-              `${selectRows} where exists(select 1 from basirah.corpus_snapshot membership where membership.passage_id=p.id and membership.corpus_version=$1) and p.snapshot_key is not null and p.source_role is not null and p.stable_reference=any($2::text[]) order by p.snapshot_key limit $3`,
-              [options.corpusVersion, exact, limit],
-            )
-          ).rows;
+          exactRows = parentClosed(
+            await client
+              .query(
+                `${selectRows} where exists(select 1 from basirah.corpus_snapshot membership where membership.passage_id=p.id and membership.corpus_version=$1) and p.snapshot_key is not null and p.source_role is not null and p.stable_reference=any($2::text[])
+              order by case p.source_role when 'quran_text' then 0 when 'tafsir_commentary' then 1 when 'tafsir_footnote' then 2 else 3 end,p.snapshot_key limit $3`,
+                [options.corpusVersion, exact, limit],
+              )
+              .then((result) => result.rows),
+          );
           merge(exactRows, 'exact');
         }
         // When a valid explicit locator resolves, return only that immutable
@@ -222,7 +232,11 @@ export function createHostedCorpus(options: HostedCorpusOptions): ClaimCorpusSea
           if (selected.length >= limit) break;
           if (!selected.includes(candidate)) selected.push(candidate);
         }
-        return selected.map((result) => evidence(result.row, result.modes));
+        const closed = parentClosed(selected.map((result) => result.row));
+        const allowed = new Set(closed.map((row) => String(row.snapshot_key)));
+        return selected
+          .filter((result) => allowed.has(String(result.row.snapshot_key)))
+          .map((result) => evidence(result.row, result.modes));
       }, signal);
     },
     async restore(keys, signal) {

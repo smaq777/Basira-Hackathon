@@ -8,7 +8,17 @@ import type { ClaimCorpusSearch } from './claim-retrieval.js';
 import { extractQuranLocators } from './quran-reference.js';
 
 export type FoundationRuntimeMode =
-  'disabled' | 'local_research' | 'hosted_research' | 'hosted_demo';
+  'disabled' | 'local_research' | 'hosted_research' | 'hosted_demo' | 'hosted_production';
+
+function validServiceId(value: string | undefined): value is string {
+  return Boolean(
+    value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(value),
+  );
+}
+
+function validRevision(value: string | undefined): value is string {
+  return Boolean(value && /^[0-9a-f]{40}$/u.test(value));
+}
 
 function assertHostedDemoBoundary(environment: NodeJS.ProcessEnv, host: string): void {
   const serviceId = environment.FOUNDATION_STAGING_SERVICE_ID;
@@ -19,12 +29,10 @@ function assertHostedDemoBoundary(environment: NodeJS.ProcessEnv, host: string):
     host !== '0.0.0.0' ||
     environment.RAILWAY_ENVIRONMENT_NAME !== 'staging' ||
     environment.BASIRAH_DEPLOYMENT_ENVIRONMENT !== 'staging' ||
-    !serviceId ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(serviceId) ||
+    !validServiceId(serviceId) ||
     environment.RAILWAY_SERVICE_ID !== serviceId ||
     environment.BASIRAH_DEPLOYMENT_REF !== 'refs/heads/development' ||
-    !revision ||
-    !/^[0-9a-f]{40}$/u.test(revision) ||
+    !validRevision(revision) ||
     (environment.RAILWAY_GIT_BRANCH !== undefined &&
       environment.RAILWAY_GIT_BRANCH !== 'development') ||
     (environment.RAILWAY_GIT_COMMIT_SHA !== undefined &&
@@ -35,6 +43,27 @@ function assertHostedDemoBoundary(environment: NodeJS.ProcessEnv, host: string):
     throw new Error('HOSTED_DEMO_ENVIRONMENT_MISMATCH');
 }
 
+function assertHostedProductionBoundary(environment: NodeJS.ProcessEnv, host: string): void {
+  const serviceId = environment.FOUNDATION_PRODUCTION_SERVICE_ID;
+  const revision = environment.BASIRAH_DEPLOYMENT_SHA;
+  if (
+    environment.NODE_ENV !== 'production' ||
+    host !== '0.0.0.0' ||
+    environment.RAILWAY_ENVIRONMENT_NAME !== 'production' ||
+    environment.BASIRAH_DEPLOYMENT_ENVIRONMENT !== 'production' ||
+    !validServiceId(serviceId) ||
+    environment.RAILWAY_SERVICE_ID !== serviceId ||
+    environment.BASIRAH_DEPLOYMENT_REF !== 'refs/heads/main' ||
+    !validRevision(revision) ||
+    (environment.RAILWAY_GIT_BRANCH !== undefined && environment.RAILWAY_GIT_BRANCH !== 'main') ||
+    (environment.RAILWAY_GIT_COMMIT_SHA !== undefined &&
+      environment.RAILWAY_GIT_COMMIT_SHA !== revision) ||
+    (environment.DATABASE_TLS_MODE || 'verify-full') !== 'verify-full' ||
+    (environment.FOUNDATION_CORPUS_TLS_MODE || 'verify-full') !== 'verify-full'
+  )
+    throw new Error('HOSTED_PRODUCTION_ENVIRONMENT_MISMATCH');
+}
+
 export function foundationRuntimeMode(
   environment: NodeJS.ProcessEnv = process.env,
   host = environment.HOST ?? '0.0.0.0',
@@ -42,9 +71,12 @@ export function foundationRuntimeMode(
   if (environment.FOUNDATION_ENABLED !== 'true') return 'disabled';
   const localResearch = environment.FOUNDATION_RESEARCH_PREVIEW === 'true';
   const hostedDemo = environment.FOUNDATION_HOSTED_DEMO === 'true';
-  if (localResearch && hostedDemo) throw new Error('FOUNDATION_RUNTIME_MODE_CONFLICT');
+  const hostedProduction = environment.FOUNDATION_HOSTED_PRODUCTION === 'true';
+  if ([localResearch, hostedDemo, hostedProduction].filter(Boolean).length > 1)
+    throw new Error('FOUNDATION_RUNTIME_MODE_CONFLICT');
   const activation = foundationActivation(environment, host);
-  if (!localResearch && !hostedDemo) throw new Error('FOUNDATION_RUNTIME_MODE_REQUIRED');
+  if (!localResearch && !hostedDemo && !hostedProduction)
+    throw new Error('FOUNDATION_RUNTIME_MODE_REQUIRED');
   if (
     hostedDemo &&
     [
@@ -57,14 +89,32 @@ export function foundationRuntimeMode(
   )
     throw new Error('HOSTED_DEMO_REQUIRES_READ_ONLY_RETRIEVAL');
   if (
-    hostedDemo &&
+    hostedProduction &&
+    [
+      environment.FOUNDATION_WEB_CACHE_ENABLED,
+      environment.FOUNDATION_WEB_CACHE_PASSAGES_ENABLED,
+      environment.FOUNDATION_WEB_CACHE_CONTENT_VIEWS_ENABLED,
+      environment.FOUNDATION_REWRITE_ENABLED,
+    ].some((value) => value === 'true')
+  )
+    throw new Error('HOSTED_PRODUCTION_REQUIRES_READ_ONLY_ACQUISITION');
+  if (
+    (hostedDemo || hostedProduction) &&
     (environment.FOUNDATION_SEMANTIC_ENABLED !== 'true' ||
       environment.FOUNDATION_CLAIM_RETRIEVAL_ENABLED !== 'true')
   )
-    throw new Error('HOSTED_DEMO_REQUIRES_SEMANTIC_RETRIEVAL');
+    throw new Error(
+      hostedDemo
+        ? 'HOSTED_DEMO_REQUIRES_SEMANTIC_RETRIEVAL'
+        : 'HOSTED_PRODUCTION_REQUIRES_SEMANTIC_RETRIEVAL',
+    );
   if (hostedDemo) {
     assertHostedDemoBoundary(environment, host);
     return 'hosted_demo';
+  }
+  if (hostedProduction) {
+    assertHostedProductionBoundary(environment, host);
+    return 'hosted_production';
   }
   return activation.profile === 'hosted-staging' ? 'hosted_research' : 'local_research';
 }
@@ -199,6 +249,7 @@ function compareQuote(quote: string, source: string) {
 export function createHostedDraftAdapter(
   corpusVersion: string,
   corpus?: ClaimCorpusSearch,
+  researchOnly = true,
 ): FoundationAdapter {
   const selectedVersion = corpusVersion.trim();
   if (!selectedVersion || selectedVersion.length > 120)
@@ -364,7 +415,7 @@ export function createHostedDraftAdapter(
         warnings: unresolvedExplicit.length
           ? ['explicit_reference_not_available_in_hosted_corpus']
           : [],
-        researchOnly: true,
+        researchOnly,
       };
       return FoundationIntakeSchema.parse(intake);
     },
