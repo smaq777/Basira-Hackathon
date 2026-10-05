@@ -312,8 +312,10 @@ describe('Basirah web flow', () => {
       '/api/v1/capabilities',
       '/api/v1/reviews',
       `/api/v1/reviews/${REVIEW_ID}/report`,
-      '/api/v1/capabilities',
+      '/api/v1/capabilities', // existing rewrite availability
+      '/api/v1/capabilities', // strict ticket presentation availability
     ]);
+    expect(screen.queryByRole('button', { name: /إرسال النص للمراجعة/ })).toBeNull();
   });
 
   it('aborts the in-flight analysis request when the user leaves the analysis route', async () => {
@@ -479,7 +481,12 @@ describe('Basirah web flow', () => {
 
     expect(screen.getByText('يمكنك البدء كضيف.')).not.toBeNull();
     expect(screen.queryByText(/تنتهي صلاحية الوصول للمسودة بعد 24 ساعة/)).toBeNull();
-    expect(screen.getByRole('heading', { name: 'مراجعة واضحة بالدليل وحدوده' })).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'ثلاث خطوات لمراجعة أوضح' })).not.toBeNull();
+    expect(document.querySelectorAll('.review-steps article')).toHaveLength(3);
+    expect(screen.getByRole('heading', { name: 'أضف النص' })).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'راجع الدليل' })).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'حسّن الصياغة' })).not.toBeNull();
+    expect(screen.getByText(/أداة مساعدة للمراجعة، وليست فتوى/)).not.toBeNull();
     expect(
       screen.getByRole('heading', { name: 'جهات تصنع الأثر في تحدي المحتوى الإسلامي' }),
     ).not.toBeNull();
@@ -491,6 +498,7 @@ describe('Basirah web flow', () => {
     ).not.toBeNull();
     expect(screen.getByRole('img', { name: 'شركة التحول التقني' })).not.toBeNull();
     expect(screen.getByRole('img', { name: 'Future Frontiers' })).not.toBeNull();
+    expect(document.querySelectorAll('.partner-marquee .partner-logo-group')).toHaveLength(2);
     expect(screen.getByRole('link', { name: 'الموقع الرسمي للتحدي' }).getAttribute('href')).toBe(
       'https://islamicaich.org/#partners-sponsors',
     );
