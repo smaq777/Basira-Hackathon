@@ -1,5 +1,5 @@
 begin;
-select pg_advisory_xact_lock(hashtext('basirah:migration:0014'));
+select pg_advisory_xact_lock(hashtext('basirah:migration:0015'));
 -- Derived lexical views are separate from immutable originals and v1 passage vectors.
 create table basirah.research_page_content_view (
  view_id text primary key check(view_id ~ '^content-view:[a-f0-9]{64}$'),
@@ -111,5 +111,5 @@ create policy content_passage_read on basirah.research_page_content_passage for 
 create policy content_passage_insert on basirah.research_page_content_passage for insert to basirah_cache_writer
  with check(exists(select 1 from basirah.research_page_content_view v where v.view_id=research_page_content_passage.view_id));
 insert into basirah_private.schema_migration(version,checksum_sha256)
- values('0014_source_content_views','0000000000000000000000000000000000000000000000000000000000000000');
+ values('0015_source_content_views','0000000000000000000000000000000000000000000000000000000000000000');
 commit;
