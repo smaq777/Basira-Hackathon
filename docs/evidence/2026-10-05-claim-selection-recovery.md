@@ -96,3 +96,31 @@ comparison. It is not described as a provider outage, an assertion-free text or
 a correctness judgment. Actual service failures retain their separate message.
 A rendered regression verifies this distinction while preserving quotation
 results. This follow-up is separate from the original 582-test implementation run.
+
+## Integrated UI recheck
+
+The combined local checkout passed 44 files / 594 tests and all required checks.
+Actual v1.8 report `d52e7ebb-3a63-4c33-91d8-ecb4d49de8fc` selected the source-free
+hadith-studies assertion previously omitted, then ran hybrid retrieval against
+the active 86-passage Neon snapshot and retained public cache. Bin Baz's
+`أنواع الحديث الضعيف` and Shamela's hadith-studies page were retrieved. Assessment
+supported the general assertion with exact Bin Baz excerpts, explicit conditions,
+negation and scope. The refreshed UI displayed those findings. This one success
+does not establish extraction coverage or scholarly correctness.
+
+An additional new 31:15 mixed-author/quotation report,
+`79fe5e29-01ba-4efb-b71d-5a0d8ec5dc96`, failed original-span selection binding
+(`invalid_claims`) despite a successful extraction HTTP response. It retained
+quotation/source comparison and made zero assessment calls. This failure remains
+in the record; empty-selection recovery does not repair malformed selections.
+The prior supported 31:15 report was separately used to test the new rewrite
+guard, not substituted as a successful fresh v1.8 extraction run.
+
+The browser initially retained the old bundle after the backend restart and
+rejected the new report version; explicit reload loaded the matching client and
+rendered the saved report. Another guest-session draft-start attempt failed
+without a review ID and is retained as unresolved; a separate fresh loopback
+session could start a review. Do not claim the generic error proves a provider
+outage or that an inferred resource limit has been verified. External owned-test
+receipts and screenshot are in `AI_Foundation/experiments/integration-lead-v1` and
+`AI_Foundation/experiments/broader-source-cache-2026-10-05`.
