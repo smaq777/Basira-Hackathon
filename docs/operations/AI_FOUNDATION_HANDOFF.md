@@ -6,15 +6,16 @@ here are real, but are not automatically present in a Vercel/Railway deployment.
 
 ## Message to the integration agent
 
-Please review PR #59 and follow-ups #70–#78, then passage PR #80. Preserve merge
+PR #59, follow-ups #70–#78 and passage PR #80 are now merged. Preserve merge
 commits into `development`; do not squash, force-push or close issues automatically.
 The implementation branches have passed their documented checks. A working local
 research run is separate from acceptance of the shared staging configuration.
 
-At the read-only checkpoint on 5 October 2026, 13:53 UTC, #59 and #70–#72 were
-merged into `development` (`809baeed63a9e70c5e1d79a7d010e7f12ed6db4d`). Review the
-remaining #73–#78 before #80; recheck GitHub rather than treating this checkpoint
-as permanent status. Required checks passed at #80 head `48acf4a`.
+At the read-only checkpoint on 5 October 2026, 15:36 UTC, #59, #70–#78 and #80
+were merged into `development` (`0b13a8c5278efcf25126056f444119045b88c3db`).
+Required quality, policy and dependency checks passed at their accepted heads,
+including #80 head `d173de37`. Recheck GitHub rather than treating this checkpoint
+as permanent status. Merge acceptance does not prove deployed configuration.
 
 The RAG database is **not the application's `DATABASE_URL`**. That variable stores
 documents, jobs and reports. The RAG reader uses `FOUNDATION_CORPUS_DATABASE_URL`
@@ -75,6 +76,36 @@ plus forward fix 0012; the applied 0011 bytes/checksum stay unchanged. Fresh cop
 databases encountered cluster-role creation failure in historical 0008, retained
 under [issue #81](https://github.com/smaq777/Basira-Hackathon/issues/81). Do not drop
 copied roles, rewrite migration history or run production migrations to bypass it.
+
+## Cleaning implementation and isolated validation
+
+Cleaning is a separate, default-off implementation at frozen commit
+`0c04dcfd116c93ab73d76e75f4a5a9d9aa8272be`, with 50 test files / 640 tests and
+type, documentation, policy, formatting and build checks passing. The same Luna
+request returns topics and exact block labels. Only model agreement plus a
+structural navigation/audio check permits removal; article prose, citations,
+exceptions, corrective footnotes and uncertain blocks remain. The immutable
+original and its hash are preserved. The derived content windows are lexical;
+existing vectors do not become cleaned vectors automatically.
+
+The isolated cleaning child is `br-square-salad-b2mo9m2a`, endpoint
+`ep-silent-butterfly-b213f5fo.c-6.eu-central-1.aws.neon.tech`, database
+`basirah_research`, copied from the passage-validation child. It expires on
+12 October 2026. It is not the active app or production branch.
+Read-only checks verified the 86-passage corpus, 16 unchanged cached originals,
+four indexed parents, eight windows/vectors and separate reader/writer roles.
+The additive experimental `0013_source_content_views` migration passed checksum
+and table/RLS checks. Actual passage insertion then failed with SQLSTATE `42702`, confirmed as a
+PL/pgSQL variable/range-alias collision;
+synthetic records were rolled back. No classifier calls or durable cleaned-page
+records were produced. Preserve this failure; passing unit tests did not establish
+database operation.
+
+Current development already contains `0013_secure_review_tickets.sql`. The
+cleaning integration must use the next unique migration number and repair the SQL
+ambiguity. Do not rewrite the applied experimental migration or deploy the frozen
+cleaning branch as-is. Repeat the reviewed role/integrity checks on a separate
+child before the declared four-page, two-repeat classifier test.
 
 Use the database's checked-in migration metadata and the existing verification
 script. To inspect the selected corpus without writing:
@@ -140,10 +171,12 @@ Navigation fragments remain in some windows. A separate default-off source-conte
 cleaning task will combine topic classification with exact block labels and retain
 immutable originals, substantive text, citations and corrective footnotes.
 
-At 14:13 UTC on 5 October, the user-facing Vercel capabilities URL still returned 404. Railway capabilities reported no foundation review or live providers, and
-readiness reported migration 0005. Owner merges have not established a connected
-hosted AI Foundation. Recheck the selected proxy, deployed revision and backend
-runtime/migrations under issue #69 before claiming shared staging activation.
+At 15:40 UTC on 5 October, Vercel's user-facing capabilities URL still returned 404. Railway readiness advanced to `0013_secure_review_tickets`, and its
+capabilities now include review tickets, but foundation review, semantic assessment,
+research preview and rewrite remained off with no live providers. This proves
+backend migration progress, not connected hosted AI. Recheck the selected proxy,
+deployed revision, Foundation assets and server-only RAG/provider configuration
+under issue #69; then validate a fresh persisted report through the actual UI.
 
 Do not silently turn on new flags, ingest benchmark gold answers, approve source
 editions, claim deployment or close acceptance issues based on this handoff.
