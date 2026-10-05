@@ -108,9 +108,20 @@ The full aggregate check at integrated `a976bdee285ce64e72264b33458772b3b4f3d0ef
 ran 808 tests: 807 passed and one inherited hosting test failed at
 `tests/foundation-activation.test.ts:116`. It still expects the hosted demo to reject
 flags that accepted owner hosting changes now permit. The test and hosting source
-match owner development; neither was altered to hide the failure. Full quality is
-therefore **not green**, pending owner reconciliation of that hosting contract.
+match owner development; neither was altered to hide the failure. Full quality was
+therefore **not green at that check**, pending owner reconciliation of that hosting contract.
 TypeScript passes. Independent documentation (95 Markdown files), policy,
 formatting, build and 51 offline Python tests pass. The existing large-bundle build
 warning remains. Initial sandbox Git-subprocess restrictions on docs/policy were
 resolved with scoped local execution; their successful logs remain separate.
+
+A later owner update, accepted PR #139 at
+`caf56ff0963b834c66e5dd043beb83ae09a15c8c`, reconciled the hosted activation test
+and added exact Quran-reference routing. This branch preserves that update with
+merge commit `8781e3b66d87d85794535c99bd31cab4bc8723ec`; it does not independently
+change those owner paths. The new full aggregate check passes **56 files / 812
+tests**, TypeScript, documentation, policy, formatting and build. The earlier
+807/1 failure log remains retained as `IMPLEMENTATION_FULL_CHECK_V1.log`; the
+successful check is separately retained as `IMPLEMENTATION_FULL_CHECK_V2.log`.
+The unchanged offline Python suite previously passed 51 tests. No additional paid
+assessment was made for the owner merge or evidence amendment.
