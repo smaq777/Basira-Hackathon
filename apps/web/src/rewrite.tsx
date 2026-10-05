@@ -33,6 +33,7 @@ function candidateFrom(body: unknown, report: FoundationReport) {
 }
 export function RewritePanel({ report }: { report: FoundationReport }) {
   const [enabled, setEnabled] = useState(false);
+  const [wordingMode, setWordingMode] = useState(false);
   const [candidate, setCandidate] = useState<RewriteCandidate | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -55,10 +56,15 @@ export function RewritePanel({ report }: { report: FoundationReport }) {
     setEnabled(false);
     void request('/api/v1/capabilities', {}, abort.signal)
       .then((body) => {
-        if (!abort.signal.aborted)
+        if (!abort.signal.aborted) {
           setEnabled(
-            body.draftRewrite === true && body.draftRewriteMode === 'citation_and_layout_only',
+            body.draftRewrite === true &&
+              ['citation_and_layout_only', 'supported_author_wording'].includes(
+                body.draftRewriteMode,
+              ),
           );
+          setWordingMode(body.draftRewriteMode === 'supported_author_wording');
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -245,14 +251,22 @@ export function RewritePanel({ report }: { report: FoundationReport }) {
   };
   if (!enabled) return null;
   return (
-    <section className="source-panel" aria-label="اقتراح تنسيق وتوثيق النص">
-      <h2>تنسيق النص وإضافة التوثيق</h2>
+    <section
+      className="source-panel"
+      aria-label={wordingMode ? 'اقتراح تحسين صياغة النص' : 'اقتراح تنسيق وتوثيق النص'}
+    >
+      <h2>{wordingMode ? 'تحسين الصياغة وإضافة التوثيق' : 'تنسيق النص وإضافة التوثيق'}</h2>
       <p>
-        اقتراح بحثي منفصل يضيف فواصل فقرات ومراجع مسجلة. يحفظ ألفاظ النص وشروطه؛ لا يصحح الادعاءات
-        أو يقوّي الاستدلال. لا يمثل اعتمادًا علميًا.
+        {wordingMode
+          ? 'اقتراح بحثي يحسّن ألفاظ الكاتب في العبارات المدعومة فقط، مع فحص مستقل لحفظ المعنى والشروط والتوثيق. يحفظ الاقتباسات كما وردت، ويبقي النص غير المدعوم أو غير المراجع دون تغيير. لا يمثل اعتمادًا علميًا.'
+          : 'اقتراح بحثي منفصل يضيف فواصل فقرات ومراجع مسجلة. يحفظ ألفاظ النص وشروطه؛ لا يصحح الادعاءات أو يقوّي الاستدلال. لا يمثل اعتمادًا علميًا.'}
       </p>
       <button className="button button--outline" disabled={busy} onClick={() => void generate()}>
-        {busy ? 'جار إعداد الاقتراح وفحصه' : 'تنسيق النص وإضافة التوثيق'}
+        {busy
+          ? 'جار إعداد الاقتراح وفحصه'
+          : wordingMode
+            ? 'تحسين الصياغة وإضافة التوثيق'
+            : 'تنسيق النص وإضافة التوثيق'}
       </button>
       {busy && (
         <button className="button button--ghost" onClick={() => void cancel()}>
@@ -264,17 +278,29 @@ export function RewritePanel({ report }: { report: FoundationReport }) {
           <h3>النص المقترح — للمراجعة</h3>
           <p style={{ whiteSpace: 'pre-wrap' }}>{candidate.text}</p>
           {!candidate.operations?.citations.length &&
-            !candidate.operations?.paragraphBreaks.length && (
+            !candidate.operations?.paragraphBreaks.length &&
+            !candidate.operations?.replacements?.length && (
               <p>لم ينتج الاقتراح إضافة مناسبة؛ النص المعروض هو الأصل كما ورد، دون توثيق جديد.</p>
             )}
           {!!candidate.operations?.paragraphBreaks.length &&
-            !candidate.operations?.citations.length && (
+            !candidate.operations?.citations.length &&
+            !candidate.operations?.replacements?.length && (
               <p>اقتُرح ترتيب الفقرات فقط؛ لم تُضف مراجع جديدة.</p>
             )}
           <details>
             <summary>مقارنة التغييرات مع الأصل</summary>
             <p style={{ whiteSpace: 'pre-wrap' }}>{report.intake.originalText}</p>
             <ul>
+              {candidate.operations?.replacements?.map((replacement) => (
+                <li key={replacement.claimId}>
+                  <p>
+                    الصياغة الأصلية: <del>{replacement.originalText}</del>
+                  </p>
+                  <p>
+                    الصياغة المقترحة: <ins>{replacement.replacementText}</ins>
+                  </p>
+                </li>
+              ))}
               {candidate.operations?.paragraphBreaks.map((offset) => (
                 <li key={`p${offset}`}>
                   فصل الفقرة بعد «
@@ -295,6 +321,13 @@ export function RewritePanel({ report }: { report: FoundationReport }) {
               ))}
             </ul>
           </details>
+          {wordingMode && (
+            <p>
+              {candidate.operations?.replacements?.length
+                ? 'حُسّنت العبارات المعروضة في المقارنة فقط. بقيت بقية العبارات، بما فيها غير المدعومة أو غير المراجعة، كما وردت.'
+                : 'لم تنتج صياغة بديلة اجتازت الفحوص؛ بقيت ألفاظ الكاتب كما وردت.'}
+            </p>
+          )}
           {candidate.unresolved.length > 0 && (
             <div>
               <h3>مواضع ما زالت تحتاج إلى مراجعة</h3>
