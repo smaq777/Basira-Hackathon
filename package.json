@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Pre-hackathon engineering foundation for evidence-linked Arabic content review",
+  "description": "Evidence-linked Arabic Islamic content review before publication",
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11 <12"

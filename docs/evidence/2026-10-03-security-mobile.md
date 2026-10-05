@@ -82,7 +82,7 @@ pixel content viewport after browser chrome. The viewport override was reset aft
 
 The first automatic-analysis attempt displayed the recoverable Arabic connection state; the visible
 **Retry** action completed the same saved request and reached the result. This proves recovery UX,
-not provider reliability. It remains evidence for Issue #16 latency/retry work.
+not provider reliability. It remains evidence for Issue #17 latency/retry work.
 
 ## Boundaries
 
