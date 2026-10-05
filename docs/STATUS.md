@@ -164,7 +164,7 @@ without weakening source validation. Repeated editorial notes are consolidated
 with their affected passages. Claim-driven retrieval and a persistent typed Neon
 source corpus are now the next implementation priorities.
 
-The fresh repository baseline contains the completed foundation and architecture work. Current validation is recorded by this repository's GitHub Actions runs. [Issue #27](https://github.com/smaq777/Basira-Hackathon/issues/27) tracks the judge-ready repository and deployment handoff.
+The repository contains the current foundation, architecture, and integrated product work. Current validation is recorded by this repository's GitHub Actions runs. [Issue #27](https://github.com/smaq777/Basira-Hackathon/issues/27) tracks the judge-ready repository and deployment handoff.
 
 | Area                           | Actual state                                                                                                                                                                                                                                                                               |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
