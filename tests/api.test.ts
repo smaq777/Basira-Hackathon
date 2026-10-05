@@ -232,6 +232,19 @@ it('keeps allowlist authorization as the default and requires an explicit hackat
   expect(reviewerAuth.authorizationConfigured).toBe(true);
 });
 
+it('rejects the staging-wide reviewer mode in an explicit production deployment', () => {
+  expect(() =>
+    createClerkReviewerAuth({
+      CLERK_PUBLISHABLE_KEY: 'public',
+      CLERK_SECRET_KEY: 'secret',
+      CLERK_AUTHORIZED_PARTIES: 'https://production.example.com',
+      CLERK_REVIEWER_ACCESS_MODE: 'authenticated',
+      NODE_ENV: 'production',
+      BASIRAH_DEPLOYMENT_ENVIRONMENT: 'production',
+    } as NodeJS.ProcessEnv),
+  ).toThrow(/Production reviewer access requires/u);
+});
+
 it('separates reviewer authentication from authorization', async () => {
   const reviewerAuth: ReviewerAuthGateway = {
     configured: true,
