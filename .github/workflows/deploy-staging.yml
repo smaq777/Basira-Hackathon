@@ -67,5 +67,5 @@ jobs:
       - name: Build and deploy Vercel preview
         run: |
           npx -y vercel@62.1.0 pull --yes --environment=preview --token="$VERCEL_TOKEN"
-          npx -y vercel@62.1.0 build --token="$VERCEL_TOKEN"
-          npx -y vercel@62.1.0 deploy --prebuilt --token="$VERCEL_TOKEN"
+          npx -y vercel@62.1.0 build --local-config=vercel.staging.json --token="$VERCEL_TOKEN"
+          npx -y vercel@62.1.0 deploy --prebuilt --local-config=vercel.staging.json --token="$VERCEL_TOKEN"

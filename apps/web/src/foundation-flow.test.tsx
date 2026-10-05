@@ -33,7 +33,7 @@ function mockReviewApi(
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const path = String(input);
     if (path === '/api/v1/capabilities')
-      return json({ foundationReview: options.capability !== false });
+      return json({ guestDocuments: true, foundationReview: options.capability !== false });
     if (path === '/api/v1/documents')
       return json({ documentId: 'doc', revisionId: REVISION_ID }, 201);
     if (path.endsWith('/extractions'))
@@ -289,7 +289,9 @@ describe('owned foundation review web flow', () => {
     expect(
       screen.getByRole('button', { name: 'جار بدء تحليل جديد' }).hasAttribute('disabled'),
     ).toBe(true);
-    expect(fetchMock.mock.calls.filter(([path]) => path === '/api/v1/documents')).toHaveLength(1);
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.filter(([path]) => path === '/api/v1/documents')).toHaveLength(1),
+    );
     releaseDraft(json({ documentId: 'new-document', revisionId: newRevision }, 201));
     await waitFor(() => expect(window.location.hash).toBe(`#/result?reviewId=${newReview}`));
     await screen.findByRole('heading', { name: 'راجع النقل وحدود الاستدلال' });
