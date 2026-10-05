@@ -8,6 +8,7 @@ import { createClerkReviewerAuth } from './reviewer-auth.js';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { createPythonAdapter } from './foundation.js';
+import { createHostedDraftAdapter, foundationRuntimeMode } from './hosted-foundation.js';
 import { createReviewStore } from './review-store.js';
 import { createFoundationWorker } from './review-worker.js';
 import { createSemanticAssessmentAdapter } from './semantic-assessment.js';
@@ -75,21 +76,19 @@ if (reviewerAuth.configured !== Boolean(clerkFrontendApiOrigin))
     'CLERK_FRONTEND_API_ORIGIN must be configured exactly when Clerk reviewer authentication is enabled',
   );
 async function initializeFoundation() {
-  if (process.env.FOUNDATION_ENABLED !== 'true') return undefined;
-  const researchPreview = process.env.FOUNDATION_RESEARCH_PREVIEW === 'true';
-  if (
-    researchPreview &&
-    (process.env.NODE_ENV === 'production' || !['127.0.0.1', '::1'].includes(host))
-  )
-    throw new Error('RESEARCH_PREVIEW_REQUIRES_LOCAL_DEVELOPMENT');
+  const runtimeMode = foundationRuntimeMode(process.env, host);
+  if (runtimeMode === 'disabled') return undefined;
+  const researchPreview = runtimeMode === 'local_research';
+  const hostedDemo = runtimeMode === 'hosted_demo';
+  const researchEvidence = researchPreview || hostedDemo;
   // This opt-in uses only numeric verse references and the pinned Tafsir adapter.
   // Hosted activation needs separate source-edition and deployment validation.
   if (process.env.FOUNDATION_TAFSIR_LIVE === 'true' && !researchPreview)
     throw new Error('LIVE_SOURCE_ACQUISITION_REQUIRES_LOCAL_RESEARCH_PREVIEW');
   const semanticEnabled = process.env.FOUNDATION_SEMANTIC_ENABLED === 'true';
-  const semanticBudget = semanticBudgetConfiguration(process.env, researchPreview);
-  if (semanticEnabled && !researchPreview)
-    throw new Error('SEMANTIC_PILOT_REQUIRES_LOCAL_RESEARCH_PREVIEW');
+  const semanticBudget = semanticBudgetConfiguration(process.env, researchEvidence);
+  if (semanticEnabled && !researchEvidence)
+    throw new Error('SEMANTIC_PILOT_REQUIRES_RESEARCH_PROFILE');
   const retrievalEnabled = process.env.FOUNDATION_CLAIM_RETRIEVAL_ENABLED === 'true';
   const webDiscoveryEnabled = process.env.FOUNDATION_WEB_DISCOVERY_ENABLED === 'true';
   const webCacheEnabled = process.env.FOUNDATION_WEB_CACHE_ENABLED === 'true';
@@ -106,7 +105,13 @@ async function initializeFoundation() {
   const python = process.env.FOUNDATION_PYTHON;
   const sourceDatabase = process.env.FOUNDATION_DATABASE;
   const workerUrl = process.env.REVIEW_WORKER_DATABASE_URL;
-  if (!connectionString || !python || !sourceDatabase || !workerUrl)
+  const hostedCorpusVersion = process.env.FOUNDATION_CORPUS_VERSION?.trim();
+  if (
+    !connectionString ||
+    !workerUrl ||
+    (researchPreview && (!python || !sourceDatabase)) ||
+    (hostedDemo && !hostedCorpusVersion)
+  )
     throw new Error('FOUNDATION_CONFIGURATION_INCOMPLETE');
   const readiness = await database.readiness();
   if (
@@ -114,14 +119,16 @@ async function initializeFoundation() {
     !(Number(readiness.migrationVersion?.slice(0, 4)) >= (retrievalEnabled ? 9 : 7))
   )
     throw new Error('FOUNDATION_MIGRATION_REQUIRED');
-  const adapter = createPythonAdapter({
-    python,
-    script: resolve('apps/foundation_worker/intake_bridge.py'),
-    cwd: resolve('apps/foundation_worker'),
-    database: sourceDatabase,
-    snapshotDirectory: process.env.FOUNDATION_SNAPSHOTS || undefined,
-    researchPreview,
-  });
+  const adapter = hostedDemo
+    ? createHostedDraftAdapter(hostedCorpusVersion!)
+    : createPythonAdapter({
+        python: python!,
+        script: resolve('apps/foundation_worker/intake_bridge.py'),
+        cwd: resolve('apps/foundation_worker'),
+        database: sourceDatabase!,
+        snapshotDirectory: process.env.FOUNDATION_SNAPSHOTS || undefined,
+        researchPreview,
+      });
   let corpusPool: Pool | undefined;
   let webCachePool: Pool | undefined;
   try {
@@ -154,7 +161,7 @@ async function initializeFoundation() {
       const corpus = createHostedCorpus({
         pool: corpusPool,
         corpusVersion,
-        researchPreview,
+        researchPreview: researchEvidence,
         embeddingSpace: {
           modelId: QUERY_EMBEDDING_MODEL,
           dimensions: QUERY_EMBEDDING_DIMENSIONS,
@@ -169,7 +176,7 @@ async function initializeFoundation() {
       claimRetrieval = createClaimRetrievalAdapter({
         corpus,
         corpusVersion,
-        researchPreview,
+        researchPreview: researchEvidence,
         reserveDiscoveryKeys: webDiscoveryEnabled,
       });
     }
@@ -242,7 +249,7 @@ async function initializeFoundation() {
         claimRetrieval = createClaimRetrievalAdapter({
           corpus: withResearchPageCorpus(baseCorpus!, cache),
           corpusVersion: selectedCorpusVersion!,
-          researchPreview,
+          researchPreview: researchEvidence,
           reserveDiscoveryKeys: true,
         });
       }
@@ -260,19 +267,20 @@ async function initializeFoundation() {
           },
           allowedModels: ['openai/gpt-6-luna', 'openai/gpt-6.1-sol'],
           allowedProviders: ['OpenAI'],
-          researchPreview,
+          researchPreview: researchEvidence,
           claimRetrieval,
           gapDiscovery,
         })
       : undefined;
     const worker = createFoundationWorker(adapter, store, semantic, {
-      researchPreview,
+      researchPreview: researchEvidence,
       semanticTimeoutMs: semanticBudget.overallTimeoutMs,
     });
     return {
       worker,
       reports,
       researchPreview,
+      hostedDemo,
       liveTafsir: process.env.FOUNDATION_TAFSIR_LIVE === 'true',
       semanticPilot: semanticEnabled,
       webDiscovery: webDiscoveryEnabled,

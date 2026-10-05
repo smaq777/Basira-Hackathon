@@ -132,6 +132,15 @@ stored reports or enable rewriting. See the [pilot evidence](../evidence/2026-10
 
 All foundation, semantic, retrieval, discovery, and cache flags default off. Live research activation requires `NODE_ENV` other than production, `HOST=127.0.0.1` or `::1`, and `FOUNDATION_RESEARCH_PREVIEW=true`. It is not a production deployment setting.
 
+For a time-bounded public hackathon demonstration, `FOUNDATION_HOSTED_DEMO=true`
+selects a separate read-only hosted profile. It starts from the immutable submitted
+draft, retrieves only from a pinned `FOUNDATION_CORPUS_VERSION`, and keeps pending
+records visibly research-only. It does not perform literal quotation verification
+without the packaged canonical index. Live Tafsir/MCP acquisition, web discovery,
+cache writes and rewrite are rejected in this profile. Configure a dedicated report
+worker login, a least-privilege research corpus reader and the server-only model key;
+never reuse an owner URL or expose a credential to the browser.
+
 Enable `FOUNDATION_ENABLED`, `FOUNDATION_SEMANTIC_ENABLED`, `FOUNDATION_CLAIM_RETRIEVAL_ENABLED`, `FOUNDATION_WEB_DISCOVERY_ENABLED`, and `FOUNDATION_WEB_CACHE_ENABLED` only for an authorized research run. Keep the local Python executable/index, report runtime login, and separate worker login configured as described in `.env.example`. The report database needs migration 0007 for source review and at least 0009 for claim retrieval. The separate Neon corpus/cache database needs the populated versioned corpus and migration `0010_research_page_cache`. Apply checked-in migrations only to the explicitly selected isolated development database with its direct migration credential; never place owner credentials in runtime configuration.
 
 `FOUNDATION_CORPUS_DATABASE_URL` uses the existing least-privileged research reader and `FOUNDATION_CORPUS_VERSION` selects the frozen corpus. `FOUNDATION_WEB_CACHE_DATABASE_URL` uses a separate cache writer login: only cache SELECT/INSERT and verification/expiry updates, no canonical-corpus changes or source approval. Both use `FOUNDATION_CORPUS_TLS_MODE`, default `verify-full`. Provider keys remain server-only in the owning external environment: `OPENROUTER_API_KEY`, `FIRECRAWL_API_KEY`, and, when selected, `TINYFISH_API_KEY`.
