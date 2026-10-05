@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "hackathon-2026-10-05-v1",
+  "referenceDocument": {
+    "name": "References_and_Data.pdf",
+    "sha256": "23d776c729fcf68f9c33152a22f34edb4cd80efc7c2b7c15981aff7c5a1cb9c7",
+    "pages": [3, 4]
+  },
+  "deniedDomains": [],
+  "sources": [
+    {
+      "id": "dawa",
+      "domain": "dawa.center",
+      "pathPrefixes": ["/"],
+      "excludedPrefixes": [],
+      "enabled": true,
+      "basis": "hackathon_listed",
+      "documentPages": [3, 4],
+      "sourceRole": "book_excerpt",
+      "notes": "Dawah repository; Bayyinat at /file/7937. HTML context only; download files are not automatically ingested."
+    },
+    {
+      "id": "islamic-content",
+      "domain": "islamic-content.com",
+      "pathPrefixes": ["/"],
+      "excludedPrefixes": [],
+      "enabled": true,
+      "basis": "hackathon_listed",
+      "documentPages": [3, 4],
+      "sourceRole": "book_excerpt",
+      "notes": "Al-Jamhara topics and terminology, including /dictionary."
+    },
+    {
+      "id": "quranpedia",
+      "domain": "quranpedia.net",
+      "pathPrefixes": ["/"],
+      "excludedPrefixes": [],
+      "enabled": true,
+      "basis": "hackathon_listed",
+      "documentPages": [3],
+      "sourceRole": "book_excerpt",
+      "notes": "Reference-page context only. Canonical Quran comparison still uses the pinned edition."
+    },
+    {
+      "id": "dorar",
+      "domain": "dorar.net",
+      "pathPrefixes": ["/tafseer", "/hadith", "/aqeeda", "/feqhia", "/history"],
+      "excludedPrefixes": [],
+      "enabled": true,
+      "basis": "hackathon_listed",
+      "documentPages": [3, 4],
+      "sourceRole": "scholar_explanation",
+      "notes": "Hadith authenticity needs an explicit attributed grading record; a web page match is not a grade."
+    },
+    {
+      "id": "shamela",
+      "domain": "shamela.ws",
+      "pathPrefixes": ["/book/"],
+      "excludedPrefixes": [],
+      "includeTags": [".nass"],
+      "enabled": true,
+      "basis": "hackathon_listed",
+      "documentPages": [3],
+      "sourceRole": "book_excerpt",
+      "notes": "Selected works and editions need attribution/rights records. Listing this host does not approve every book."
+    },
+    {
+      "id": "binbaz",
+      "domain": "binbaz.org.sa",
+      "pathPrefixes": ["/fatwas/", "/audios/"],
+      "excludedPrefixes": [],
+      "includeTags": [".fatwa"],
+      "enabled": true,
+      "basis": "owner_selected",
+      "documentPages": [],
+      "sourceRole": "scholar_explanation",
+      "notes": "Previously selected by the owner; distinct from the hackathon document list."
+    }
+  ]
+}

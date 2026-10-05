@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.5';
-export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.5';
+export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.6';
+export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.6';
 
 const EvidenceKeys = z.array(z.string().min(1).max(160)).max(20);
 const Details = z.array(z.string().min(1).max(500)).max(6);
@@ -88,7 +88,7 @@ export type SemanticErrorCode = z.infer<typeof SemanticErrorCodeSchema>;
 export const SemanticRequestTraceSchema = z
   .object({
     requestId: z.string().uuid(),
-    stage: z.enum(['extraction', 'assessment']),
+    stage: z.enum(['extraction', 'assessment', 'gap_assessment']),
     modelId: z.string().min(1).max(160),
     providerId: z.string().min(1).max(120),
     fallback: z.boolean(),
@@ -130,6 +130,7 @@ export const SemanticAssessmentReportSchema = z
           'provisional-semantic-v1.2',
           'provisional-semantic-v1.3',
           'provisional-semantic-v1.4',
+          'provisional-semantic-v1.5',
           SEMANTIC_PIPELINE_VERSION,
         ]),
         promptVersion: z.enum([
@@ -137,6 +138,7 @@ export const SemanticAssessmentReportSchema = z
           'evidence-support-v1.2',
           'evidence-support-v1.3',
           'evidence-support-v1.4',
+          'evidence-support-v1.5',
           SEMANTIC_PROMPT_VERSION,
         ]),
         inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),
@@ -176,7 +178,29 @@ export const SemanticAssessmentReportSchema = z
           })
           .strict()
           .optional(),
-        requests: z.array(SemanticRequestTraceSchema).max(3),
+        initialAssessmentInputSha256: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/u)
+          .optional(),
+        discovery: z
+          .object({
+            claimId: z.string().min(1).max(160),
+            reason: z.enum(['not_established', 'insufficient_context']),
+            querySha256: z.string().regex(/^[a-f0-9]{64}$/u),
+            outcome: z.enum([
+              'budget_skipped',
+              'packet_budget_skipped',
+              'no_evidence',
+              'failed',
+              'reassessed',
+              'reassessment_failed',
+            ]),
+            addedKeys: z.array(z.string().min(1).max(160)).max(2),
+            failureCodes: z.array(z.string().regex(/^[a-z_0-9]{1,100}$/u)).max(10),
+          })
+          .strict()
+          .optional(),
+        requests: z.array(SemanticRequestTraceSchema).max(4),
       })
       .strict(),
     limitations: z.array(z.string().min(1).max(1000)).max(10),

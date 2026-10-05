@@ -46,8 +46,14 @@ export function allowedWebUrl(value: string, policies: readonly WebSourcePolicy[
     const policy = policies.find((row) => row.domain === url.hostname);
     if (
       !policy ||
-      !policy.pathPrefixes.some((prefix) => path.startsWith(prefix)) ||
-      policy.excludedPrefixes?.some((prefix) => path.startsWith(prefix))
+      !policy.pathPrefixes.some(
+        (prefix) =>
+          path === prefix || path.startsWith(prefix.endsWith('/') ? prefix : prefix + '/'),
+      ) ||
+      policy.excludedPrefixes?.some(
+        (prefix) =>
+          path === prefix || path.startsWith(prefix.endsWith('/') ? prefix : prefix + '/'),
+      )
     )
       return null;
     url.hash = '';

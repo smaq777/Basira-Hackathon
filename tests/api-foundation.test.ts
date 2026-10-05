@@ -362,3 +362,28 @@ it('advertises source review only after the database and bridge schema are ready
     foundationReview: false,
   });
 });
+
+it.each([false, true])(
+  'advertises Firecrawl acquisition only when web discovery is configured: %s',
+  async (enabled) => {
+    const { database, foundation } = fixture();
+    const base = await serve({
+      database,
+      foundation: { ...foundation, semanticPilot: true, webDiscovery: enabled },
+    });
+    const capabilities = await (await fetch(base + '/api/v1/capabilities')).json();
+    expect(capabilities.liveProviders).toEqual(
+      enabled ? ['openrouter', 'firecrawl'] : ['openrouter'],
+    );
+    expect(capabilities.verification).toBe(false);
+    expect(capabilities.draftRewrite).toBe(false);
+  },
+);
+
+it('keeps Firecrawl absent for preexisting source configurations with no web option', async () => {
+  const { database, foundation } = fixture();
+  const base = await serve({ database, foundation: { ...foundation, semanticPilot: true } });
+  expect((await (await fetch(base + '/api/v1/capabilities')).json()).liveProviders).toEqual([
+    'openrouter',
+  ]);
+});

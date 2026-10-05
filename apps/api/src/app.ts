@@ -88,6 +88,7 @@ type AppOptions = {
     researchPreview: boolean;
     liveTafsir?: boolean;
     semanticPilot?: boolean;
+    webDiscovery?: boolean;
   };
   database?: BackendDatabase;
   production?: boolean;
@@ -186,6 +187,7 @@ export function createApp(options: AppOptions = {}) {
       liveProviders: [
         ...(options.foundation?.liveTafsir ? ['tafsir_mcp'] : []),
         ...(options.foundation?.semanticPilot ? ['openrouter'] : []),
+        ...(options.foundation?.webDiscovery ? ['firecrawl'] : []),
       ],
       provisionalSemanticAssessment: options.foundation?.semanticPilot ?? false,
       accounts: reviewerAuth.configured,

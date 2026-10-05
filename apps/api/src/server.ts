@@ -10,6 +10,8 @@ import { createFoundationWorker } from './review-worker.js';
 import { createSemanticAssessmentAdapter } from './semantic-assessment.js';
 import { createHostedCorpus } from './hosted-corpus.js';
 import { createClaimRetrievalAdapter } from './claim-retrieval.js';
+import { loadSourcePolicy } from './source-policy.js';
+import { createWebGapDiscovery } from './web-gap-discovery.js';
 import {
   createOpenRouterQueryEmbedding,
   QUERY_EMBEDDING_MODEL,
@@ -46,6 +48,9 @@ async function initializeFoundation() {
   if (semanticEnabled && !researchPreview)
     throw new Error('SEMANTIC_PILOT_REQUIRES_LOCAL_RESEARCH_PREVIEW');
   const retrievalEnabled = process.env.FOUNDATION_CLAIM_RETRIEVAL_ENABLED === 'true';
+  const webDiscoveryEnabled = process.env.FOUNDATION_WEB_DISCOVERY_ENABLED === 'true';
+  if (webDiscoveryEnabled && !retrievalEnabled)
+    throw new Error('WEB_DISCOVERY_REQUIRES_CLAIM_RETRIEVAL');
   if (retrievalEnabled && !semanticEnabled)
     throw new Error('CLAIM_RETRIEVAL_REQUIRES_SEMANTIC_PIPELINE');
   const python = process.env.FOUNDATION_PYTHON;
@@ -106,7 +111,21 @@ async function initializeFoundation() {
         },
       });
       if (!(await corpus.readiness()).ready) throw new Error('HOSTED_CORPUS_NOT_READY');
-      claimRetrieval = createClaimRetrievalAdapter({ corpus, corpusVersion, researchPreview });
+      claimRetrieval = createClaimRetrievalAdapter({
+        corpus,
+        corpusVersion,
+        researchPreview,
+        reserveDiscoveryKeys: webDiscoveryEnabled,
+      });
+    }
+    let gapDiscovery;
+    if (webDiscoveryEnabled) {
+      const apiKey = process.env.FIRECRAWL_API_KEY;
+      if (!apiKey) throw new Error('FIRECRAWL_CONFIGURATION_REQUIRED');
+      gapDiscovery = createWebGapDiscovery({
+        apiKey,
+        policy: await loadSourcePolicy(process.env.FOUNDATION_WEB_POLICY_PATH || undefined),
+      });
     }
     const semantic = semanticEnabled
       ? createSemanticAssessmentAdapter({
@@ -122,6 +141,7 @@ async function initializeFoundation() {
           allowedProviders: ['OpenAI'],
           researchPreview,
           claimRetrieval,
+          gapDiscovery,
         })
       : undefined;
     const worker = createFoundationWorker(adapter, store, semantic, { researchPreview });
@@ -131,6 +151,7 @@ async function initializeFoundation() {
       researchPreview,
       liveTafsir: process.env.FOUNDATION_TAFSIR_LIVE === 'true',
       semanticPilot: semanticEnabled,
+      webDiscovery: webDiscoveryEnabled,
       corpusPool,
     };
   } catch (error) {

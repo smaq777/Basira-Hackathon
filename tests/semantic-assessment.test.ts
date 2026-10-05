@@ -311,8 +311,8 @@ describe('bounded semantic assessment', () => {
     expect(prompt).not.toMatch(/scholar_explanation|book_excerpt/u);
     expect(result.scholarlyApproval).toBe(false);
     expect(result.trace).toMatchObject({
-      pipelineVersion: 'provisional-semantic-v1.5',
-      promptVersion: 'evidence-support-v1.5',
+      pipelineVersion: 'provisional-semantic-v1.6',
+      promptVersion: 'evidence-support-v1.6',
     });
     expect(intake).toEqual(before);
   });
@@ -1106,4 +1106,287 @@ it('runs at most three searches concurrently, merges deterministically, and rest
   expect(result.trace.queries.map((query) => query.claimId)).toEqual(
     claims.map((claim) => claim.id),
   );
+});
+
+describe('semantic gap-triggered web discovery', () => {
+  const web = (): SourceEvidence => ({
+    ...evidence('web-source'),
+    sourceRole: 'scholar_explanation',
+    sourceUrl: 'https://owned.example/source/1',
+    provenance: { representation: 'extracted_markdown', provider: 'firecrawl' },
+  });
+  const gapFetch = (reassessment?: 'invalid' | 'outage') =>
+    vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+      const { body, data } = requestData(init);
+      const stage = body.response_format.json_schema.name;
+      if (stage === 'extraction') return response(proposal(), body.model);
+      const value = finding(data.claims[0].claim.id);
+      if (stage === 'assessment') {
+        value.status = 'not_established';
+        value.citations = [];
+      } else {
+        expect(data.claims).toHaveLength(1);
+        expect(
+          data.claims[0].evidence.some(
+            (row: { evidenceKey: string }) => row.evidenceKey === 'web-source',
+          ),
+        ).toBe(true);
+        if (reassessment === 'outage') return new Response('', { status: 503 });
+        value.citations = [
+          {
+            evidenceKey: 'web-source',
+            excerpt: reassessment === 'invalid' ? 'عبارة ليست في المصدر' : SOURCE,
+          },
+        ];
+      }
+      return response({ assessments: [value] }, body.model);
+    });
+  it('performs one discovery for a validated semantic gap and reassesses the affected frozen packet', async () => {
+    const fetch = gapFetch();
+    const discover = vi.fn(async () => ({ evidence: [web()], failureCodes: [] }));
+    const input = fixture();
+    const result = await createSemanticAssessmentAdapter(
+      options(fetch, { researchPreview: true, gapDiscovery: { discover } }),
+    ).assessWithEvidence(input);
+    expect(result.report.status).toBe('completed');
+    expect(result.report.assessments[0]!.status).toBe('supported');
+    expect(result.report.trace.discovery).toMatchObject({
+      reason: 'not_established',
+      outcome: 'reassessed',
+      addedKeys: ['web-source'],
+    });
+    expect(result.report.trace.requests.map((row) => row.stage)).toEqual([
+      'extraction',
+      'assessment',
+      'gap_assessment',
+    ]);
+    expect(result.report.trace.initialAssessmentInputSha256).toMatch(/^[a-f0-9]{64}$/u);
+    expect(result.report.trace.evidenceSha256).toBe(sha256(canonical(result.intake.evidence)));
+    expect(result.intake.quotationFindings).toEqual(input.quotationFindings);
+    expect(input.evidence).toHaveLength(1);
+    expect(discover).toHaveBeenCalledTimes(1);
+    expect(discover.mock.calls[0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ originalText: CLAIM }),
+        expect.objectContaining({ reason: 'not_established', query: CLAIM }),
+      ]),
+    );
+  });
+  it('does not search supported claims and records an insufficient remaining budget', async () => {
+    const discover = vi.fn(async () => ({ evidence: [web()], failureCodes: [] }));
+    await createSemanticAssessmentAdapter(
+      options(successfulFetch(), { researchPreview: true, gapDiscovery: { discover } }),
+    ).assessWithEvidence(fixture());
+    expect(discover).not.toHaveBeenCalled();
+    let elapsed = 0;
+    const fetch = gapFetch();
+    const timedFetch: typeof globalThis.fetch = async (...args) => {
+      const response = await fetch(...args);
+      elapsed += 20000;
+      return response;
+    };
+    const result = await createSemanticAssessmentAdapter(
+      options(timedFetch, {
+        now: () => elapsed,
+        researchPreview: true,
+        gapDiscovery: { discover },
+      }),
+    ).assessWithEvidence(fixture());
+    expect(result.report.trace.discovery?.outcome).toBe('budget_skipped');
+    expect(result.intake.evidence).toHaveLength(1);
+    expect(discover).not.toHaveBeenCalled();
+  });
+  it.each(['outage', 'invalid'] as const)(
+    'preserves the first-pass finding on %s reassessment failure',
+    async (failure) => {
+      const result = await createSemanticAssessmentAdapter(
+        options(gapFetch(failure), {
+          researchPreview: true,
+          gapDiscovery: { discover: async () => ({ evidence: [web()], failureCodes: [] }) },
+        }),
+      ).assessWithEvidence(fixture());
+      expect(result.report.status).toBe('partial');
+      expect(result.report.assessments[0]!.status).toBe('not_established');
+      expect(result.report.trace.discovery?.outcome).toBe('reassessment_failed');
+      expect(result.intake.evidence).toHaveLength(2);
+    },
+  );
+  it('preserves the quotation packet on invalid acquisition or timeout without reassessment', async () => {
+    const input = fixture();
+    const fetch = gapFetch();
+    const malformed = { ...web(), originalText: 'تحريف' };
+    const bad = await createSemanticAssessmentAdapter(
+      options(fetch, {
+        researchPreview: true,
+        gapDiscovery: { discover: async () => ({ evidence: [malformed], failureCodes: [] }) },
+      }),
+    ).assessWithEvidence(input);
+    expect(bad.intake).toEqual(input);
+    expect(bad.report.trace.discovery?.outcome).toBe('failed');
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const timeout = await createSemanticAssessmentAdapter(
+      options(gapFetch(), {
+        researchPreview: true,
+        gapDiscoveryTimeoutMs: 10,
+        gapDiscovery: { discover: () => new Promise(() => undefined) },
+      }),
+    ).assessWithEvidence(input);
+    expect(timeout.intake).toEqual(input);
+    expect(timeout.report.trace.discovery).toMatchObject({
+      outcome: 'failed',
+      failureCodes: ['timeout'],
+    });
+  });
+  it('requires explicit research preview and leaves the overall default limit unchanged', async () => {
+    const fetch = gapFetch();
+    const gapDiscovery = { discover: async () => ({ evidence: [], failureCodes: [] }) };
+    expect(
+      (
+        await createSemanticAssessmentAdapter(options(fetch, { gapDiscovery })).assessWithEvidence(
+          fixture(),
+        )
+      ).report.errorCode,
+    ).toBe('configuration_invalid');
+    expect(
+      (
+        await createSemanticAssessmentAdapter(
+          options(fetch, { gapDiscovery, researchPreview: true, overallTimeoutMs: 75000 }),
+        ).assessWithEvidence(fixture())
+      ).report.errorCode,
+    ).toBe('configuration_invalid');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+it('reassesses only the first independent gap and preserves supported findings', async () => {
+  const second = 'يجب حفظ الأمانة';
+  const text = `${CLAIM}. ${second}.`;
+  let supportedFinding: ReturnType<typeof finding> | undefined;
+  const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+    const { body, data } = requestData(init);
+    if (body.response_format.json_schema.name === 'extraction')
+      return response(
+        {
+          claims: [CLAIM, second].map((originalText) => ({
+            segmentId: 'author-1',
+            originalText,
+            evidenceKeys: ['owned-source'],
+          })),
+        },
+        body.model,
+      );
+    if (body.response_format.json_schema.name === 'assessment') {
+      const gap = { ...finding(data.claims[0].claim.id), status: 'not_established', citations: [] };
+      supportedFinding = finding(data.claims[1].claim.id);
+      return response({ assessments: [gap, supportedFinding] }, body.model);
+    }
+    expect(data.claims).toHaveLength(1);
+    return response({ assessments: [finding(data.claims[0].claim.id)] }, body.model);
+  });
+  const source: SourceEvidence = {
+    ...evidence('web-extra'),
+    sourceRole: 'scholar_explanation',
+    sourceUrl: 'https://owned.example/source',
+    provenance: { representation: 'extracted_markdown' },
+  };
+  const discover = vi.fn(async () => ({ evidence: [source], failureCodes: [] }));
+  const result = await createSemanticAssessmentAdapter(
+    options(fetch, { researchPreview: true, gapDiscovery: { discover } }),
+  ).assessWithEvidence(fixture(text));
+  expect(result.report.status).toBe('completed');
+  expect(result.report.assessments[1]).toEqual(supportedFinding);
+  expect(discover).toHaveBeenCalledTimes(1);
+  expect(result.report.claims[0]!.evidenceKeys).toContain('web-extra');
+  expect(result.report.claims[1]!.evidenceKeys).not.toContain('web-extra');
+});
+
+it.each([false, true])(
+  'reserves two claim/evidence slots before assessment only for enabled web discovery: %s',
+  async (reserveDiscoveryKeys) => {
+    const intake = fixture();
+    intake.evidence = Array.from({ length: 18 }, (_row, index) => evidence(`seed-${index}`));
+    const claim = {
+      id: `claim-${'d'.repeat(24)}`,
+      segmentId: 'author-1',
+      originalText: CLAIM,
+      startOffset: 0,
+      endOffset: CLAIM.length,
+      evidenceKeys: intake.evidence.map((row) => row.snapshotKey),
+      provisional: true as const,
+    };
+    const candidates = [evidence('candidate-one'), evidence('candidate-two')];
+    const result = await createClaimRetrievalAdapter({
+      corpus: { search: async () => candidates, restore: async () => [] },
+      corpusVersion: 'owned',
+      researchPreview: true,
+      reserveDiscoveryKeys,
+    }).retrieve(intake, [claim]);
+    expect(result.claims[0]!.evidenceKeys).toHaveLength(reserveDiscoveryKeys ? 18 : 20);
+    expect(result.evidence).toHaveLength(reserveDiscoveryKeys ? 18 : 20);
+    expect(result.evidence.slice(0, 18)).toEqual(intake.evidence);
+  },
+);
+
+it('preserves indivisible canonical families that occupy reserved discovery slots', async () => {
+  const intake = fixture();
+  const root = evidence('canonical-root');
+  intake.evidence = [root];
+  const children = Array.from({ length: 18 }, (_row, index) =>
+    evidence(`commentary-${index}`, 'canonical-root'),
+  );
+  const claim = {
+    id: `claim-${'e'.repeat(24)}`,
+    segmentId: 'author-1',
+    originalText: CLAIM,
+    startOffset: 0,
+    endOffset: CLAIM.length,
+    evidenceKeys: [root.snapshotKey],
+    provisional: true as const,
+  };
+  const result = await createClaimRetrievalAdapter({
+    corpus: { search: async () => [], restore: async () => [root, ...children] },
+    corpusVersion: 'owned',
+    researchPreview: true,
+    reserveDiscoveryKeys: true,
+  }).retrieve(intake, [claim]);
+  expect(result.claims[0]!.evidenceKeys).toHaveLength(19);
+  expect(result.evidence).toHaveLength(19);
+});
+
+it('skips paid gap acquisition visibly when canonical selection leaves fewer than two keys', async () => {
+  const intake = fixture();
+  intake.evidence = [
+    evidence(),
+    ...Array.from({ length: 18 }, (_row, index) => evidence(`seed-${index}`)),
+  ];
+  const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+    const { body, data } = requestData(init);
+    if (body.response_format.json_schema.name === 'extraction')
+      return response(
+        proposal(
+          CLAIM,
+          intake.evidence.map((row) => row.snapshotKey),
+        ),
+        body.model,
+      );
+    return response(
+      {
+        assessments: [
+          { ...finding(data.claims[0].claim.id), status: 'not_established', citations: [] },
+        ],
+      },
+      body.model,
+    );
+  });
+  const discover = vi.fn(async () => ({ evidence: [], failureCodes: [] }));
+  const result = await createSemanticAssessmentAdapter(
+    options(fetch, { researchPreview: true, gapDiscovery: { discover } }),
+  ).assessWithEvidence(intake);
+  expect(result.report.trace.discovery).toMatchObject({
+    outcome: 'packet_budget_skipped',
+    failureCodes: ['discovery_packet_headroom_unavailable'],
+  });
+  expect(result.report.assessments[0]!.status).toBe('not_established');
+  expect(result.intake.evidence).toHaveLength(19);
+  expect(discover).not.toHaveBeenCalled();
 });

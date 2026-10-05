@@ -23,6 +23,13 @@ export interface ClaimRetrievalAdapter {
     signal?: AbortSignal,
   ): Promise<{ evidence: SourceEvidence[]; claims: SemanticClaim[]; trace: ClaimRetrievalTrace }>;
 }
+export interface ClaimGapDiscovery {
+  discover(
+    claim: SemanticClaim,
+    gap: { reason: 'not_established' | 'insufficient_context'; query: string },
+    signal?: AbortSignal,
+  ): Promise<{ evidence: SourceEvidence[]; failureCodes: string[] }>;
+}
 export interface ClaimCorpusSearch {
   search(
     query: string,
@@ -50,8 +57,11 @@ export function createClaimRetrievalAdapter(options: {
   corpusVersion: string;
   researchPreview?: boolean;
   maxCandidatesPerClaim?: number;
+  reserveDiscoveryKeys?: boolean;
 }): ClaimRetrievalAdapter {
   const max = options.maxCandidatesPerClaim ?? 8;
+  const claimLimit = options.reserveDiscoveryKeys ? 18 : 20;
+  const evidenceLimit = options.reserveDiscoveryKeys ? 78 : 80;
   if (!Number.isInteger(max) || max < 1 || max > 12) throw new Error('INVALID_RETRIEVAL_BOUND');
   return {
     async retrieve(intake, claims, signal) {
@@ -194,10 +204,20 @@ export function createClaimRetrievalAdapter(options: {
             continue;
           const newClaimKeys = family.filter((row) => !keys.has(row.snapshotKey));
           const newEvidence = family.filter((row) => !evidence.has(row.snapshotKey));
-          if (keys.size + newClaimKeys.length > 20 || evidence.size + newEvidence.length > 80) {
+          const nextClaimSize = keys.size + newClaimKeys.length;
+          const nextEvidenceSize = evidence.size + newEvidence.length;
+          if (nextClaimSize > 20 || nextEvidenceSize > 80) {
             if (claim.evidenceKeys.includes(key)) throw new Error('RETRIEVAL_PACKET_TOO_LARGE');
             continue;
           }
+          if (
+            (nextClaimSize > claimLimit || nextEvidenceSize > evidenceLimit) &&
+            !claim.evidenceKeys.includes(key)
+          )
+            continue;
+          // Seeded original families are indivisible even when they use the
+          // reserved slots. The semantic stage then skips web acquisition visibly.
+
           for (const row of family) {
             keys.add(row.snapshotKey);
             if (!evidence.has(row.snapshotKey)) evidence.set(row.snapshotKey, row);

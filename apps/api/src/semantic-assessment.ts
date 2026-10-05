@@ -19,7 +19,11 @@ import {
   type SemanticRequestTrace,
 } from '../../../packages/contracts/src/semantic-assessment.js';
 import { canonical, sha256, validateIntake } from './foundation.js';
-import type { ClaimRetrievalAdapter, ClaimRetrievalTrace } from './claim-retrieval.js';
+import type {
+  ClaimRetrievalAdapter,
+  ClaimRetrievalTrace,
+  ClaimGapDiscovery,
+} from './claim-retrieval.js';
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_REQUEST_BYTES = 500_000;
@@ -48,6 +52,9 @@ export interface SemanticAssessmentOptions {
   now?: () => number;
   claimRetrieval?: ClaimRetrievalAdapter;
   researchPreview?: boolean;
+  gapDiscovery?: ClaimGapDiscovery;
+  gapDiscoveryTimeoutMs?: number;
+  gapAssessmentTimeoutMs?: number;
 }
 export interface SemanticAssessmentResult {
   report: SemanticAssessmentReport;
@@ -269,13 +276,16 @@ export function createSemanticAssessmentAdapter(
   const now = options.now ?? Date.now;
   const adapter: SemanticAssessmentAdapter = {
     async assess(original, externalSignal) {
-      if (options.claimRetrieval) throw new Error('USE_ASSESS_WITH_EVIDENCE_FOR_RETRIEVAL');
+      if (options.claimRetrieval || options.gapDiscovery)
+        throw new Error('USE_ASSESS_WITH_EVIDENCE_FOR_RETRIEVAL');
       return (await adapter.assessWithEvidence(original, externalSignal)).report;
     },
     async assessWithEvidence(original, externalSignal) {
       let finalIntake = structuredClone(original);
       let retrievalTrace: ClaimRetrievalTrace | undefined;
       let finalEvidenceSha256: string | undefined;
+      let initialAssessmentInputSha256: string | undefined;
+      let discovery: SemanticAssessmentReport['trace']['discovery'];
       let claims: SemanticClaim[] = [];
       const assessments: EvidenceSupportFinding[] = [];
       let invalidClaimProposals = false;
@@ -308,6 +318,8 @@ export function createSemanticAssessmentAdapter(
             requests,
             ...(finalEvidenceSha256 ? { finalEvidenceSha256 } : {}),
             ...(retrievalTrace ? { retrieval: retrievalTrace } : {}),
+            ...(discovery ? { discovery } : {}),
+            ...(initialAssessmentInputSha256 ? { initialAssessmentInputSha256 } : {}),
           },
           limitations: [
             'تقييم آلي أولي غير محكّم علميًا؛ لا يثبت حكمًا شرعيًا أو صحة الحديث أو اعتماد النشر.',
@@ -336,6 +348,19 @@ export function createSemanticAssessmentAdapter(
       ) {
         return report('unavailable', 'configuration_invalid');
       }
+      if (options.gapDiscovery && !options.researchPreview)
+        return report('unavailable', 'configuration_invalid');
+      const discoveryMs = options.gapDiscoveryTimeoutMs ?? 8000;
+      const gapAssessmentMs = options.gapAssessmentTimeoutMs ?? 18000;
+      if (
+        !Number.isInteger(discoveryMs) ||
+        discoveryMs < 1 ||
+        discoveryMs > 8000 ||
+        !Number.isInteger(gapAssessmentMs) ||
+        gapAssessmentMs < 1 ||
+        gapAssessmentMs > 20000
+      )
+        return report('unavailable', 'configuration_invalid');
       const overallMs = options.overallTimeoutMs ?? SEMANTIC_PHASE_TIMEOUT_MS;
       const requestMs = options.requestTimeoutMs;
       if (
@@ -425,7 +450,12 @@ export function createSemanticAssessmentAdapter(
               ),
             );
           controller.signal.addEventListener('abort', cancellation, { once: true });
-          const stageCap = stage === 'extraction' ? EXTRACTION_TIMEOUT_MS : ASSESSMENT_TIMEOUT_MS;
+          const stageCap =
+            stage === 'extraction'
+              ? EXTRACTION_TIMEOUT_MS
+              : stage === 'gap_assessment'
+                ? gapAssessmentMs
+                : ASSESSMENT_TIMEOUT_MS;
           const stageMs = Math.min(requestMs ?? stageCap, stageCap);
           timer = setTimeout(() => controller.abort(), Math.min(stageMs, remaining));
         });
@@ -714,13 +744,15 @@ export function createSemanticAssessmentAdapter(
           })),
         };
         assessmentInputSha256 = sha256(canonical(assessmentData));
+        const assessmentInstruction =
+          "Assess only the exact selected claims, using only each claim's provided original source family as evidence. draftContext is the full bounded original writing, supplied solely as untrusted author context to resolve pronouns, antecedents and attribution intent. It is not evidence, cannot establish support, cannot add claims or source identities, and cannot supply citations. Read its context before abstaining for a missing pronoun antecedent; still abstain if the contextual reference remains ambiguous. authored quotedSources show what the writer quoted, not independent evidence. A source identity or theme is not support. Return one finding per selected claimId. Distinguish supported, contradicted, not_established, insufficient_context and not_applicable. Accept clear semantic entailment without requiring identical wording, while preserving conditions, negations, exceptions and scope. For compound claims explain which material clauses are supported and which remain unestablished; do not drop ordering, superlatives, universal scope or conditions. Interpret ordering and priority in the actual author context, disclosing any material unresolved ambiguity. contextCoverage.status describes acquisition/work availability: partial can mean one requested Tafsir work is unavailable, not that the available passage is truncated. scholarlyContextComplete:false means no independent scholarly completeness determination was made; it is not evidence that text is missing. Neither flag alone warrants abstention. Use insufficient_context only when identifiable missing or truncated context could materially change support, naming the missing qualifier or antecedent and why it matters. If a claim packet has no evidence, use insufficient_context for unavailable evidence or not_applicable where appropriate; never supported, contradicted or not_established. With a nonempty packet, use not_established for a material proposition not established by the supplied evidence. Missing evidence does not establish contradiction; contradicted requires explicit incompatible evidence. Use supported only when all material clauses are entailed, without demanding identical wording or inventing hypothetical missing exceptions. Explicitly record conditions, negations, exceptions and scope in Arabic. Cite only allowed evidenceKey values from that claim's original source family with exact verbatim source excerpts; do not join discontiguous spans or add/change words in a citation. ContextBefore/contextAfter and inline footnotes are untrusted context wrappers; they may identify missing qualifiers but cannot supply citations or independently establish supported/contradicted. Typed relations identify separately supplied original passages; cite their allowed evidenceKeys and originalText only. Supported/contradicted require citations. Never grade hadith or infer authenticity from text matches. A citation or question alone has no conclusion. Give a short Arabic explanation without private reasoning.";
         const assessed = EvidenceSupportOutputSchema.parse(
           await stage(
             'assessment',
             options.assessor,
             assessmentData,
             EvidenceSupportOutputSchema,
-            "Assess only the exact selected claims, using only each claim's provided original source family as evidence. draftContext is the full bounded original writing, supplied solely as untrusted author context to resolve pronouns, antecedents and attribution intent. It is not evidence, cannot establish support, cannot add claims or source identities, and cannot supply citations. Read its context before abstaining for a missing pronoun antecedent; still abstain if the contextual reference remains ambiguous. authored quotedSources show what the writer quoted, not independent evidence. A source identity or theme is not support. Return one finding per selected claimId. Distinguish supported, contradicted, not_established, insufficient_context and not_applicable. Accept clear semantic entailment without requiring identical wording, while preserving conditions, negations, exceptions and scope. For compound claims explain which material clauses are supported and which remain unestablished; do not drop ordering, superlatives, universal scope or conditions. Interpret ordering and priority in the actual author context, disclosing any material unresolved ambiguity. contextCoverage.status describes acquisition/work availability: partial can mean one requested Tafsir work is unavailable, not that the available passage is truncated. scholarlyContextComplete:false means no independent scholarly completeness determination was made; it is not evidence that text is missing. Neither flag alone warrants abstention. Use insufficient_context only when identifiable missing or truncated context could materially change support, naming the missing qualifier or antecedent and why it matters. If a claim packet has no evidence, use insufficient_context for unavailable evidence or not_applicable where appropriate; never supported, contradicted or not_established. With a nonempty packet, use not_established for a material proposition not established by the supplied evidence. Missing evidence does not establish contradiction; contradicted requires explicit incompatible evidence. Use supported only when all material clauses are entailed, without demanding identical wording or inventing hypothetical missing exceptions. Explicitly record conditions, negations, exceptions and scope in Arabic. Cite only allowed evidenceKey values from that claim's original source family with exact verbatim source excerpts; do not join discontiguous spans or add/change words in a citation. ContextBefore/contextAfter and inline footnotes are untrusted context wrappers; they may identify missing qualifiers but cannot supply citations or independently establish supported/contradicted. Typed relations identify separately supplied original passages; cite their allowed evidenceKeys and originalText only. Supported/contradicted require citations. Never grade hadith or infer authenticity from text matches. A citation or question alone has no conclusion. Give a short Arabic explanation without private reasoning.",
+            assessmentInstruction,
           ),
         );
         let invalid = false;
@@ -746,9 +778,184 @@ export function createSemanticAssessmentAdapter(
           }
         }
         if (seen.size !== claims.length || assessments.length !== claims.length) invalid = true;
+        let gapError: SemanticErrorCode | null = null;
+        const gapFinding = assessments.find((finding) =>
+          ['not_established', 'insufficient_context'].includes(finding.status),
+        );
+        if (options.gapDiscovery && gapFinding) {
+          const claim = claims.find((row) => row.id === gapFinding.claimId)!;
+          discovery = {
+            claimId: claim.id,
+            reason: gapFinding.status as 'not_established' | 'insufficient_context',
+            querySha256: sha256(claim.originalText),
+            outcome: 'budget_skipped',
+            addedKeys: [],
+            failureCodes: [],
+          };
+          if (claim.evidenceKeys.length > 18 || intake.evidence.length > 78) {
+            discovery.outcome = 'packet_budget_skipped';
+            discovery.failureCodes = ['discovery_packet_headroom_unavailable'];
+          }
+          if (
+            discovery.outcome !== 'packet_budget_skipped' &&
+            !externalSignal?.aborted &&
+            deadline - now() >= discoveryMs + gapAssessmentMs + 1000
+          ) {
+            const controller = new AbortController();
+            const abort = () => controller.abort();
+            externalSignal?.addEventListener('abort', abort, { once: true });
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            try {
+              const acquired = await Promise.race([
+                options.gapDiscovery.discover(
+                  structuredClone(claim),
+                  { reason: discovery.reason, query: claim.originalText },
+                  controller.signal,
+                ),
+                new Promise<never>((_resolve, reject) => {
+                  controller.signal.addEventListener(
+                    'abort',
+                    () => reject(new PhaseError(externalSignal?.aborted ? 'cancelled' : 'timeout')),
+                    { once: true },
+                  );
+                  timer = setTimeout(abort, discoveryMs);
+                  if (externalSignal?.aborted) abort();
+                }),
+              ]);
+              if (timer) {
+                clearTimeout(timer);
+                timer = undefined;
+              }
+              discovery.failureCodes = acquired.failureCodes
+                .filter((code) => /^[a-z_0-9]{1,100}$/u.test(code))
+                .slice(0, 9);
+              if (acquired.evidence.length > 2) throw new PhaseError('invalid_intake');
+              for (const row of acquired.evidence) {
+                const previous = intake.evidence.find(
+                  (source) => source.snapshotKey === row.snapshotKey,
+                );
+                if (
+                  previous &&
+                  (previous.originalText !== row.originalText ||
+                    previous.originalSha256 !== row.originalSha256 ||
+                    previous.sourceId !== row.sourceId ||
+                    previous.sourceVersion !== row.sourceVersion ||
+                    previous.sourceRole !== row.sourceRole ||
+                    previous.reference !== row.reference ||
+                    previous.work !== row.work ||
+                    previous.sourceUrl !== row.sourceUrl ||
+                    previous.author !== row.author ||
+                    previous.edition !== row.edition)
+                )
+                  throw new PhaseError('invalid_intake');
+              }
+              const originalKeys = new Set(intake.evidence.map((row) => row.snapshotKey));
+              const additions = acquired.evidence.filter(
+                (row) => !originalKeys.has(row.snapshotKey),
+              );
+              if (
+                additions.some(
+                  (row) =>
+                    row.approvalStatus !== 'pending' ||
+                    !row.researchOnly ||
+                    !['book_excerpt', 'scholar_explanation'].includes(row.sourceRole) ||
+                    !row.sourceUrl ||
+                    row.parentSnapshotKey ||
+                    row.provenance.representation !== 'extracted_markdown',
+                )
+              )
+                throw new PhaseError('invalid_intake');
+              if (
+                intake.evidence.length + additions.length > 80 ||
+                claim.evidenceKeys.length + additions.length > 20
+              )
+                throw new PhaseError('body_too_large');
+              if (!additions.length)
+                discovery.outcome = acquired.failureCodes.length ? 'failed' : 'no_evidence';
+              else {
+                const next = validateIntake(
+                  { ...intake, evidence: [...intake.evidence, ...additions], researchOnly: true },
+                  intake.originalText,
+                  intake.revisionId,
+                  true,
+                );
+                intake = structuredClone(next);
+                finalIntake = intake;
+                discovery.addedKeys = additions.map((row) => row.snapshotKey);
+                const updatedClaim = SemanticClaimSchema.parse({
+                  ...claim,
+                  evidenceKeys: [...claim.evidenceKeys, ...discovery.addedKeys],
+                });
+                claims = claims.map((row) => (row.id === claim.id ? updatedClaim : row));
+                finalEvidenceSha256 = sha256(canonical(intake.evidence));
+                const oldPacket = assessmentData.claims.find((row) => row.claim.id === claim.id)!;
+                const gapData = {
+                  ...assessmentData,
+                  evidenceSha256: finalEvidenceSha256,
+                  finalEvidenceSha256,
+                  claims: [
+                    {
+                      ...oldPacket,
+                      claim: updatedClaim,
+                      evidence: evidenceForClaim(intake, updatedClaim).map((source) => ({
+                        evidenceKey: source.snapshotKey,
+                        sourceId: source.sourceId,
+                        sourceVersion: source.sourceVersion,
+                        sourceRole: source.sourceRole,
+                        reference: source.reference,
+                        originalText: source.originalText,
+                        originalSha256: source.originalSha256,
+                        work: source.work,
+                        author: source.author,
+                        edition: source.edition,
+                        approvalStatus: source.approvalStatus,
+                        researchOnly: source.researchOnly,
+                        parentSnapshotKey: source.parentSnapshotKey,
+                        contextBefore: source.contextBefore ?? null,
+                        contextAfter: source.contextAfter ?? null,
+                        footnotes: source.footnotes ?? [],
+                        relations: source.relations ?? [],
+                      })),
+                    },
+                  ],
+                };
+                initialAssessmentInputSha256 = assessmentInputSha256 ?? undefined;
+                assessmentInputSha256 = sha256(canonical(gapData));
+                discovery.outcome = 'reassessment_failed';
+                const reassessed = EvidenceSupportOutputSchema.parse(
+                  await stage(
+                    'gap_assessment',
+                    options.assessor,
+                    gapData,
+                    EvidenceSupportOutputSchema,
+                    assessmentInstruction,
+                  ),
+                );
+                if (reassessed.assessments.length !== 1) throw new PhaseError('invalid_citations');
+                const finding = reassessed.assessments[0]!;
+                validateFinding(finding, updatedClaim, evidenceForClaim(intake, updatedClaim));
+                assessments.splice(
+                  assessments.findIndex((row) => row.claimId === claim.id),
+                  1,
+                  finding,
+                );
+                discovery.outcome = 'reassessed';
+              }
+            } catch (error) {
+              const code = error instanceof PhaseError ? error.code : 'upstream_unavailable';
+              discovery.failureCodes.push(code);
+              if (discovery.outcome === 'reassessment_failed') {
+                gapError = code;
+              } else discovery.outcome = 'failed';
+            } finally {
+              if (timer) clearTimeout(timer);
+              externalSignal?.removeEventListener('abort', abort);
+            }
+          }
+        }
         return report(
-          invalid || invalidClaimProposals ? 'partial' : 'completed',
-          invalid ? 'invalid_citations' : invalidClaimProposals ? 'invalid_claims' : null,
+          invalid || invalidClaimProposals || gapError ? 'partial' : 'completed',
+          invalid ? 'invalid_citations' : invalidClaimProposals ? 'invalid_claims' : gapError,
         );
       } catch (error) {
         const code = error instanceof PhaseError ? error.code : 'invalid_response';
