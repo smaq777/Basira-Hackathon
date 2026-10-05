@@ -114,7 +114,17 @@ outcomes and a configurable bounded budget are separate [issue #17](https://gith
 `POST_REPLAY_FINAL_UNIVERSE_V1.json` retain the results. Final read-only actual-reader
 verification found the same 86-passage corpus, 16 byte/provenance-identical originals,
 four indexed parents, eight metadata windows and eight vectors. Neither the active
-research parent nor production was modified. The isolated UI preview remains pending.
+research parent nor production was modified by the index experiment.
+
+The isolated integrated UI preview on port 8772 produced fresh persisted report
+`0bb5b9ff-fbbd-4854-84f5-ec86b882dfce`. Luna extraction and Sol assessment completed
+against the pinned 86-passage Neon corpus; the public obedience claim was supported
+with Muyassar 31:15 and preserved conditions/negation. The durable trace contained
+no cache-parent candidates or preferred cache windows. This verifies real
+UI/model/corpus activation, but does not verify passage-window delivery through the
+UI. That gate remains open alongside the retained cache-delivery investigation.
+The report JSON and screenshot are retained outside the repo; credentials are not
+included in this evidence.
 
 Some tail windows contain navigation fragments and can start inside a URL without
 `boundaryTruncated`; all eight are exact windows, not necessarily substantive article
