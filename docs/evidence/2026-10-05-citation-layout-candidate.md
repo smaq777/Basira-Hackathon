@@ -34,8 +34,8 @@ outage/oversized output/timeout, stale attempt and evidence, idempotency, expiry
 bounded retries and keyed cancellation. The UI workflow checks copy is absent
 while pending and requests fresh server validation before clipboard access; it
 also tests unmount before a late create. These are software-contract checks, not
-measured editorial quality or semantic accuracy. No live provider generation,
-deployment or production migration was performed for this evidence.
+measured editorial quality or semantic accuracy. No deployment or production
+migration was performed.
 
 Lead review repaired three boundary defects: a partial match cannot attribute
 unmatched text inside the same quotation wrapper; delayed copy responses cannot
@@ -43,11 +43,37 @@ write to the clipboard after navigation or a report-binding change; a length
 budget notice remains within the 85-item candidate schema. Targeted regression
 checks cover each defect, including faithfully quoted partial references.
 An independent Sol Medium pass repaired stale create/cancel response races after
-report replacement or a new generation. Final `npm run check` passed: 40 test
+report replacement or a new generation. Final `npm run check` passed: 37 test
 files / 533 source tests, typechecking, documentation, policy, formatting and build.
 The test command excludes compiled `dist` artifacts: the earlier 40-file / 569
 run included 36 duplicate compiled contract tests; the source-only run has 37 files.
 The existing Vite bundle-size warning remains advisory.
+
+## Live integration follow-up
+
+The combined repository app passed 39 files / 550 source tests and required
+checks in an isolated checkout. A fresh public Amanah/justice draft was reviewed
+through the UI: one compound author span was provisionally supported, a faithful
+partial Ayah stayed in the matching group, the separate proposal preserved all
+original characters, and clipboard contents matched the displayed candidate.
+The first citation prompt chose only a paragraph break. A quotation-only API
+trial took 6.199 seconds for review and 3.739 seconds for generation; it returned
+a validated no-change proposal despite an eligible recorded reference. Both
+outcomes remain evidence of a usefulness gap, not successful citation addition.
+
+Prompt `citation-layout-v1.1` explicitly distinguishes pending research attribution
+from approval and specifies the citation operation shape. Three frozen-packet
+OpenRouter repeats returned HTTP 200, selected the same actual Quran reference
+and passed deterministic validation (3.160, 1.689 and 1.860 seconds). All original
+characters remained intact and the pending-source qualifier was added. This
+small repeated case does not establish mixed-topic usefulness or semantic accuracy.
+The UI now states when a proposal adds only paragraphs or makes no change, and
+does not claim new documentation when none was added.
+
+Raw public-text receipts and screenshot are retained locally in the foundation
+experiment `integration-lead-v1`; no credential or ownership cookie is saved.
+The quotation-only assessment classification was separately repaired under #11;
+it must not be reported as model or API failure when no author claim exists.
 
 Durable candidates and substantive wording changes remain gated pending
 independent revalidation and human adjudication. See the
