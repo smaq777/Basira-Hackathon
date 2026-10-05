@@ -1,5 +1,13 @@
 # Current delivery status
 
+**Staging connection diagnostic, 5 October:** [Issue #69 evidence](evidence/2026-10-05-staging-api-routing.md)
+verified that the reported Vercel frontend returns 404 for API routes while the
+Railway staging API is reachable at migration 0005 and does not advertise
+`foundationReview`. A separately selected staging proxy configuration and clearer
+client readiness/errors are implemented for review. Deployment and PR #59's
+connected source-report readiness remain separate gates; follow the
+[staging runbook](operations/STAGING_CONNECTION.md).
+
 Baseline date: **3 October 2026**. See live issues and PR checks for subsequent progress.
 
 The fresh repository baseline contains the completed foundation and architecture work. Current validation is recorded by this repository's GitHub Actions runs. [Issue #27](https://github.com/smaq777/Basira-Hackathon/issues/27) tracks the judge-ready repository and deployment handoff.

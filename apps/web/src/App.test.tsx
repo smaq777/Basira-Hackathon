@@ -47,6 +47,11 @@ describe('Basirah web flow', () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(
+        new Response(JSON.stringify({ guestDocuments: true }), {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
         new Response(JSON.stringify({ documentId: 'doc', revisionId: 'rev' }), {
           status: 201,
           headers: { 'Content-Type': 'application/json' },
@@ -68,7 +73,7 @@ describe('Basirah web flow', () => {
     expect(
       await screen.findByRole('heading', { name: 'راجع النتيجة قبل اعتماد التعديل' }),
     ).not.toBeNull();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it('aborts the in-flight analysis request when the user leaves the analysis route', async () => {
