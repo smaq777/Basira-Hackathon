@@ -170,6 +170,13 @@ button:disabled {
   justify-self: end;
 }
 
+.public-header-actions {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .brand {
   border: 0;
   background: transparent;
@@ -1988,6 +1995,19 @@ mark {
 .ticket-footer p {
   color: var(--muted);
   margin-inline-end: auto;
+}
+
+.ticket-followup-form {
+  width: min(100%, 620px);
+  margin: 26px auto 0;
+  text-align: start;
+}
+
+.ticket-followup-result {
+  margin-top: 28px;
+  display: grid;
+  gap: 18px;
+  text-align: start;
 }
 
 .reviewer-auth-page {
