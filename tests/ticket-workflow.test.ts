@@ -26,7 +26,7 @@ const servers: Server[] = [];
 const database = {
   readiness: vi
     .fn()
-    .mockResolvedValue({ ready: true, migrationVersion: '0013_secure_review_tickets' }),
+    .mockResolvedValue({ ready: true, migrationVersion: '0014_direct_review_ticket_intake' }),
   purgeExpiredGuestSessions: vi.fn(),
   createGuestSession: vi.fn(),
   deleteGuestSession: vi.fn(),
@@ -42,6 +42,13 @@ const database = {
 function storeFixture() {
   return {
     create: vi.fn<TicketStore['create']>().mockResolvedValue({
+      ticketCode: code,
+      status: 'pending',
+      hasEmail: false,
+      notifyOptIn: false,
+      createdAt: '2026-10-05T12:00:00.000Z',
+    }),
+    createForRevision: vi.fn<TicketStore['createForRevision']>().mockResolvedValue({
       ticketCode: code,
       status: 'pending',
       hasEmail: false,
@@ -149,6 +156,47 @@ it('creates a ticket only for the owned guest session and stores encrypted conta
   expect(call?.[4]).toBeInstanceOf(Buffer);
   expect(call?.[5]).toBeInstanceOf(Buffer);
   expect(call?.[6]).toBe(true);
+});
+
+it('creates a direct human-review ticket for an owned revision without an automated report', async () => {
+  const store = storeFixture();
+  const { base } = await serve(store);
+  const response = await fetch(`${base}/api/v1/revisions/${reviewId}/tickets`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: '{}',
+  });
+  expect(response.status).toBe(201);
+  expect(await response.json()).toMatchObject({ ticketCode: code, status: 'pending' });
+  expect(store.createForRevision).toHaveBeenCalledWith(
+    sessionId,
+    secret,
+    reviewId,
+    expect.stringMatching(/^BR-[A-Z0-9]{12}$/u),
+    null,
+    null,
+    false,
+  );
+});
+
+it('updates ticket contact through the refined contact schema', async () => {
+  const store = storeFixture();
+  const { base } = await serve(store);
+  const response = await fetch(`${base}/api/v1/tickets/${code}/contact`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ email: 'OWNER@Example.com', name: 'صالح', notify: true }),
+  });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ ticketCode: code, hasEmail: true });
+  expect(store.updateContact).toHaveBeenCalledWith(
+    sessionId,
+    secret,
+    code,
+    expect.any(Buffer),
+    expect.any(Buffer),
+    true,
+  );
 });
 
 it('keeps wrong ticket-email pairs indistinguishable and rate-limits enumeration', async () => {

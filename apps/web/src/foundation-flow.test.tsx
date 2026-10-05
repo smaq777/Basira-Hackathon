@@ -241,7 +241,7 @@ describe('owned foundation review web flow', () => {
     expect(screen.queryByText('اكتملت المقارنة')).toBeNull();
   });
 
-  it('keeps unavailable connected review explicit while preserving the draft', async () => {
+  it('keeps unavailable connected review explicit and preserves a direct-review draft', async () => {
     const fetchMock = mockReviewApi({ capability: false });
     render(<App />);
     fireEvent.change(screen.getByRole('textbox', { name: 'النص المراد مراجعته' }), {
@@ -249,7 +249,8 @@ describe('owned foundation review web flow', () => {
     });
     await userEvent.click(screen.getByRole('button', { name: 'ابدأ المراجعة' }));
     expect((await screen.findByRole('alert')).textContent).toContain('المراجعة المتصلة غير مفعّلة');
-    expect(fetchMock.mock.calls.some(([path]) => path === '/api/v1/documents')).toBe(false);
+    expect(fetchMock.mock.calls.some(([path]) => path === '/api/v1/documents')).toBe(true);
+    expect(screen.getByRole('button', { name: /أحتاج مراجعة بشرية/ })).not.toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'إلغاء والعودة للنص' }));
     expect(
       (screen.getByRole('textbox', { name: 'النص المراد مراجعته' }) as HTMLTextAreaElement).value,

@@ -1,9 +1,14 @@
 # Database migrations
 
-Migration `0013` adds separate insert-only source-content views and contiguous body
-windows after `0012`; original/v1 records remain unchanged. It adds no vectors or
-roles. The content-view flag defaults off and requires isolated validation. See
-[conservative cleaning evidence](../docs/evidence/2026-10-05-source-content-views.md).
+Migration `0015` adds separate insert-only source-content views and contiguous body
+windows after owner ticket migrations `0013`/`0014`; original/v1 records remain unchanged.
+It adds no vectors or roles. The content-view flag defaults off and requires isolated validation.
+See [conservative cleaning evidence](../docs/evidence/2026-10-05-source-content-views.md).
+
+Migration `0014` lets an owned current revision enter the same secure human-review
+queue when automated analysis is unavailable. It keeps report-backed tickets
+compatible, exposes the original submission to authorized reviewers, and does
+not weaken the ticket-code plus email lookup requirement.
 
 Migration `0011` adds insert-only retained-page metadata and pinned vectors with
 exact UTF16/codepoint parent bindings. It requires `0010` and isolated fresh/copy
@@ -65,8 +70,11 @@ from immutable source originals, allowing the same snapshot and compatible
 embedding configuration to be reused in another corpus version. Hosted claim
 retrieval requires both forward migrations. See the [persistent corpus evidence](../docs/evidence/2026-10-05-hosted-source-corpus.md).
 
-The cleaning experiment at `0c04dcf` applied an experimental
-`0013_source_content_views` on a separate child and retained a functional `42702`
-failure. That child and checksum stay unchanged. Current development owns
-`0013_secure_review_tickets`; cleaning uses deployment `0014_source_content_views`
-with the corrected range alias and requires fresh isolated validation.
+The failed experiment at `0c04dcf` applied `0013_source_content_views` and retained
+SQL `42702`. Corrected source `ae11c0d` applied cleaning `0014_source_content_views`
+on a second isolated child; role/window probes, eight selected public classifier
+calls and first-repeat sidecar readback passed. Both experimental checksums remain
+unchanged. Owner development now owns `0014_direct_review_ticket_intake`, so the
+unapplied deployment cleaning migration is `0015_source_content_views`. This
+renumbering changes only its lock and metadata labels; shared deployment remains
+owner-controlled and experimental migration receipts are not deployment parity.

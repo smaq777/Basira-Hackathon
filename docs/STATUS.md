@@ -2,7 +2,7 @@
 
 ## Latest development evidence — 5 October
 
-**Conservative source cleaning (#8):** Default-off joint classification labels exact original blocks and derives lexical content views only when model labels and narrow structural rules agree. Originals and v1 vectors remain unchanged. Offline checks pass. Actual isolated view-binding probes passed, but first content-window insertion failed with SQL `42702`; the failed child and experimental migration remain preserved. Deployment migration `0014` corrects the alias and awaits new-child validation. Paid classifier outcomes remain pending. See [scope and retained failure](evidence/2026-10-05-source-content-views.md).
+**Conservative source cleaning (#8):** Default-off joint classification labels exact original blocks and derives lexical content views only when model labels and narrow structural rules agree. Originals and v1 vectors remain unchanged. The SQL `42702` failed child is preserved. Corrected isolated validation passed fourteen role/window probes, eight selected public joint-classifier calls and first-repeat-only readback of four views/eight windows. Actual reader enrichment delivered six verified hints; parent 8880's topic varied across repeats. Owner ticket migration `0014` is preserved; unapplied deployment cleaning uses `0015`. Full UI delivery, deployment-chain parity, source approval and general model reliability remain unclaimed. See [scope and retained evidence](evidence/2026-10-05-source-content-views.md).
 
 **Passage index (#8, related #11):** A separate default-off implementation adds
 offline bounded vector backfill and per-claim verified retained-page delivery.

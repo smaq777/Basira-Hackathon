@@ -274,7 +274,7 @@ export function createApp(options: AppOptions = {}) {
       reviewTickets:
         Boolean(options.tickets) &&
         state.ready &&
-        Number(state.migrationVersion?.slice(0, 4)) >= 13,
+        Number(state.migrationVersion?.slice(0, 4)) >= 14,
     });
   });
   app.post('/api/v1/preflight', guestMutationRateLimit, (req, res, next) => {
@@ -537,6 +537,38 @@ export function createApp(options: AppOptions = {}) {
       return next(error);
     }
   });
+  app.post(
+    '/api/v1/revisions/:revisionId/tickets',
+    guestMutationRateLimit,
+    async (req, res, next) => {
+      try {
+        if (!options.tickets) return res.status(503).json({ code: 'TICKETS_UNAVAILABLE' });
+        const credentials = guestCredentials(req);
+        if (!credentials) return res.status(401).json({ code: 'INVALID_OR_EXPIRED_SESSION' });
+        const { revisionId } = RevisionParams.parse(req.params);
+        const contact = TicketContactInput.parse(req.body);
+        const encrypted = contact.email
+          ? encryptTicketContact(
+              { email: contact.email, name: contact.name },
+              options.tickets.dataKey,
+            )
+          : null;
+        const receipt = await options.tickets.store.createForRevision(
+          credentials.publicId,
+          credentials.ownershipSecret,
+          revisionId,
+          ticketCode(),
+          contact.email ? emailLookupHash(contact.email, options.tickets.lookupPepper) : null,
+          encrypted,
+          contact.notify,
+        );
+        if (!receipt) return res.status(404).json({ code: 'REVISION_NOT_READY_FOR_TICKET' });
+        return res.status(201).json(receipt);
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
   app.patch(
     '/api/v1/tickets/:ticketCode/contact',
     guestMutationRateLimit,
@@ -546,7 +578,7 @@ export function createApp(options: AppOptions = {}) {
         const credentials = guestCredentials(req);
         if (!credentials) return res.status(401).json({ code: 'INVALID_OR_EXPIRED_SESSION' });
         const { ticketCode: code } = ReviewerTicketParams.parse(req.params);
-        const contact = TicketContactInput.extend({ email: EmailAddress }).parse(req.body);
+        const contact = TicketContactInput.safeExtend({ email: EmailAddress }).parse(req.body);
         const receipt = await options.tickets.store.updateContact(
           credentials.publicId,
           credentials.ownershipSecret,

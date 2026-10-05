@@ -44,6 +44,7 @@ import {
   analysisErrorMessage,
   awaitFoundationReport,
   cancelOwnedReview,
+  createRevisionTicket,
   createReviewTicket,
   createOwnedReview,
   getOwnedReview,
@@ -869,11 +870,13 @@ function AnalysisScreen({
   text,
   onCancel,
   onComplete,
+  onTicket,
   initialReviewId,
 }: {
   text: string;
   onCancel: () => void;
   onComplete: (report: FoundationReport) => void;
+  onTicket: (revisionId: string) => void;
   initialReviewId: string | null;
 }) {
   const phases = [
@@ -886,6 +889,7 @@ function AnalysisScreen({
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState('');
   const [cancelling, setCancelling] = useState(false);
+  const [fallbackRevisionId, setFallbackRevisionId] = useState<string | null>(null);
   const runRef = useRef<OwnedReview | null>(null);
   const pendingRunRef = useRef<Promise<OwnedReview> | null>(null);
   const receiptRef = useRef<DraftAnalysisReceipt | null>(null);
@@ -905,11 +909,13 @@ function AnalysisScreen({
     const execute = async () => {
       let run = runRef.current;
       if (!run && resumeRef.current) run = await getOwnedReview(resumeRef.current);
+      if (run) setFallbackRevisionId(run.revisionId);
       if (!run) {
-        await requireFoundationReview();
-        if (cancelledRef.current || !active) return;
         if (!receiptRef.current)
           receiptRef.current = await persistDraftForAnalysis(text, controller.signal);
+        if (cancelledRef.current || !active) return;
+        setFallbackRevisionId(receiptRef.current.revisionId);
+        await requireFoundationReview();
         if (cancelledRef.current || !active) return;
         setPhase(1);
         pendingRunRef.current = createOwnedReview(
@@ -1028,6 +1034,14 @@ function AnalysisScreen({
             >
               إعادة المحاولة
             </button>
+            {fallbackRevisionId && (
+              <button
+                className="button button--primary"
+                onClick={() => onTicket(fallbackRevisionId)}
+              >
+                <UsersThree size={20} /> أحتاج مراجعة بشرية
+              </button>
+            )}
           </div>
         )}
         <div className="analysis-footer">
@@ -1652,20 +1666,28 @@ function UnresolvedScreen({ onHome, onTicket }: { onHome: () => void; onTicket: 
   );
 }
 
-function TicketScreen({ onHome, reviewId }: { onHome: () => void; reviewId: string | null }) {
+function TicketScreen({
+  onHome,
+  reviewId,
+  revisionId,
+}: {
+  onHome: () => void;
+  reviewId: string | null;
+  revisionId: string | null;
+}) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [receipt, setReceipt] = useState<TicketReceipt | null>(null);
-  const [loading, setLoading] = useState(Boolean(reviewId));
+  const [loading, setLoading] = useState(Boolean(reviewId || revisionId));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!reviewId) return;
+    if (!reviewId && !revisionId) return;
     let active = true;
     setLoading(true);
-    void createReviewTicket(reviewId)
+    void (reviewId ? createReviewTicket(reviewId) : createRevisionTicket(revisionId!))
       .then((created) => {
         if (active) setReceipt(created);
       })
@@ -1678,7 +1700,7 @@ function TicketScreen({ onHome, reviewId }: { onHome: () => void; reviewId: stri
     return () => {
       active = false;
     };
-  }, [reviewId]);
+  }, [reviewId, revisionId]);
 
   const saveContact = async () => {
     if (!receipt || !email || saving) return;
@@ -1705,7 +1727,7 @@ function TicketScreen({ onHome, reviewId }: { onHome: () => void; reviewId: stri
       {saved && <Toast message="تم حفظ بيانات المتابعة لهذه التذكرة." />}
       <main className="ticket-main page-shell page-enter">
         {loading && <p role="status">جار إنشاء تذكرة مرتبطة بتقريرك…</p>}
-        {!reviewId && (
+        {!reviewId && !revisionId && (
           <div className="analysis-error" role="alert">
             افتح التذكرة من زر «أحتاج مراجعة بشرية» داخل تقرير محفوظ.
           </div>
@@ -1871,6 +1893,12 @@ function FollowUpScreen({ onHome }: { onHome: () => void }) {
               {result.status === 'published' ? 'اكتملت المراجعة' : 'قيد المراجعة البشرية'}
             </StatusPill>
             {result.report && <FoundationReportContent report={result.report} />}
+            {!result.report && result.submission && (
+              <article className="reviewer-panel">
+                <h2>النص المرسل للمراجعة</h2>
+                <p>{result.submission.originalText}</p>
+              </article>
+            )}
             {result.response && (
               <article className="reviewer-panel">
                 <h2>رد المراجع</h2>
@@ -2362,10 +2390,17 @@ function ReviewerDetail({
               </div>
               <div className="submitted-copy">
                 <span>النص المرسل</span>
-                <p>{ticket.report.intake.originalText}</p>
+                <p>{ticket.submission.originalText}</p>
               </div>
             </article>
-            <FoundationReportContent report={ticket.report} />
+            {ticket.report ? (
+              <FoundationReportContent report={ticket.report} />
+            ) : (
+              <article className="reviewer-panel">
+                <h2>أُحيل مباشرة للمراجع</h2>
+                <p>لم يكتمل تقرير آلي لهذا النص؛ راجع النص والمصدر يدويًا قبل نشر الرد.</p>
+              </article>
+            )}
           </section>
           <aside className="decision-panel reviewer-panel">
             <div className="panel-heading">
@@ -2495,6 +2530,9 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
   const [reviewText, setReviewText] = useState('');
   const [foundationReport, setFoundationReport] = useState<FoundationReport | null>(null);
   const reviewId = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('reviewId');
+  const revisionId = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get(
+    'revisionId',
+  );
   const selectedTicketCode = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get(
     'ticketCode',
   );
@@ -2548,6 +2586,9 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
         initialReviewId={reviewId}
         onCancel={() => navigate('home')}
         onComplete={completeAnalysis}
+        onTicket={(ownedRevisionId) => {
+          window.location.hash = `${pathFor('ticket')}?revisionId=${encodeURIComponent(ownedRevisionId)}`;
+        }}
       />
     );
   if (route === 'result')
@@ -2572,7 +2613,8 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
     );
   if (route === 'unresolved')
     return <UnresolvedScreen onHome={startNewReview} onTicket={() => navigate('ticket')} />;
-  if (route === 'ticket') return <TicketScreen onHome={startNewReview} reviewId={reviewId} />;
+  if (route === 'ticket')
+    return <TicketScreen onHome={startNewReview} reviewId={reviewId} revisionId={revisionId} />;
   if (route === 'follow-up') return <FollowUpScreen onHome={startNewReview} />;
   return (
     <HomeScreen

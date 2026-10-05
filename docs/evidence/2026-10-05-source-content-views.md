@@ -2,9 +2,9 @@
 
 This default-off follow-up was frozen at `0c04dcf` on local integration base
 `7b08054`. The owner has since merged #59, #70–#78 and #80 into development
-`0b13a8c`. This corrective integration preserves those accepted changes, including
-secure-review-ticket migration `0013`, and assigns cleaning deployment migration
-`0014`. Local tests are separate from deployment, source approval and scholarly
+`0b13a8c`, then #88/#89 at `661fef8`. This corrective integration preserves those
+accepted changes, including ticket migrations `0013`/`0014`, and assigns cleaning
+deployment migration `0015`. Local tests are separate from deployment, source approval and scholarly
 acceptance.
 
 ## Retained isolated SQL failure and forward validation
@@ -26,11 +26,14 @@ operator and paid classifier stages did not run.
 Applied experimental `0013` and its checksum remain preserved in the failed child,
 commit `0c04dcf` and exclusive external receipts under
 `source-content-cleaning-2026-10-05`. They are not deployment history for the new
-integration. Deployment `0014` uses an explicit `retained_range.value` alias. A new
-isolated child from the original passage parent must verify secure-ticket `0013`
-dependencies before applying that accepted migration followed by cleaning `0014`.
-The complete actual SQL/operator probe must pass before paid execution. No repair
-has been applied to the failed child and no paid calls have occurred.
+integration. Corrected frozen source `ae11c0d` used an explicit
+`retained_range.value` alias. A new isolated child, `br-little-pond-b2y5usie`, verified
+secure-ticket `0013` dependencies and applied it followed by experimental cleaning
+`0014`. Fourteen actual-role/window rollback probes passed. The failed child remains
+unchanged. Owner development subsequently assigned its direct-ticket migration
+`0014`; the unapplied deployment cleaning file is now `0015`, changing only its
+advisory-lock and migration-metadata labels. The successful experimental `0014`
+checksum and receipts remain unchanged and do not claim exact deployment-chain parity.
 
 ## Classification and selection
 
@@ -61,7 +64,7 @@ extractor or a semantic completeness guarantee. The block limit can prevent a vi
 
 ## Separate immutable storage and exact delivery
 
-Additive migration `0014` creates insert-only public view/body-window sidecars.
+Additive deployment migration `0015` creates insert-only public view/body-window sidecars.
 Original cache text, hashes, metadata and v1 window/vector records remain unchanged.
 SQL verifies parent URL/hash/policy and Unicode range bindings. RLS hides expired or
 revoked parents; the existing cache writer can insert but cannot update/delete.
@@ -109,11 +112,23 @@ tampering, collisions and parent ranks. The full cache/corpus/claim/assessor flo
 delivers separate body windows to two claims sharing a seed; cross-claim citation
 validation still rejects the wrong span.
 
-Corrected deployment SQL/operator validation and the four-parent/two-repeat public
-joint-Luna diagnostic remain pending technical review. Planned controls freeze complete Bin Baz 8880/8881 originals,
-11647's corrective footnote and 19992's conditional discussion. All eight outcomes
-and failures will be retained; these are engineering controls, not scholarly gold or
-unseen accuracy. No active-parent, production or owning `.env` write is authorized.
+The corrected isolated SQL/operator validation passed before eight joint-Luna calls
+on complete Bin Baz 8880/8881 originals, 11647's corrective footnote and 19992's
+conditional discussion. All eight responses were valid. The two cleaned parents
+each removed eleven recognized boilerplate blocks; both control originals stayed
+complete. Removed block IDs were repeat-stable, but parent 8880's proposed topic
+varied between worship and ethics. These selected controls are not scholarly gold,
+unseen accuracy or general classification reliability.
+
+First-repeat-only admission stored four immutable views and eight exact body
+windows. Independent readback retained all sixteen original parents and all eight
+older windows/vectors. Actual reader enrichment delivered six verified hints for
+the cleaned parents, while both no-removal controls stayed identical. All protocols,
+outputs and failures remain external under `source-content-cleaning-2026-10-05`;
+no output was chosen after inspecting both repeats. This establishes isolated
+schema/operator/reader behavior, not a fresh complete UI report, improved semantic
+accuracy or acceptance of deployment `0015`. No active-parent, production or owning
+`.env` write occurred.
 
 Rollback disables `FOUNDATION_WEB_CACHE_CONTENT_VIEWS_ENABLED`; original/v1 retrieval
 remains available. Preserve applied migrations/sidecars and historical checksums.
