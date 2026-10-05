@@ -287,7 +287,7 @@ describe('v1.7 assessment wire and coverage', () => {
       if (request.response_format.json_schema.name === 'extraction') {
         const claims = data.candidates.slice(0, 5).map((candidate: { candidateId: string }) => ({
           candidateId: candidate.candidateId,
-          evidenceKeys: ['owned-source'],
+          evidenceKeys: ['E1'],
         }));
         reverse = !reverse;
         return modelResponse({ claims: reverse ? claims.reverse() : claims }, request.model);
@@ -353,9 +353,7 @@ describe('v1.7 assessment wire and coverage', () => {
       if (request.response_format.json_schema.name === 'extraction')
         return modelResponse(
           {
-            claims: [
-              { candidateId: data.candidates[0].candidateId, evidenceKeys: ['owned-source'] },
-            ],
+            claims: [{ candidateId: data.candidates[0].candidateId, evidenceKeys: ['E1'] }],
           },
           request.model,
         );

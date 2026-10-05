@@ -80,8 +80,8 @@ function options(
     assessor,
     allowedModels: [extractor.modelId, assessor.modelId, fallback.modelId],
     allowedProviders: ['owned-a', 'owned-b'],
-    // Migrate these existing transport/finding controls to the v1.7 wire contract.
-    // Dedicated inventory tests exercise selection IDs directly, without this bridge.
+    // Adapt older span-proposal fixtures to the v1.9 alias wire contract.
+    // Dedicated alias tests exercise strict wire binding without this fixture bridge.
     fetch: async (url, init) => {
       const result = await fetch(url, init);
       const { body, data } = requestData(init);
@@ -99,13 +99,14 @@ function options(
             }) => {
               if (row.candidateId) return row;
               const candidate = data.candidates.find(
-                (candidate: { segmentId: string; originalText: string }) =>
-                  candidate.segmentId === row.segmentId &&
-                  candidate.originalText.includes(row.originalText),
+                (candidate: { originalText: string }) =>
+                  row.segmentId === 'author-1' && candidate.originalText.includes(row.originalText),
               );
               return {
-                candidateId: candidate?.candidateId ?? `claim-${'0'.repeat(24)}`,
-                evidenceKeys: row.evidenceKeys,
+                candidateId: candidate?.candidateId ?? 'C9999',
+                evidenceKeys: row.evidenceKeys.map((key) =>
+                  key === 'owned-source' ? 'E1' : /^E[1-9][0-9]*$/u.test(key) ? key : 'E9999',
+                ),
               };
             },
           );
@@ -345,8 +346,8 @@ describe('bounded semantic assessment', () => {
     expect(prompt).not.toMatch(/scholar_explanation|book_excerpt/u);
     expect(result.scholarlyApproval).toBe(false);
     expect(result.trace).toMatchObject({
-      pipelineVersion: 'provisional-semantic-v1.8',
-      promptVersion: 'evidence-support-v1.8',
+      pipelineVersion: 'provisional-semantic-v1.9',
+      promptVersion: 'evidence-support-v1.9',
     });
     expect(intake).toEqual(before);
   });
@@ -847,7 +848,7 @@ describe('bounded semantic assessment', () => {
         return response(
           proposal(
             CLAIM,
-            intake.evidence.map((source) => source.snapshotKey),
+            data.evidenceManifest.map((source: { evidenceKey: string }) => source.evidenceKey),
           ),
         );
       expect(data.claims[0].evidence[0]).not.toHaveProperty('originalText');
@@ -1560,7 +1561,7 @@ it('skips paid gap acquisition visibly when canonical selection leaves fewer tha
       return response(
         proposal(
           CLAIM,
-          intake.evidence.map((row) => row.snapshotKey),
+          data.evidenceManifest.map((row: { evidenceKey: string }) => row.evidenceKey),
         ),
         body.model,
       );
@@ -1762,5 +1763,58 @@ describe('coherent retrieval phase ceiling and assessment reserve', () => {
     } finally {
       diagnostic.mockRestore();
     }
+  });
+});
+
+describe('v1.9 production alias binding diagnostics', () => {
+  it('records fixed rejection counts without unknown model identities and never retries malformed binding', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+      const { data } = requestData(init);
+      expect(data.selectionProtocol).toBe('exact-selection-alias-v1');
+      expect(data.candidates[0].candidateId).toBe('C1');
+      expect(data.candidates[0]).not.toHaveProperty('id');
+      expect(data.evidenceManifest[0].evidenceKey).toBe('E1');
+      return response({ claims: [{ candidateId: 'C999', evidenceKeys: ['E999'] }] });
+    });
+    const result = await createSemanticAssessmentAdapter(options(fetch)).assess(fixture());
+    expect(result.errorCode).toBe('invalid_claims');
+    expect(result.trace.selectionBinding).toMatchObject([
+      {
+        attempt: 'initial',
+        proposalCount: 1,
+        acceptedCount: 0,
+        rejectedCount: 1,
+        rejectionCounts: { unknown_candidate_alias: 1, unknown_evidence_alias: 1 },
+      },
+    ]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(result)).not.toMatch(/C999|E999|private-reasoning-marker/u);
+    expect(SemanticAssessmentReportSchema.safeParse(result).success).toBe(true);
+  });
+  it('records empty reconsideration separately and sends canonical claims to assessment', async () => {
+    let extractionCalls = 0;
+    const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+      const { body, data } = requestData(init);
+      if (body.response_format.json_schema.name === 'extraction') {
+        extractionCalls++;
+        return response({
+          claims: extractionCalls === 1 ? [] : [{ candidateId: 'C1', evidenceKeys: ['E1'] }],
+        });
+      }
+      expect(data.claims[0].claim.id).toMatch(/^claim-[a-f0-9]{24}$/u);
+      expect(data.claims[0].claim.evidenceKeys).toEqual(['owned-source']);
+      return response({ assessments: [finding(data.claims[0].claim.id)] }, body.model);
+    });
+    const result = await createSemanticAssessmentAdapter(options(fetch)).assess(fixture());
+    expect(result.errorCode).toBe(null);
+    expect(result.trace.selectionRecovery?.outcome).toBe('recovered');
+    expect(result.trace.selectionBinding?.map((row) => row.attempt)).toEqual([
+      'initial',
+      'empty_reconsideration',
+    ]);
+    expect(result.trace.selectionBinding?.[0]?.aliasMapSha256).toBe(
+      result.trace.selectionBinding?.[1]?.aliasMapSha256,
+    );
+    expect(result.claims[0]!.evidenceKeys).toEqual(['owned-source']);
   });
 });
