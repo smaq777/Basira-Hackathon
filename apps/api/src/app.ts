@@ -197,7 +197,7 @@ export function createApp(options: AppOptions = {}) {
             "default-src 'self'",
             `script-src 'self' 'unsafe-inline' ${clerkOrigin} https://challenges.cloudflare.com https://*.protect.clerk.com`,
             `connect-src 'self' ${clerkOrigin} https://*.protect.clerk.com:* https://clerk-telemetry.com https://*.clerk-telemetry.com`,
-            "img-src 'self' data: https://img.clerk.com",
+            "img-src 'self' data: https://img.clerk.com https://islamicaich.org",
             "worker-src 'self' blob:",
             "style-src 'self' 'unsafe-inline'",
             "frame-src 'self' https://challenges.cloudflare.com https://*.protect.clerk.com",
@@ -205,7 +205,7 @@ export function createApp(options: AppOptions = {}) {
             "object-src 'none'",
             "frame-ancestors 'none'",
           ].join('; ')
-        : "default-src 'self'; object-src 'none'; frame-ancestors 'none'",
+        : "default-src 'self'; img-src 'self' data: https://islamicaich.org; object-src 'none'; frame-ancestors 'none'",
     );
     next();
   });
