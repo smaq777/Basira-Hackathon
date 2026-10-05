@@ -158,6 +158,10 @@ without the packaged canonical index. Live Tafsir/MCP acquisition, web discovery
 cache writes and rewrite are rejected in this profile. Configure a dedicated report
 worker login, a least-privilege research corpus reader and the server-only model key;
 never reuse an owner URL or expose a credential to the browser.
+The demo is staging-only: it requires the selected Railway staging service, the
+accepted `development` revision, explicit staging deployment markers, verified
+corpus TLS, and at least encrypted Railway-private report-database transport. It is
+rejected on `main`/production rather than exposing pending research material there.
 
 Enable `FOUNDATION_ENABLED`, `FOUNDATION_SEMANTIC_ENABLED`, `FOUNDATION_CLAIM_RETRIEVAL_ENABLED`, `FOUNDATION_WEB_DISCOVERY_ENABLED`, and `FOUNDATION_WEB_CACHE_ENABLED` only for an authorized research run. Keep the local Python executable/index, report runtime login, and separate worker login configured as described in `.env.example`. The report database needs migration 0007 for source review and at least 0009 for claim retrieval. The separate Neon corpus/cache database needs the populated versioned corpus and migration `0010_research_page_cache`. Apply checked-in migrations only to the explicitly selected isolated development database with its direct migration credential; never place owner credentials in runtime configuration.
 
