@@ -73,6 +73,12 @@ After integrating accepted owner PR137 (`f7c7028`) with a merge commit, the suit
 recorded 807 passes and the same inherited activation-test failure. The task
 did not change the owner's hosting code or tests. First outcomes are retained.
 
+Latest validation: accepted owner PR139 (`caf56ff`) reconciles that test. After
+preserving those owner changes with a merge commit, the full repository check
+passes: 56 files / 812 tests, TypeScript, documentation links, policy, formatting
+and build. Earlier failures remain in their original logs. Exact-head remote CI
+and owner acceptance remain separate.
+
 ## Saleh handoff and activation
 
 The owning ignored Foundation `.env` selects the new hash through
