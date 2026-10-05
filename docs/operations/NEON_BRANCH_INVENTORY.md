@@ -21,7 +21,18 @@ The pinned research corpus is
 Pending public sources remain pending even when hashes, topics or delivery checks
 pass. Original parents and previously indexed vectors are immutable.
 
-## Deleted failed child
+## Collected-batch update — 6 October
+
+The retained research branch `br-wandering-unit-b24xqw5d`, database
+`basirah_research`, now also stores a verified 175-passage/175-vector snapshot:
+`7372242cf7f4960c2cba0a33d8670a04ce13413f9fab5536783d6a3671e3ad6f`.
+The owning ignored Foundation configuration selects it. Historical 86-passage
+membership and vectors remain unchanged; the table above records the earlier
+cleanup checkpoint. Shared staging selection remains Saleh-owned. No Neon branch
+was created or deleted during this ingestion. See the
+[actual receipt and activation boundary](../evidence/2026-10-06-collected-corpus-ingestion.md).
+
+## Deleted failed child (historical)
 
 `br-square-salad-b2mo9m2a` (`basirah-source-content-preview-20261005`) is the
 failed first cleaning experiment, a leaf under `br-weathered-tooth-b2luwnxr`.

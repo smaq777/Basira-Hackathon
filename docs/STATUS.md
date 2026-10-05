@@ -1,5 +1,12 @@
 # Current delivery status
 
+**Collected corpus ingestion (#8), 6 October:** The existing Neon research branch
+now stores a 175-passage snapshot with 175 compatible embeddings. Historical
+86-passage originals, vectors and approval states remain unchanged. The owning
+Foundation configuration selects the new version; shared hosting remains
+Saleh-owned. See [ingestion and activation limits](evidence/2026-10-06-collected-corpus-ingestion.md).
+No additional collection or production approval is claimed.
+
 **Shared staging activation (#114):** The selected Railway staging service now
 runs the bounded hosted-demo path with a distinct report worker login, the pinned
 86-passage Neon research corpus and OpenRouter assessment. A fresh browser request
