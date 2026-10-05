@@ -186,6 +186,9 @@ export function createHostedCorpus(options: HostedCorpusOptions): ClaimCorpusSea
           return [...ranked.values()]
             .sort((a, b) => String(a.row.snapshot_key).localeCompare(String(b.row.snapshot_key)))
             .map((result) => evidence(result.row, result.modes));
+        // An unresolved explicit locator must never fall through to broad lexical
+        // neighbors. A higher-level exact-source provider may fill the missing verse.
+        if (exact.length) return [];
         merge(
           (
             await client.query(
