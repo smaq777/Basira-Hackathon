@@ -103,6 +103,17 @@ describe('database TLS policy', () => {
     expect(() => databaseTls('disable', production)).toThrow(/Production database connections/u);
   });
 
+  it('accepts a server-only provider CA for verified runtime connections', () => {
+    const environment = {
+      RAILWAY_ENVIRONMENT_NAME: 'production',
+      DATABASE_CA_CERT: '-----BEGIN CERTIFICATE-----\\nprovider-ca\\n-----END CERTIFICATE-----',
+    } as NodeJS.ProcessEnv;
+    expect(databaseTls('verify-full', environment)).toEqual({
+      rejectUnauthorized: true,
+      ca: '-----BEGIN CERTIFICATE-----\nprovider-ca\n-----END CERTIFICATE-----',
+    });
+  });
+
   it('requires an explicit valid mode', () => {
     expect(databaseTls('disable')).toBe(false);
     expect(() => databaseTls('unexpected')).toThrow('DATABASE_TLS_MODE');
