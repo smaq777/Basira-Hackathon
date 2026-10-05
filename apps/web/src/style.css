@@ -1819,6 +1819,14 @@ mark {
   font-size: 0.86rem;
 }
 
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
 .contested-claim {
   display: grid;
   grid-template-columns: auto 1fr auto;

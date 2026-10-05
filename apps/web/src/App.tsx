@@ -43,6 +43,7 @@ import { X } from '@phosphor-icons/react/X';
 import {
   analysisErrorMessage,
   awaitFoundationReport,
+  BasirahApiError,
   cancelOwnedReview,
   createRevisionTicket,
   createReviewTicket,
@@ -870,12 +871,14 @@ function AnalysisScreen({
   text,
   onCancel,
   onComplete,
+  onUnavailable,
   onTicket,
   initialReviewId,
 }: {
   text: string;
   onCancel: () => void;
   onComplete: (report: FoundationReport) => void;
+  onUnavailable: (receipt: DraftAnalysisReceipt) => void;
   onTicket: (revisionId: string) => void;
   initialReviewId: string | null;
 }) {
@@ -898,6 +901,8 @@ function AnalysisScreen({
   const cancelledRef = useRef(false);
   const completeRef = useRef(onComplete);
   completeRef.current = onComplete;
+  const unavailableRef = useRef(onUnavailable);
+  unavailableRef.current = onUnavailable;
   const controllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -952,6 +957,14 @@ function AnalysisScreen({
     };
     void execute().catch((reason: unknown) => {
       if (!active || controller.signal.aborted) return;
+      if (
+        reason instanceof BasirahApiError &&
+        reason.code === 'FOUNDATION_UNAVAILABLE' &&
+        receiptRef.current
+      ) {
+        unavailableRef.current(receiptRef.current);
+        return;
+      }
       setError(analysisErrorMessage(reason));
     });
     return () => {
@@ -1054,6 +1067,74 @@ function AnalysisScreen({
             disabled={cancelling}
           >
             {cancelling ? 'جار تأكيد الإلغاء' : 'إلغاء والعودة للنص'}
+          </button>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function UnavailableResultScreen({
+  onHome,
+  onTicket,
+  receipt,
+  text,
+}: {
+  onHome: () => void;
+  onTicket: () => void;
+  receipt: DraftAnalysisReceipt | null;
+  text: string;
+}) {
+  return (
+    <div className="app-page result-page">
+      <BackHeader onHome={onHome} />
+      <main className="result-main page-shell page-enter">
+        <StatusPill tone="warning">
+          <WarningCircle size={20} weight="fill" /> تحتاج النتيجة إلى مراجعة بشرية
+        </StatusPill>
+        <h1>حفظنا النص، ولم نصدر نتيجة غير موثقة</h1>
+        <p className="hero-copy">
+          خدمة التحقق المتصل بالمصادر غير متاحة الآن. لذلك لم نعرض حكمًا أو اقتباسًا أو مرجعًا لم
+          يتم التحقق منه.
+        </p>
+
+        <section className="reason-banner" aria-label="حالة المراجعة">
+          <strong>حالة الطلب:</strong>
+          <StatusPill tone="success">تم حفظ المسودة</StatusPill>
+          <span>التحقق الآلي غير مكتمل</span>
+          <span>لا توجد نتيجة جاهزة للنشر</span>
+          <span>يمكن إحالتها إلى المراجع</span>
+        </section>
+
+        {text.trim() && (
+          <section className="contested-claim">
+            <div>
+              <FileText size={23} />
+              <strong>النص المحفوظ للمراجعة</strong>
+            </div>
+            <p dir="auto">{compactDraftPreview(text)}</p>
+            <span>
+              {receipt
+                ? `رُصدت ${receipt.candidateCount} عبارة مرشحة آليًا، ولم تُراجع بعد.`
+                : 'المسودة مرتبطة بطلب المراجعة المحفوظ.'}
+            </span>
+          </section>
+        )}
+
+        <div className="prototype-disclosure" role="note">
+          <Info size={21} />
+          <p>
+            الإحالة البشرية تحفظ النص نفسه للمراجع. لن تُعامل أي ملاحظة أولية بوصفها نتيجة معتمدة
+            قبل أن يراجعها المختص وينشر رده.
+          </p>
+        </div>
+
+        <div className="result-actions">
+          <button className="button button--primary" onClick={onTicket} type="button">
+            <UsersThree size={20} /> إرسال النص للمراجعة البشرية
+          </button>
+          <button className="button button--outline" onClick={onHome} type="button">
+            العودة وتعديل النص
           </button>
         </div>
       </main>
@@ -2529,6 +2610,7 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
   const { route, navigate } = useRoute();
   const [reviewText, setReviewText] = useState('');
   const [foundationReport, setFoundationReport] = useState<FoundationReport | null>(null);
+  const [unavailableReceipt, setUnavailableReceipt] = useState<DraftAnalysisReceipt | null>(null);
   const reviewId = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('reviewId');
   const revisionId = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get(
     'revisionId',
@@ -2541,6 +2623,7 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
     (text: string) => {
       setReviewText(text);
       setFoundationReport(null);
+      setUnavailableReceipt(null);
       navigate('analysis');
     },
     [navigate],
@@ -2549,6 +2632,7 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
   const startNewReview = useCallback(() => {
     setReviewText('');
     setFoundationReport(null);
+    setUnavailableReceipt(null);
     navigate('home');
   }, [navigate]);
 
@@ -2559,6 +2643,11 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
     },
     [navigate],
   );
+
+  const showUnavailableResult = useCallback((receipt: DraftAnalysisReceipt) => {
+    setUnavailableReceipt(receipt);
+    window.location.hash = `${pathFor('result')}?revisionId=${encodeURIComponent(receipt.revisionId)}`;
+  }, []);
 
   if (route.startsWith('reviewer-')) {
     if (!clerkConfigured) return <ReviewerAuthUnavailable onHome={() => navigate('home')} />;
@@ -2586,6 +2675,7 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
         initialReviewId={reviewId}
         onCancel={() => navigate('home')}
         onComplete={completeAnalysis}
+        onUnavailable={showUnavailableResult}
         onTicket={(ownedRevisionId) => {
           window.location.hash = `${pathFor('ticket')}?revisionId=${encodeURIComponent(ownedRevisionId)}`;
         }}
@@ -2602,6 +2692,17 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
           onTicket={() => navigate('ticket', reviewId)}
         />
       );
+  if (route === 'result' && revisionId)
+    return (
+      <UnavailableResultScreen
+        onHome={() => navigate('home')}
+        onTicket={() => {
+          window.location.hash = `${pathFor('ticket')}?revisionId=${encodeURIComponent(revisionId)}`;
+        }}
+        receipt={unavailableReceipt?.revisionId === revisionId ? unavailableReceipt : null}
+        text={reviewText}
+      />
+    );
   if (route === 'result')
     return (
       <ResultScreen
