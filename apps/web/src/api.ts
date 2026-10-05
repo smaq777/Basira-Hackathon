@@ -405,6 +405,142 @@ export async function awaitFoundationReport(
   throw new DOMException('Review view closed', 'AbortError');
 }
 
+export type TicketReceipt = {
+  ticketCode: string;
+  status: 'pending' | 'in_review' | 'published' | 'closed';
+  hasEmail: boolean;
+  notifyOptIn: boolean;
+  createdAt: string;
+};
+
+function ticketReceipt(value: unknown): TicketReceipt {
+  if (typeof value !== 'object' || value === null) throw new BasirahApiError('INVALID_RESPONSE', 0);
+  const receipt = value as Partial<TicketReceipt>;
+  if (
+    typeof receipt.ticketCode !== 'string' ||
+    !/^BR-[A-Z0-9]{12}$/u.test(receipt.ticketCode) ||
+    !['pending', 'in_review', 'published', 'closed'].includes(receipt.status ?? '') ||
+    typeof receipt.hasEmail !== 'boolean' ||
+    typeof receipt.notifyOptIn !== 'boolean' ||
+    typeof receipt.createdAt !== 'string'
+  )
+    throw new BasirahApiError('INVALID_RESPONSE', 0);
+  return receipt as TicketReceipt;
+}
+
+export async function createReviewTicket(
+  reviewId: string,
+  contact: { name?: string; email?: string; notify?: boolean } = {},
+): Promise<TicketReceipt> {
+  return ticketReceipt(
+    await requestJson(`/api/v1/reviews/${encodeURIComponent(reviewId)}/tickets`, {
+      method: 'POST',
+      body: JSON.stringify(contact),
+    }),
+  );
+}
+
+export async function updateReviewTicketContact(
+  code: string,
+  contact: { name?: string; email: string; notify: boolean },
+): Promise<TicketReceipt> {
+  return ticketReceipt(
+    await requestJson(`/api/v1/tickets/${encodeURIComponent(code)}/contact`, {
+      method: 'PATCH',
+      body: JSON.stringify(contact),
+    }),
+  );
+}
+
+export type TicketLookup = {
+  found: boolean;
+  ticketCode?: string;
+  status?: TicketReceipt['status'];
+  report?: FoundationReport;
+  response?: { decision: string; text: string; publishedAt: string } | null;
+};
+
+export async function lookupReviewTicket(code: string, email: string): Promise<TicketLookup> {
+  const value = await requestJson('/api/v1/ticket-lookup', {
+    method: 'POST',
+    body: JSON.stringify({ ticketCode: code, email }),
+  });
+  if (typeof value !== 'object' || value === null || !('found' in value))
+    throw new BasirahApiError('INVALID_RESPONSE', 0);
+  const result = value as TicketLookup;
+  if (typeof result.found !== 'boolean') throw new BasirahApiError('INVALID_RESPONSE', 0);
+  if (result.found && result.report) {
+    const parsed = FoundationReportSchema.safeParse(result.report);
+    if (!parsed.success) throw new BasirahApiError('INVALID_RESPONSE', 0);
+    result.report = parsed.data;
+  }
+  return result;
+}
+
+export type ReviewerTicketSummary = {
+  ticketCode: string;
+  status: TicketReceipt['status'];
+  createdAt: string;
+  notifyOptIn: boolean;
+};
+
+export type ReviewerTicket = ReviewerTicketSummary & {
+  report: FoundationReport;
+  responses: Array<{
+    version: number;
+    decision: 'needs_context' | 'bounded_revision' | 'returned';
+    text: string;
+    published: boolean;
+    createdAt: string;
+  }>;
+};
+
+export async function listReviewerTickets(): Promise<ReviewerTicketSummary[]> {
+  const value = await requestJson('/api/v1/reviewer/tickets', { method: 'GET' });
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('tickets' in value) ||
+    !Array.isArray(value.tickets)
+  )
+    throw new BasirahApiError('INVALID_RESPONSE', 0);
+  return value.tickets as ReviewerTicketSummary[];
+}
+
+export async function getReviewerTicket(code: string): Promise<ReviewerTicket> {
+  const value = await requestJson(`/api/v1/reviewer/tickets/${encodeURIComponent(code)}`, {
+    method: 'GET',
+  });
+  if (typeof value !== 'object' || value === null || !('ticket' in value))
+    throw new BasirahApiError('INVALID_RESPONSE', 0);
+  const ticket = value.ticket as Partial<ReviewerTicket>;
+  const report = FoundationReportSchema.safeParse(ticket.report);
+  if (
+    typeof ticket.ticketCode !== 'string' ||
+    !['pending', 'in_review', 'published', 'closed'].includes(ticket.status ?? '') ||
+    typeof ticket.createdAt !== 'string' ||
+    typeof ticket.notifyOptIn !== 'boolean' ||
+    !Array.isArray(ticket.responses) ||
+    !report.success
+  )
+    throw new BasirahApiError('INVALID_RESPONSE', 0);
+  return { ...(ticket as ReviewerTicket), report: report.data };
+}
+
+export async function saveReviewerResponse(
+  code: string,
+  input: {
+    decision: 'needs_context' | 'bounded_revision' | 'returned';
+    text: string;
+    publish: boolean;
+  },
+): Promise<void> {
+  await requestJson(`/api/v1/reviewer/tickets/${encodeURIComponent(code)}/responses`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 function validPreflightFinding(value: unknown): value is PreflightFinding {
   if (typeof value !== 'object' || value === null) return false;
   const finding = value as Partial<PreflightFinding>;

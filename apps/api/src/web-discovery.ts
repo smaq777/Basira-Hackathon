@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { sourceExtractionFailure } from './source-extraction-quality.js';
 
 /** Research acquisition only. These snapshots are not source approvals or verdicts. */
 export interface WebSourcePolicy {
@@ -242,6 +243,8 @@ export function createWebDiscovery(options: {
               metadata.title.length > 300
             )
               throw new Error('discovery_source_identity');
+            const qualityFailure = sourceExtractionFailure(final.href, scraped.markdown);
+            if (qualityFailure) throw new Error(qualityFailure);
             result.snapshots.push({
               requestedUrl: url.href,
               sourceUrl: final.href,
