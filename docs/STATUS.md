@@ -2,6 +2,15 @@
 
 ## Latest development evidence — 5 October
 
+**Routing evidence and next priorities (#13):** The
+[fixed-evidence comparison](evidence/2026-10-05-fixed-packet-routing.md) held
+claims/sources/prompts constant across Luna low and Sol medium. Both matched
+selected relation expectations, but detailed qualifier fields varied and actual
+stronger reasoning was not demonstrated. The
+[ordered delivery plan](planning/AI_FOUNDATION_NEXT.md) records extraction,
+rewrite-preservation, passage coverage, staging and judging evidence still needed.
+Neither the diagnostic nor green CI completes scientific or owner acceptance.
+
 **Active local research testing (#8):** The integrated app now uses the 86-passage
 Neon snapshot, verified in a newly completed durable UI report. Eleven additional
 approved-domain public originals were classified and added to the separate
