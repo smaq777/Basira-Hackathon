@@ -1,9 +1,38 @@
 # AI Foundation resumption checklist — 5 October 2026
 
-Checkpoint: 18:05 UTC. Continue local research integration and remaining priorities;
+Checkpoint: 18:55 UTC. Continue local research integration and remaining priorities;
 owner PR acceptance does not prevent isolated implementation. Saleh alone accepts,
 merges and deploys shared releases. This document is a continuation record, not a
 completion or acceptance receipt. Read the [integration handoff](../operations/AI_FOUNDATION_HANDOFF.md).
+
+## Current checkpoint — supersedes the dated implementation status below
+
+- Saleh merged #85, #92, #95, #99, #100, #104 and #87 into development; observed
+  head `ce54db6`. #98 and #103 are accepted production promotion merges. Merge
+  status is not evidence of live model activation; recheck current GitHub/deployment.
+- Copied-role bootstrap passed actual empty/recovery/rerun/isolation controls on a
+  separate PostgreSQL 18/pgvector0.8.7 cluster. Owner c33 merge passed 51 files /
+  662 tests and all required local checks. Fresh Neon/cleaning0015 parity remains.
+- Two first-outcome mixed-writing UI runs on frozen b99 source completed semantic
+  assessment with exact author bindings and delivered citations; both retained
+  provisional supported relations. [Evidence and remaining defects](../evidence/2026-10-05-mixed-writing-ui.md).
+  Bibliographic locator false quotation, mixed-language explanation, missing
+  negation in a scope phrase and misleading escalation remain recorded.
+- Separate UI fixture is on 55441, schema0014; app8776 uses
+  `basirah-selection.localhost` for cookie isolation and read-only corrected Neon
+  child. Existing 55439/8771–8773 databases/configuration were not reset or changed.
+- Authorized Neon cleanup deleted only unused failed leaf `br-square-salad-b2mo9m2a`.
+  Production, research parent, passage parent and corrected child remain; before/
+  after retained data hashes match. Historical failed SQL/receipts/source are
+  archived externally. The branch itself no longer exists.
+
+Next implementation order: (1) bibliographic reference detection and precise
+partial-result/capability copy; (2) measured passage relevance/packet compaction;
+(3) clear Arabic with explicit qualifier preservation; (4) evidence-bound rewrite
+modality/citation checks; (5) contextual RAG expansion and fresh Neon0015 parity;
+(6) source-rights/scholarly review, editor pilot and reproducible judging demo.
+Use separate issue-linked Sol Medium tasks and lead review; preserve frozen
+results. Earlier lists below describe their dated state, not pending acceptance.
 
 ## Rules to preserve
 

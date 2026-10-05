@@ -100,11 +100,12 @@ describe('explicit foundation research activation', () => {
       foundationRuntimeMode({ ...staging, FOUNDATION_HOSTED_DEMO: 'true' }, '0.0.0.0'),
     ).toThrow('FOUNDATION_RUNTIME_MODE_CONFLICT');
     const demo = {
-      FOUNDATION_ENABLED: 'true',
+      ...staging,
+      FOUNDATION_RESEARCH_PROFILE: 'local',
+      FOUNDATION_RESEARCH_PREVIEW: undefined,
       FOUNDATION_HOSTED_DEMO: 'true',
       FOUNDATION_SEMANTIC_ENABLED: 'true',
       FOUNDATION_CLAIM_RETRIEVAL_ENABLED: 'true',
-      NODE_ENV: 'production',
     };
     expect(foundationRuntimeMode(demo, '0.0.0.0')).toBe('hosted_demo');
     for (const key of [

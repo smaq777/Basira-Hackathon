@@ -96,6 +96,13 @@ describe('database TLS policy', () => {
     expect(databaseTls('require')).toEqual({ rejectUnauthorized: false });
   });
 
+  it('requires verified TLS for an explicit production deployment', () => {
+    const production = { BASIRAH_DEPLOYMENT_ENVIRONMENT: 'production' } as NodeJS.ProcessEnv;
+    expect(databaseTls('verify-full', production)).toEqual({ rejectUnauthorized: true });
+    expect(() => databaseTls('require', production)).toThrow(/Production database connections/u);
+    expect(() => databaseTls('disable', production)).toThrow(/Production database connections/u);
+  });
+
   it('requires an explicit valid mode', () => {
     expect(databaseTls('disable')).toBe(false);
     expect(() => databaseTls('unexpected')).toThrow('DATABASE_TLS_MODE');
