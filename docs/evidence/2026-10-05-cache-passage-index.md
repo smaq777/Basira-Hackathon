@@ -100,9 +100,11 @@ missed. Travel already delivered its corrective footnote under the baseline, so 
 benefit is claimed there. Conservative ranking forfeits the observed weak-hadith
 lexical parent-selection gain; unified comparable parent relevance remains future work.
 
-Three composed-corpus hybrid arms delivered no sources despite valid direct rankings.
-These remain delivery failures in the denominator, rather than successful semantic
-outcomes. The existing 3-second cache budget silently drops failures; surfaced
+Three composed-corpus hybrid diagnostic arms delivered no cached parents despite
+valid direct rankings; their harness base corpus was empty, so this does not show
+that the full app lacked other corpus sources. These remain delivery failures in
+the denominator. Their timings are consistent with exhaustion of the existing
+3-second cache budget, which silently drops cache failures; surfaced
 outcomes and a configurable bounded budget are separate [issue #17](https://github.com/smaq777/Basira-Hackathon/issues/17).
 Some tail windows contain navigation fragments and can start inside a URL without
 `boundaryTruncated`; all eight are exact windows, not necessarily substantive article
