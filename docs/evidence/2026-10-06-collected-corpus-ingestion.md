@@ -69,6 +69,10 @@ existing bundle-size warning remains. This documentation branch changes no
 activation implementation or tests and does not claim a green full suite.
 Saleh owns the activation correction and acceptance.
 
+After integrating accepted owner PR137 (`f7c7028`) with a merge commit, the suite
+recorded 807 passes and the same inherited activation-test failure. The task
+did not change the owner's hosting code or tests. First outcomes are retained.
+
 ## Saleh handoff and activation
 
 The owning ignored Foundation `.env` selects the new hash through
