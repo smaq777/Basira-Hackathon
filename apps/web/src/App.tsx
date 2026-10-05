@@ -41,7 +41,6 @@ import { WarningCircle } from '@phosphor-icons/react/WarningCircle';
 import { X } from '@phosphor-icons/react/X';
 import {
   analysisErrorMessage,
-  isResourceCapacityError,
   awaitFoundationReport,
   BasirahApiError,
   cancelOwnedReview,
@@ -936,7 +935,6 @@ function AnalysisScreen({
   const [phase, setPhase] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState('');
-  const [capacityLimited, setCapacityLimited] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [fallbackRevisionId, setFallbackRevisionId] = useState<string | null>(null);
   const runRef = useRef<OwnedReview | null>(null);
@@ -956,7 +954,6 @@ function AnalysisScreen({
     const controller = new AbortController();
     controllerRef.current = controller;
     setError('');
-    setCapacityLimited(false);
     setPhase(0);
     const execute = async () => {
       let run = runRef.current;
@@ -1012,12 +1009,6 @@ function AnalysisScreen({
         unavailableRef.current(receiptRef.current);
         return;
       }
-      const fixedCapacity = isResourceCapacityError(reason);
-      // A documented capacity rejection cannot have created a review. Keep the
-      // existing run path for ambiguous transport failures and owned reviews.
-      if (fixedCapacity && !runRef.current) pendingRunRef.current = null;
-      setCapacityLimited(fixedCapacity);
-
       setError(analysisErrorMessage(reason));
     });
     return () => {
@@ -1090,18 +1081,16 @@ function AnalysisScreen({
           <div className="analysis-error" role="alert">
             <WarningCircle size={22} />
             <div>
-              <strong>{capacityLimited ? 'بلغت حد السعة' : 'لم يكتمل الاتصال'}</strong>
+              <strong>لم يكتمل الاتصال</strong>
               <p>{error}</p>
             </div>
-            {!capacityLimited && (
-              <button
-                disabled={cancelling}
-                className="button button--outline"
-                onClick={() => setAttempt((value) => value + 1)}
-              >
-                إعادة المحاولة
-              </button>
-            )}
+            <button
+              disabled={cancelling}
+              className="button button--outline"
+              onClick={() => setAttempt((value) => value + 1)}
+            >
+              إعادة المحاولة
+            </button>
             {fallbackRevisionId && (
               <button
                 className="button button--primary"
@@ -1121,11 +1110,7 @@ function AnalysisScreen({
             onClick={() => void cancel()}
             disabled={cancelling}
           >
-            {cancelling
-              ? 'جار تأكيد الإلغاء'
-              : capacityLimited
-                ? 'العودة للنص'
-                : 'إلغاء والعودة للنص'}
+            {cancelling ? 'جار تأكيد الإلغاء' : 'إلغاء والعودة للنص'}
           </button>
         </div>
       </main>

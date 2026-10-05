@@ -159,11 +159,7 @@ paths:
         '401':
           description: Guest session is missing, invalid or expired
         '429':
-          description: Burst limit or per-session document cap reached
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LimitError'
+          $ref: '#/components/responses/RateLimited'
   /api/v1/documents/{documentId}/revisions:
     post:
       summary: Create an immutable child revision
@@ -190,11 +186,7 @@ paths:
         '404':
           description: Owned document not found
         '429':
-          description: Burst limit or per-document revision cap reached
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LimitError'
+          $ref: '#/components/responses/RateLimited'
   /api/v1/reviews:
     post:
       summary: Create or replay an owned review run for an immutable revision
@@ -238,11 +230,7 @@ paths:
         '404':
           description: Owned revision not found
         '429':
-          description: Burst limit or per-revision review-run cap reached
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LimitError'
+          $ref: '#/components/responses/RateLimited'
   /api/v1/revisions/{revisionId}/extractions:
     post:
       summary: Automatically extract bounded claim candidates from an owned immutable revision
@@ -398,17 +386,3 @@ components:
             required: [code]
             properties:
               code: { const: RATE_LIMITED }
-  schemas:
-    LimitError:
-      oneOf:
-        - type: object
-          additionalProperties: false
-          required: [code]
-          properties:
-            code: { const: RATE_LIMITED }
-        - type: object
-          additionalProperties: false
-          required: [code, resource]
-          properties:
-            code: { const: RESOURCE_LIMIT_REACHED }
-            resource: { enum: [documents, revisions, reviews] }

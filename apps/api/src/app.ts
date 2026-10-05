@@ -3,12 +3,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 import { extractClaimCandidates } from '../../../packages/contracts/src/index.js';
-import {
-  DatabaseUnavailable,
-  OwnershipError,
-  ResourceLimitError,
-  type BackendDatabase,
-} from './database.js';
+import { DatabaseUnavailable, OwnershipError, type BackendDatabase } from './database.js';
 import { fixedWindowRateLimit } from './rate-limit.js';
 import {
   normalizeTrustedOrigin,
@@ -835,8 +830,6 @@ export function createApp(options: AppOptions = {}) {
     if (error instanceof RewriteError) return res.status(error.status).json({ code: error.code });
     if (error instanceof OwnershipError)
       return res.status(401).json({ code: 'INVALID_OR_EXPIRED_SESSION' });
-    if (error instanceof ResourceLimitError)
-      return res.status(429).json({ code: 'RESOURCE_LIMIT_REACHED', resource: error.resource });
     if (isUniqueConstraintError(error))
       return res.status(409).json({ code: 'TICKET_ALREADY_PUBLISHED' });
     if (error instanceof SyntaxError) return res.status(400).json({ code: 'INVALID_JSON' });

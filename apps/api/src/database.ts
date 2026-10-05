@@ -97,12 +97,6 @@ export class OwnershipError extends Error {
   }
 }
 
-export class ResourceLimitError extends Error {
-  constructor(public readonly resource: 'documents' | 'revisions' | 'reviews') {
-    super('RESOURCE_LIMIT_REACHED');
-  }
-}
-
 export class DatabaseUnavailable implements BackendDatabase {
   async readiness(): Promise<DatabaseReadiness> {
     return { ready: false, reason: 'not_configured' };
@@ -297,10 +291,6 @@ export function createDatabase(connectionString: string): BackendDatabase {
     async createDocument(publicId, ownershipSecret, text) {
       return withSerializable(async (client) => {
         await authenticate(client, publicId, ownershipSecret);
-        const existing = await client.query<{ count: number }>(
-          'select count(*)::int as count from basirah.document',
-        );
-        if ((existing.rows[0]?.count ?? 0) >= 20) throw new ResourceLimitError('documents');
         const document = await client.query<{ id: string; public_id: string }>(
           `insert into basirah.document (session_id)
            values ((select basirah_private.current_session_id()))
@@ -346,7 +336,6 @@ export function createDatabase(connectionString: string): BackendDatabase {
         );
         const row = document.rows[0];
         if (!row) return null;
-        if (row.version >= 20) throw new ResourceLimitError('revisions');
         const revision = await client.query<{ public_id: string; version: number; id: string }>(
           `insert into basirah.document_revision
              (document_id, parent_revision_id, version, original_text, content_hash)
@@ -423,12 +412,6 @@ export function createDatabase(connectionString: string): BackendDatabase {
         );
         const existingRow = existing.rows[0];
         if (existingRow) return { ...reviewRun(existingRow), replayed: true };
-
-        const runCount = await client.query<{ count: number }>(
-          'select count(*)::int as count from basirah.review_run where revision_id = $1',
-          [revisionId],
-        );
-        if ((runCount.rows[0]?.count ?? 0) >= 10) throw new ResourceLimitError('reviews');
 
         const inserted = await client.query<ReviewRunRow & { id: string }>(
           `insert into basirah.review_run

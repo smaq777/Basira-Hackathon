@@ -3,7 +3,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   analysisErrorMessage,
-  isResourceCapacityError,
   BasirahApiError,
   persistDraftForAnalysis,
   createOwnedReview,
@@ -251,38 +250,20 @@ describe('same-origin draft analysis client', () => {
   });
 });
 
-describe('documented capacity responses', () => {
+describe('transient request errors', () => {
   afterEach(() => vi.restoreAllMocks());
-  it.each(['documents', 'revisions', 'reviews', 'unknown-private-value'])(
-    'preserves only known resource values from %s and never resets a session',
-    async (resource) => {
-      const fetchMock = vi
-        .spyOn(globalThis, 'fetch')
-        .mockResolvedValueOnce(jsonResponse({ guestDocuments: true }))
-        .mockResolvedValueOnce(jsonResponse({ code: 'RESOURCE_LIMIT_REACHED', resource }, 429));
-      let caught: unknown;
-      try {
-        await persistDraftForAnalysis(ORIGINAL_TEXT);
-      } catch (error) {
-        caught = error;
-      }
-      expect(isResourceCapacityError(caught)).toBe(true);
-      expect(caught).toMatchObject({
-        resource: resource === 'unknown-private-value' ? undefined : resource,
-      });
-      expect(analysisErrorMessage(caught)).not.toContain('unknown-private-value');
-      expect(analysisErrorMessage(caught)).not.toContain('إعادة المحاولة');
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect(fetchMock.mock.calls.some(([path]) => path === '/api/v1/sessions')).toBe(false);
-    },
-  );
-  it('keeps burst-rate and network failures separate from fixed capacity', () => {
+  it('keeps burst-rate and network failures distinct', () => {
     const burst = new BasirahApiError('RATE_LIMITED', 429);
     const network = new BasirahApiError('NETWORK_ERROR', 0);
-    expect(isResourceCapacityError(burst)).toBe(false);
-    expect(isResourceCapacityError(network)).toBe(false);
     expect(analysisErrorMessage(burst)).toContain('انتظر');
     expect(analysisErrorMessage(network)).toContain('الاتصال');
+  });
+
+  it('does not describe a legacy resource response as a permanent session cap', () => {
+    const message = analysisErrorMessage(new BasirahApiError('RESOURCE_LIMIT_REACHED', 429));
+    expect(message).not.toContain('حد السعة');
+    expect(message).not.toContain('مراجعاتك السابقة');
+    expect(message).toContain('إعادة المحاولة');
   });
 });
 
