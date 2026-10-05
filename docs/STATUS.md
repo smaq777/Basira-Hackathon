@@ -2,6 +2,13 @@
 
 ## Latest development evidence — 5 October
 
+**Optional citation/layout candidate (#38):** A default-off local research action
+now creates a separate candidate from the owned persisted report, preserves every
+original character, and adds only validated paragraph breaks and recorded
+citations. Copy reloads ownership/report/attempt binding and revalidates
+insertions. Storage is explicitly session-bound memory; source approval and
+substantive prose changes remain gated. See [evidence](evidence/2026-10-05-citation-layout-candidate.md).
+
 Draft PR #59 now connects the current UI to persisted review reports, local quotation lookup, live Tafsir context, OpenRouter claim assessment, and a persistent isolated Neon hybrid-retrieval corpus. Optional gap-triggered Firecrawl acquisition is controlled by `config/source-policy.json`; UI follow-up is assigned to Saleh in [#68](https://github.com/smaq777/Basira-Hackathon/issues/68). Features remain research-only/default-off and are not deployed or owner-accepted merely because local checks pass.
 
 The Neon research corpus has 62 originals; the larger local index has 6,236 Quran, 6,235 Tafsir and 31,811 hadith entries. Only four IslamicEval hadith originals are currently hosted. Benchmark answers/gold are evaluation material, not retrieval evidence. The trained role classifiers are not live. See [dataset/records audit](evidence/2026-10-05-islamiceval-records-audit.md).

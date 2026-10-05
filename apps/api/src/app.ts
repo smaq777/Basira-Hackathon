@@ -19,6 +19,8 @@ import { buildDemoPreflight, PreflightInputSchema } from './preflight.js';
 import { FoundationReportSchema } from '../../../packages/contracts/src/foundation.js';
 import { isSafeDraftText, MAX_DRAFT_LENGTH } from '../../../packages/contracts/src/draft-text.js';
 import type { ReviewStore } from './review-store.js';
+import { RewriteError, type RewriteService, type RewriteContext } from './rewrite.js';
+import { sha256 } from './foundation.js';
 
 const TextInput = z
   .object({
@@ -82,6 +84,7 @@ function setGuestCookie(
 }
 
 type AppOptions = {
+  rewrite?: RewriteService;
   foundation?: {
     worker: { notify(): void };
     reports: Pick<ReviewStore, 'ownedReport'>;
@@ -204,7 +207,8 @@ export function createApp(options: AppOptions = {}) {
         Number(state.migrationVersion?.slice(0, 4)) >= 7,
       researchPreview: options.foundation?.researchPreview ?? false,
       maximumTextLength: MAX_DRAFT_LENGTH,
-      draftRewrite: false,
+      draftRewrite: Boolean(options.rewrite),
+      draftRewriteMode: options.rewrite ? 'citation_and_layout_only' : null,
     });
   });
   app.post('/api/v1/preflight', guestMutationRateLimit, (req, res, next) => {
@@ -439,12 +443,130 @@ export function createApp(options: AppOptions = {}) {
       return next(error);
     }
   });
+  const RewriteParams = ReviewParams.extend({ candidateId: z.uuid() }).strict();
+  const RewriteRequest = z
+    .object({
+      inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+      evidenceStateSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    })
+    .strict();
+  const rewriteContext = async (
+    req: Request,
+    reviewId: string,
+  ): Promise<{ owner: string; context: RewriteContext }> => {
+    const credentials = guestCredentials(req);
+    if (!credentials) throw new RewriteError('INVALID_OR_EXPIRED_SESSION', 401);
+    if (!options.rewrite || !options.foundation) throw new RewriteError('REWRITE_UNAVAILABLE', 503);
+    const run = await database.getReviewRun(
+      credentials.publicId,
+      credentials.ownershipSecret,
+      reviewId,
+    );
+    if (!run) throw new RewriteError('REVIEW_NOT_FOUND', 404);
+    if (!['completed', 'partial', 'needs_review'].includes(run.status))
+      throw new RewriteError('REWRITE_REPORT_NOT_READY');
+    const stored = await options.foundation.reports.ownedReport(
+      credentials.publicId,
+      credentials.ownershipSecret,
+      reviewId,
+    );
+    const parsed = FoundationReportSchema.safeParse(stored);
+    const revision = await database.getRevision(
+      credentials.publicId,
+      credentials.ownershipSecret,
+      run.revisionId,
+    );
+    if (
+      !parsed.success ||
+      !revision ||
+      parsed.data.reviewId !== reviewId ||
+      parsed.data.revisionId !== run.revisionId ||
+      parsed.data.inputSha256 !== sha256(revision.text) ||
+      parsed.data.intake.originalText !== revision.text ||
+      parsed.data.intake.revisionSha256 !== parsed.data.inputSha256
+    )
+      throw new RewriteError('REWRITE_STALE_REPORT');
+    return {
+      owner: sha256(`${credentials.publicId}:${credentials.ownershipSecret}`),
+      context: { report: parsed.data, attempt: run.attempt },
+    };
+  };
+  app.post('/api/v1/reviews/:reviewId/rewrites', guestMutationRateLimit, async (req, res, next) => {
+    try {
+      const { reviewId } = ReviewParams.parse(req.params);
+      const expected = RewriteRequest.parse(req.body);
+      const key = IdempotencyKey.parse(req.header('Idempotency-Key'));
+      const { owner, context } = await rewriteContext(req, reviewId);
+      if (
+        expected.inputSha256 !== context.report.inputSha256 ||
+        expected.evidenceStateSha256 !== context.report.evidenceStateSha256
+      )
+        throw new RewriteError('REWRITE_STALE_REPORT');
+      const candidate = options.rewrite!.create(
+        owner,
+        key,
+        context,
+        async () => (await rewriteContext(req, reviewId)).context,
+      );
+      return res.status(candidate.status === 'pending' ? 202 : 200).json({ candidate });
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.delete(
+    '/api/v1/reviews/:reviewId/rewrites',
+    guestMutationRateLimit,
+    async (req, res, next) => {
+      try {
+        const { reviewId } = ReviewParams.parse(req.params);
+        z.object({}).strict().parse(req.body);
+        const key = IdempotencyKey.parse(req.header('Idempotency-Key'));
+        const { owner, context } = await rewriteContext(req, reviewId);
+        return res.json({ candidate: options.rewrite!.cancelKey(owner, key, context) });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+  app.get('/api/v1/reviews/:reviewId/rewrites/:candidateId', async (req, res, next) => {
+    try {
+      const { reviewId, candidateId } = RewriteParams.parse(req.params);
+      const { owner, context } = await rewriteContext(req, reviewId);
+      return res.json({ candidate: options.rewrite!.get(owner, candidateId, context) });
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.delete('/api/v1/reviews/:reviewId/rewrites/:candidateId', async (req, res, next) => {
+    try {
+      const { reviewId, candidateId } = RewriteParams.parse(req.params);
+      const { owner, context } = await rewriteContext(req, reviewId);
+      return res.json({ candidate: options.rewrite!.cancel(owner, candidateId, context) });
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.post(
+    '/api/v1/reviews/:reviewId/rewrites/:candidateId/copy',
+    guestMutationRateLimit,
+    async (req, res, next) => {
+      try {
+        const { reviewId, candidateId } = RewriteParams.parse(req.params);
+        z.object({}).strict().parse(req.body);
+        const { owner, context } = await rewriteContext(req, reviewId);
+        return res.json({ text: options.rewrite!.copy(owner, candidateId, context) });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
   app.use('/api', (_req, res) => res.status(404).json({ code: 'NOT_FOUND' }));
   const web = resolve('apps/web/dist');
   if (existsSync(web)) app.use(express.static(web));
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (error instanceof z.ZodError)
       return res.status(400).json({ code: 'INVALID_REQUEST', issues: error.issues });
+    if (error instanceof RewriteError) return res.status(error.status).json({ code: error.code });
     if (error instanceof OwnershipError)
       return res.status(401).json({ code: 'INVALID_OR_EXPIRED_SESSION' });
     if (error instanceof ResourceLimitError)

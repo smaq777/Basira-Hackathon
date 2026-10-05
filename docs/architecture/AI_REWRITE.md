@@ -1,6 +1,47 @@
 # Evidence-bound AI-ReWrite proposal
 
-Status: scoped next implementation, not enabled. Related: #38, #13, #18, #68. Preserve the 3,000-character review scope and original revision.
+Status: citation/layout research slice implemented behind a default-off local flag;
+substantive wording changes remain proposed and disabled. Related: #38, #13, #18,
+#68. Preserve the 3,000-character review scope and original revision.
+
+## Implemented first slice
+
+The current button is «تنسيق النص وإضافة التوثيق». It selects paragraph breaks and
+actual recorded citations, creates a separate candidate, and offers copy only
+after deterministic validation and a fresh server ownership/report check. The
+model returns insertion operations, never replacement text, verdicts or new
+source metadata. Every original UTF-16 unit remains unchanged. Consequently this
+slice cannot remove negations/qualifications, add new claim wording, complete a
+partial Ayah or correct an incorrect quotation. Faithful partial excerpts remain
+eligible for attribution; extent alone is not an error. Whole quotation wrappers
+and classified source spans are protected from internal insertions. Unsupported
+claims and unavailable semantic assessment remain unresolved in the candidate.
+
+Generation uses a pinned OpenRouter model/provider with a 30-second total task
+ceiling and bounded JSON response. The API loads the original through the owned
+revision and persisted report, checks immutable input/evidence hashes, then binds
+the complete report and current review attempt. Every status/read/copy/cancel
+request rechecks database ownership and report binding; clients submit only the
+expected hashes and an idempotency key. No client verdict is trusted. Cancellation
+by key creates a tombstone, preventing a late create after UI navigation from
+starting model work. Copy revalidates allowed insertions against the current
+report before returning the text.
+
+Candidates are explicitly **session-bound memory** with a ten-minute TTL, at
+most three attempts per review in that window and at most 64 retained tasks.
+Restart/multiple-instance recovery and durable candidate revisions are not
+implemented. This is an isolated research prototype, not persistent editorial
+history. The flag `FOUNDATION_REWRITE_ENABLED=true` requires a loopback-only
+foundation research preview and the owning OpenRouter key; startup rejects
+production. Source approval remains pending wherever the report records it.
+Readable citations are rendered server-side; URLs are not generated or appended.
+Oversized additions are omitted within the 3,000-unit limit with an explicit note;
+the original is never trimmed. Empty insertion output is permitted without
+claiming the text was corrected.
+
+Substantive prose changes require the independent re-assessment and scientific
+gates below. Existing report assessment is retained because author wording is
+unchanged; this slice makes no new semantic determination or scholarly approval.
 
 ## One-click user flow
 
