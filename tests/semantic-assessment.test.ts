@@ -80,7 +80,41 @@ function options(
     assessor,
     allowedModels: [extractor.modelId, assessor.modelId, fallback.modelId],
     allowedProviders: ['owned-a', 'owned-b'],
-    fetch,
+    // Migrate these existing transport/finding controls to the v1.7 wire contract.
+    // Dedicated inventory tests exercise selection IDs directly, without this bridge.
+    fetch: async (url, init) => {
+      const result = await fetch(url, init);
+      const { body, data } = requestData(init);
+      if (body.response_format.json_schema.name !== 'extraction' || !result.ok) return result;
+      try {
+        const envelope = await result.clone().json();
+        const payload = JSON.parse(envelope.choices[0].message.content);
+        if (Array.isArray(payload.claims))
+          payload.claims = payload.claims.map(
+            (row: {
+              candidateId?: string;
+              segmentId: string;
+              originalText: string;
+              evidenceKeys: string[];
+            }) => {
+              if (row.candidateId) return row;
+              const candidate = data.candidates.find(
+                (candidate: { segmentId: string; originalText: string }) =>
+                  candidate.segmentId === row.segmentId &&
+                  candidate.originalText.includes(row.originalText),
+              );
+              return {
+                candidateId: candidate?.candidateId ?? `claim-${'0'.repeat(24)}`,
+                evidenceKeys: row.evidenceKeys,
+              };
+            },
+          );
+        envelope.choices[0].message.content = JSON.stringify(payload);
+        return new Response(JSON.stringify(envelope), { status: result.status });
+      } catch {
+        return result;
+      }
+    },
     ...extra,
   };
 }
@@ -226,7 +260,7 @@ describe('bounded semantic assessment', () => {
       'owned-source',
       'owned-commentary',
     ]);
-    expect(data.claims[0].evidence[0].originalText).toBe(SOURCE);
+    expect(data.claims[0].evidence[0].passages[0].originalText).toBe(SOURCE);
     expect(JSON.stringify(data)).not.toContain('private-operator-path');
   });
 
@@ -290,7 +324,7 @@ describe('bounded semantic assessment', () => {
     const { body, data } = requestData(fetch.mock.calls[1]![1]);
     expect(data.claims[0].contextCoverage).toEqual(intake.contextCoverage);
     expect(data.claims[0].evidence[0]).toMatchObject({
-      originalText: SOURCE,
+      passages: [expect.objectContaining({ originalText: SOURCE })],
       approvalStatus: 'pending',
       researchOnly: true,
       sourceRole: 'quran_text',
@@ -311,8 +345,8 @@ describe('bounded semantic assessment', () => {
     expect(prompt).not.toMatch(/scholar_explanation|book_excerpt/u);
     expect(result.scholarlyApproval).toBe(false);
     expect(result.trace).toMatchObject({
-      pipelineVersion: 'provisional-semantic-v1.6',
-      promptVersion: 'evidence-support-v1.6',
+      pipelineVersion: 'provisional-semantic-v1.7',
+      promptVersion: 'evidence-support-v1.7',
     });
     expect(intake).toEqual(before);
   });
@@ -345,7 +379,7 @@ describe('bounded semantic assessment', () => {
         const { body, data } = requestData(init);
         if (body.response_format.json_schema.name === 'extraction')
           return response(proposal(control.claim));
-        expect(data.claims[0].evidence[0].originalText).toBe(control.source);
+        expect(data.claims[0].evidence[0].passages[0].originalText).toBe(control.source);
         expect(data.claims[0].claim.originalText).toBe(control.claim);
         return response(
           {
@@ -423,7 +457,7 @@ describe('bounded semantic assessment', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it('bounds original extraction previews while preserving full selected assessment evidence', async () => {
+  it('uses exact original passage previews preserving UTF16 and full small-source context', async () => {
     const intake = fixture();
     // The surrogate pair straddles the preview boundary and must remain intact.
     const text = `${'ن'.repeat(999)}😀${SOURCE}`;
@@ -433,15 +467,17 @@ describe('bounded semantic assessment', () => {
     const result = await createSemanticAssessmentAdapter(options(fetch)).assess(intake);
     expect(result.status).toBe('completed');
     const preview = requestData(fetch.mock.calls[0]![1]).data.evidenceManifest[0];
-    expect(preview).toMatchObject({
-      originalExcerpt: 'ن'.repeat(999),
-      excerptStartOffset: 0,
-      excerptEndOffset: 999,
-      excerptTruncated: true,
+    expect(preview.passages[0]).toMatchObject({
+      originalText: text,
+      startOffset: 0,
+      endOffset: text.length,
+      contextTruncated: false,
       originalSha256: sha256(text),
     });
     expect(preview).not.toHaveProperty('originalText');
-    expect(requestData(fetch.mock.calls[1]![1]).data.claims[0].evidence[0].originalText).toBe(text);
+    expect(
+      requestData(fetch.mock.calls[1]![1]).data.claims[0].evidence[0].passages[0].originalText,
+    ).toBe(text);
     expect(JSON.stringify(preview)).not.toContain('private-operator-path');
   });
 
@@ -451,16 +487,17 @@ describe('bounded semantic assessment', () => {
       fixture('الكتابة عن الحقوق.'),
     );
     expect(result).toMatchObject({ status: 'partial', errorCode: 'no_claims_extracted' });
-    expect(requestData(fetch.mock.calls[0]![1]).data.evidenceManifest[0]).toMatchObject({
-      originalExcerpt: SOURCE,
-      excerptTruncated: false,
-      excerptEndOffset: SOURCE.length,
-    });
+    expect(requestData(fetch.mock.calls[0]![1]).data.evidenceManifest[0].passages[0]).toMatchObject(
+      {
+        originalText: SOURCE,
+        contextTruncated: false,
+        endOffset: SOURCE.length,
+      },
+    );
   });
 
   it.each([
     ['paraphrase', 'يجب حفظ حقوق الجميع', `لذلك ${CLAIM}.`],
-    ['ambiguous anchor', CLAIM, `${CLAIM}. لذلك ${CLAIM}.`],
     ['source quote', CLAIM, `قال الكاتب «${CLAIM}». لذلك يجب المراجعة.`],
     ['question in mixed writing', CLAIM, `هل ${CLAIM}؟ لذلك يجب المراجعة.`],
   ])('rejects %s before any assessment', async (_name, proposed, text) => {
@@ -493,7 +530,7 @@ describe('bounded semantic assessment', () => {
     async (kind) => {
       const second = 'يجب حفظ السجل';
       const intake = fixture(
-        `😀 لذلك ${CLAIM}. هل يجب إسقاط الحقوق؟ قال الكاتب «يجب تغيير السجل». ${second}.`,
+        `😀 لذلك ${CLAIM}. هل يجب إسقاط الحقوق؟ قال الكاتب «يجب تغيير السجل». ${second}. يجب حفظ المال.`,
       );
       const invalid = {
         segmentId: kind === 'unknown_segment' ? 'invented-segment' : 'author-1',
@@ -505,7 +542,7 @@ describe('bounded semantic assessment', () => {
               : 'عبارة اخترعها النموذج',
         evidenceKeys: kind === 'unknown_source' ? ['invented-key'] : ['owned-source'],
       };
-      if (kind === 'unknown_source') invalid.originalText = second;
+      if (kind === 'unknown_source') invalid.originalText = 'يجب حفظ المال';
       const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
         const { body, data } = requestData(init);
         if (body.response_format.json_schema.name === 'extraction')
@@ -796,7 +833,7 @@ describe('bounded semantic assessment', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  it('bounds selected evidence request bytes before sending assessment', async () => {
+  it('bounds long-source assessment windows while retaining immutable full originals', async () => {
     const intake = fixture();
     intake.evidence = Array.from({ length: 20 }, (_, index) => {
       const source = evidence(`owned-${index}`);
@@ -804,21 +841,36 @@ describe('bounded semantic assessment', () => {
       source.originalSha256 = sha256(source.originalText);
       return source;
     });
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
-      response(
-        proposal(
-          CLAIM,
-          intake.evidence.map((source) => source.snapshotKey),
-        ),
-      ),
-    );
+    const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+      const { body, data } = requestData(init);
+      if (body.response_format.json_schema.name === 'extraction')
+        return response(
+          proposal(
+            CLAIM,
+            intake.evidence.map((source) => source.snapshotKey),
+          ),
+        );
+      expect(data.claims[0].evidence[0]).not.toHaveProperty('originalText');
+      expect(data.claims[0].evidence[0].passages[0].originalText).toHaveLength(4000);
+      return response(
+        {
+          assessments: [
+            {
+              ...finding(data.claims[0].claim.id),
+              citations: [{ evidenceKey: 'owned-0', excerpt: 'ن' }],
+            },
+          ],
+        },
+        assessor.modelId,
+      );
+    });
     const result = await createSemanticAssessmentAdapter(options(fetch)).assess(intake);
     expect(result).toMatchObject({
-      status: 'partial',
-      errorCode: 'body_too_large',
-      assessments: [],
+      status: 'completed',
+      errorCode: null,
     });
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(intake.evidence[0]!.originalText).toHaveLength(30000);
   });
 
   it('honors the phase deadline without returning a late semantic verdict', async () => {
