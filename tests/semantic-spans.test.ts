@@ -274,7 +274,7 @@ describe('v1.7 assessment wire and coverage', () => {
       errorCode: 'no_claims_extracted',
       claims: [],
     });
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
   it('repeats stable IDs/order while separately recording provisional model selection and unreviewed coverage', async () => {
     const original = intake(
