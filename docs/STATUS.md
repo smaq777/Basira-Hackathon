@@ -1,5 +1,13 @@
 # Current delivery status
 
+**Shared staging activation (#114):** The selected Railway staging service now
+runs the bounded hosted-demo path with a distinct report worker login, the pinned
+86-passage Neon research corpus and OpenRouter assessment. A fresh browser request
+rendered a durable partial report with provisional assessment and 16 candidate
+sources. The run also exposed weak retrieval relevance and unavailable canonical
+quotation matching, so production remains disabled and all 17 source editions
+remain pending. See the [activation evidence](evidence/2026-10-05-hosted-demo-activation.md).
+
 **Hosted research staging (#69/#14/#20):** A separate explicit profile now permits
 the selected Railway staging service to run real Foundation research, with matching
 service/environment/development declarations, verified TLS and unchanged ownership,

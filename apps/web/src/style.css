@@ -3041,6 +3041,26 @@ mark {
     gap: 9px;
   }
 
+  .analysis-error {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .analysis-error > svg {
+    align-self: flex-start;
+    flex: 0 0 auto;
+  }
+
+  .analysis-error > div {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .analysis-error .button {
+    width: 100%;
+    justify-content: center;
+  }
+
   .ticket-footer p {
     margin-inline-end: 0;
   }

@@ -17,7 +17,7 @@ from .tafsir_adapter import PROVIDER, WORKS, TafsirAdapter, verify_snapshot
 from review_flow.quotation import compare_quotation, VERSION as COMPARATOR_VERSION
 from .quote_discovery import ordered_omission
 
-VERSION = 'source-first-intake-1.8/' + COMPARATOR_VERSION
+VERSION = 'source-first-intake-1.9/' + COMPARATOR_VERSION
 SCHEMA_PIN = 'c492c3d0c73919981e4518a483750eae90b025559985c3fe286681e16765c332'
 FORMULAE = {normalize(x) for x in ('بسم الله', 'بسم الله الرحمن الرحيم', 'الحمد لله',
     'الحمد لله رب العالمين', 'إن شاء الله', 'إنا لله وإنا إليه راجعون',
@@ -29,7 +29,10 @@ MAX_EVIDENCE_ROWS = 80
 MAX_CONTEXT_ROWS = 30
 MAX_OPTIONAL_EVIDENCE_BYTES = 200_000
 NEGATIVE_CONTEXT_CACHE_SECONDS = 30.0
-NON_SOURCE_NUMERIC = re.compile(r'الساعة|ساعه|الوقت|التوقيت|موعد|الاجتماع|نتيجة|المباراة|النقاط|الاهداف|clock|time|score|\bam\b|\bpm\b', re.I)
+NON_SOURCE_NUMERIC = re.compile(r'الساعة|ساعه|الوقت|التوقيت|موعد|الاجتماع|نتيجة|المباراة|النقاط|الاهداف|clock|time|score|ratio|\bam\b|\bpm\b', re.I)
+# Ratio wording needs numeric adjacency or an explicit mathematical qualifier.
+# Bare نسبة also means source attribution and must not suppress a locator.
+NON_SOURCE_RATIO = re.compile(r'(?:النسبة|نسبة|نسبه)(?:\s+(?:العددية|العدديه|المئوية|المئويه|بين)(?:\s|$)|\s*[:：]?\s*[\[(]?\s*$)')
 JOINED_VOCATIVE = re.compile(r'(?<!\w)ياايها(?!\w)')
 
 
@@ -64,6 +67,39 @@ def _quran_search_key(text):
     # Search presentation alias only. Original text and literal comparison are
     # untouched; the comparator independently assesses the pinned edition.
     return JOINED_VOCATIVE.sub('يا ايها', normalize(text))
+
+
+def _bound_quran_locators(text, quote_units, names, reference):
+    """Recognize complete reference containers, never arbitrary quoted prose.
+
+    Only independently parsed, balanced square/parenthesized units qualify.
+    A locator nested in genuine speech does not turn that whole speech into
+    metadata. Comparison normalization binds the label; original slices remain.
+    """
+    locators = {}
+    pattern = re.compile(r'(?:(?P<label>[\u0621-\u064a\u066e-\u06d3\u064b-\u065f\u0670ـ\s]+?)\s*[:：]?\s*)?'
+                         r'(?P<surah>\d{1,3})\s*[:：]\s*(?P<ayah>\d{1,3})')
+    for a, b, _, _, outer_end in quote_units:
+        opening = a - 1
+        while opening >= 0 and text[opening].isspace():
+            opening -= 1
+        if opening < 0 or text[opening] not in '[(' or outer_end <= b or \
+                text[outer_end-1] != {'[': ']', '(': ')'}[text[opening]]:
+            continue
+        match = pattern.fullmatch(text[a:b])
+        if not match:
+            continue
+        surah, ayah = int(match['surah']), int(match['ayah'])
+        label = normalize(match['label'] or '')
+        if label:
+            label = re.sub(r'^(?:سورة|سوره)\s+', '', label)
+            if names.get(label) != surah:
+                continue
+        records = reference(surah, ayah)
+        if len(records) != 1:
+            continue
+        locators[(a + match.start('surah'), a + match.end('ayah'))] = (a, b, records)
+    return locators
 
 
 def _quote_units(text, surah_names=None, reference=None):
@@ -327,6 +363,8 @@ class SourceIntake:
         self.context_attempted = set()
         spans, references, warnings = [], [], related_warnings
         quote_units = _quote_units(text, self.store.names, self.store.reference)
+        locators = _bound_quran_locators(text, quote_units, self.store.names, self.store.reference)
+        locator_units = set()
 
         def add(start, end, role, status, method, records=(), proposal=None, conflict=False):
             if start >= end:
@@ -337,21 +375,29 @@ class SourceIntake:
         # Parse numeric ranges as one unresolved mention: never silently turn a
         # requested range into its first verse. int accepts Arabic-Indic digits.
         for m in NUMERIC.finditer(text):
+            locator = locators.get((m.start(), m.end()))
             before = normalize(text[max(0,m.start()-60):m.start()])
             named_ids = [surah for name,surah in self.store.names.items()
                 if re.search(r'(?<!\w)'+re.escape(name)+r'\s*$', before)]
             named = bool(named_ids)
             framed = _framing(text,m.start())=='ayah'
             bracketed = bool(re.search(r'[\[(]\s*$',text[max(0,m.start()-5):m.start()]))
-            non_source = NON_SOURCE_NUMERIC.search(before+' '+normalize(text[m.end():m.end()+8]))
+            non_source = NON_SOURCE_NUMERIC.search(before+' '+normalize(text[m.end():m.end()+8])) or NON_SOURCE_RATIO.search(before)
             if non_source and not named:
                 continue
-            explicit = named or framed or bracketed
+            explicit = bool(locator) or named or framed or bracketed
             records = self.store.reference(int(m[1]), int(m[2])) if m[3] is None else []
-            add(m.start(), m.end(), 'claimed_source', 'source_matched' if records and explicit else 'candidate' if records else 'unresolved',
-                ('explicit_numeric_reference' if explicit else 'ambiguous_numeric_reference') if not m[3] else 'range_requires_confirmation',
-                records, conflict=bool(named_ids and int(m[1]) not in named_ids))
-            references.append((m.start(), m.end(), records if explicit else []))
+            start, end = locator[:2] if locator else (m.start(), m.end())
+            if locator:
+                locator_units.add((start, end))
+                method = 'bound_quran_bibliographic_locator'
+            elif m[3]:
+                method = 'range_requires_confirmation'
+            else:
+                method = 'explicit_numeric_reference' if explicit else 'ambiguous_numeric_reference'
+            add(start, end, 'claimed_source', 'source_matched' if records and explicit else 'candidate' if records else 'unresolved',
+                method, records, conflict=bool(named_ids and int(m[1]) not in named_ids))
+            references.append((start, end, records if explicit else []))
             if records and not explicit:
                 warnings.append('Bare numeric n:m is an ambiguous reference candidate; confirm its intended meaning before source-context retrieval.')
         for name, surah in self.store.names.items():
@@ -437,6 +483,8 @@ class SourceIntake:
                 add(a, b, 'ayah', 'source_matched', 'complete_verse_search_match', [record], proposal, proposal=='matn')
 
         for a, b, hinted, marker, outer_end in quote_units:
+            if (a, b) in locator_units:
+                continue
             # A verse/footnote number is metadata, never quoted source wording.
             if not any(char.isalpha() for char in text[a:b]):
                 continue
