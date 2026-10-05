@@ -24,9 +24,11 @@ dependency queue awaits Saleh.
 
 ## Completed checkpoint
 
-- Dependency PRs #59 and #70–#78 were ready, CI-green and unmerged with no formal
-  owner reviews at the recorded read-only GitHub checkpoint. Recheck before making
-  statements about current acceptance; do not infer approval from CI.
+- At the read-only GitHub checkpoint on 5 October 2026, 13:53 UTC, #59 and #70–#72
+  were merged into development `809baeed63a9e70c5e1d79a7d010e7f12ed6db4d`.
+  #73–#78 remained open with required checks green, and #80 remained draft with
+  required checks green at `48acf4a`. Recheck before making statements about
+  current acceptance; do not infer approval from CI.
 - Claim recovery v1.8 reaches real evidence for one fresh source-free assertion.
   A mixed-writing `invalid_claims` failure is retained. Rewrite v2 preserves
   explicit obligation/non-obligation in a retained supported UI report and keeps

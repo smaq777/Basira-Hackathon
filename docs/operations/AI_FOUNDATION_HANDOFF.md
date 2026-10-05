@@ -11,6 +11,11 @@ commits into `development`; do not squash, force-push or close issues automatica
 The implementation branches have passed their documented checks. A working local
 research run is separate from acceptance of the shared staging configuration.
 
+At the read-only checkpoint on 5 October 2026, 13:53 UTC, #59 and #70–#72 were
+merged into `development` (`809baeed63a9e70c5e1d79a7d010e7f12ed6db4d`). Review the
+remaining #73–#78 before #80; recheck GitHub rather than treating this checkpoint
+as permanent status. Required checks passed at #80 head `48acf4a`.
+
 The RAG database is **not the application's `DATABASE_URL`**. That variable stores
 documents, jobs and reports. The RAG reader uses `FOUNDATION_CORPUS_DATABASE_URL`
 and a pinned `FOUNDATION_CORPUS_VERSION`. A separate pending public-page cache
