@@ -134,18 +134,18 @@ describe('database TLS policy', () => {
   });
 });
 
-describe('database-backed guest retention', () => {
+describe('database-backed guest quotas', () => {
   const databaseSource = readFileSync('apps/api/src/database.ts', 'utf8');
 
-  it('does not block a valid retained session with fixed lifetime item caps', () => {
-    expect(databaseSource).not.toContain('RESOURCE_LIMIT_REACHED');
-    expect(databaseSource).not.toContain('>= 20');
-    expect(databaseSource).not.toContain('>= 10');
+  it('bounds documents, revisions and review runs independently', () => {
+    expect(databaseSource).toContain("ResourceLimitError('documents')");
+    expect(databaseSource).toContain("ResourceLimitError('revisions')");
+    expect(databaseSource).toContain("ResourceLimitError('reviews')");
   });
 
-  it('still replays an existing review idempotency key before insertion', () => {
+  it('replays an existing idempotency key before enforcing the review cap', () => {
     expect(databaseSource.indexOf('if (existingRow) return')).toBeLessThan(
-      databaseSource.indexOf('on conflict (revision_id, idempotency_key) do nothing'),
+      databaseSource.indexOf("ResourceLimitError('reviews')"),
     );
   });
 });

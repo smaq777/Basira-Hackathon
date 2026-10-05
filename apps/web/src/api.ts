@@ -67,12 +67,24 @@ export type PreflightResponse = {
   warnings: string[];
 };
 
-type ApiErrorBody = { code?: string };
+export type CapacityResource = 'documents' | 'revisions' | 'reviews';
+type ApiErrorBody = { code?: string; resource?: unknown };
+function capacityResource(value: unknown): CapacityResource | undefined {
+  return value === 'documents' || value === 'revisions' || value === 'reviews' ? value : undefined;
+}
+export function isResourceCapacityError(error: unknown): error is BasirahApiError {
+  return (
+    error instanceof BasirahApiError &&
+    error.status === 429 &&
+    error.code === 'RESOURCE_LIMIT_REACHED'
+  );
+}
 
 export class BasirahApiError extends Error {
   constructor(
     public readonly code: string,
     public readonly status: number,
+    public readonly resource?: CapacityResource,
   ) {
     super(code);
   }
@@ -112,7 +124,14 @@ async function requestJson(
     })) as ApiErrorBody;
     if (typeof body !== 'object' || body === null || Array.isArray(body))
       throw new BasirahApiError('INVALID_RESPONSE', response.status);
-    if (!response.ok) throw new BasirahApiError(body.code ?? 'REQUEST_FAILED', response.status);
+    if (!response.ok)
+      throw new BasirahApiError(
+        body.code ?? 'REQUEST_FAILED',
+        response.status,
+        response.status === 429 && body.code === 'RESOURCE_LIMIT_REACHED'
+          ? capacityResource(body.resource)
+          : undefined,
+      );
     return body;
   } catch (error) {
     if (error instanceof BasirahApiError) throw error;
@@ -210,6 +229,17 @@ export async function persistDraftForAnalysis(
 }
 
 export function analysisErrorMessage(error: unknown): string {
+  if (isResourceCapacityError(error)) {
+    const description =
+      error.resource === 'documents'
+        ? 'بلغت هذه الجلسة الحد الأقصى لعدد المسودات.'
+        : error.resource === 'revisions'
+          ? 'بلغت هذه المسودة الحد الأقصى لعدد النسخ المحفوظة.'
+          : error.resource === 'reviews'
+            ? 'بلغت هذه النسخة من النص الحد الأقصى لعدد المراجعات.'
+            : 'تعذر إضافة مسودة أو مراجعة لأن حد السعة قد بلغ.';
+    return `${description} بقي نصك كما هو؛ عد إلى النص واحتفظ بنسخة منه. تبقى مراجعاتك السابقة متاحة في جلستك الحالية.`;
+  }
   if (error instanceof BasirahApiError) {
     if (error.code === 'API_ROUTE_UNAVAILABLE')
       return 'خدمة التحليل غير مرتبطة بهذه الواجهة حاليًا. بقي نصك كما هو؛ حاول لاحقًا.';
