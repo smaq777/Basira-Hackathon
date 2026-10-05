@@ -1,4 +1,5 @@
 import { semanticBudgetConfiguration } from './semantic-budget.js';
+import { foundationActivation } from './foundation-activation.js';
 import { createApp } from './app.js';
 import { createRewriteService } from './rewrite.js';
 import { createAuthorRewriteGenerator, createAuthorRewriteVerifier } from './rewrite-provider.js';
@@ -39,6 +40,7 @@ const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
 const host = process.env.HOST ?? '0.0.0.0';
 if (!['127.0.0.1', '0.0.0.0', '::1'].includes(host)) throw new Error('Invalid HOST');
+const activation = foundationActivation(process.env, host);
 const connectionString = process.env.DATABASE_URL;
 if (process.env.NODE_ENV === 'production' && !connectionString)
   throw new Error('DATABASE_URL is required in production');
@@ -80,20 +82,15 @@ if (reviewerAuth.configured !== Boolean(clerkFrontendApiOrigin))
   );
 async function initializeFoundation() {
   if (process.env.FOUNDATION_ENABLED !== 'true') return undefined;
-  const researchPreview = process.env.FOUNDATION_RESEARCH_PREVIEW === 'true';
-  if (
-    researchPreview &&
-    (process.env.NODE_ENV === 'production' || !['127.0.0.1', '::1'].includes(host))
-  )
-    throw new Error('RESEARCH_PREVIEW_REQUIRES_LOCAL_DEVELOPMENT');
+  const researchPreview = activation.researchPreview;
   // This opt-in uses only numeric verse references and the pinned Tafsir adapter.
-  // Hosted activation needs separate source-edition and deployment validation.
+  // Both research profiles retain provisional source/edition status.
   if (process.env.FOUNDATION_TAFSIR_LIVE === 'true' && !researchPreview)
-    throw new Error('LIVE_SOURCE_ACQUISITION_REQUIRES_LOCAL_RESEARCH_PREVIEW');
+    throw new Error('LIVE_SOURCE_ACQUISITION_REQUIRES_RESEARCH_PREVIEW');
   const semanticEnabled = process.env.FOUNDATION_SEMANTIC_ENABLED === 'true';
   const semanticBudget = semanticBudgetConfiguration(process.env, researchPreview);
   if (semanticEnabled && !researchPreview)
-    throw new Error('SEMANTIC_PILOT_REQUIRES_LOCAL_RESEARCH_PREVIEW');
+    throw new Error('SEMANTIC_PILOT_REQUIRES_RESEARCH_PREVIEW');
   const retrievalEnabled = process.env.FOUNDATION_CLAIM_RETRIEVAL_ENABLED === 'true';
   const webDiscoveryEnabled = process.env.FOUNDATION_WEB_DISCOVERY_ENABLED === 'true';
   const webCacheEnabled = process.env.FOUNDATION_WEB_CACHE_ENABLED === 'true';
@@ -329,10 +326,9 @@ const rewriteEnabled = process.env.FOUNDATION_REWRITE_ENABLED === 'true';
 if (
   rewriteEnabled &&
   (!foundation?.researchPreview ||
-    process.env.NODE_ENV === 'production' ||
-    !['127.0.0.1', '::1'].includes(host))
+    !['local-research', 'hosted-staging'].includes(activation.profile))
 )
-  throw new Error('REWRITE_REQUIRES_LOCAL_RESEARCH_PREVIEW');
+  throw new Error('REWRITE_REQUIRES_RESEARCH_PREVIEW');
 const rewrite = rewriteEnabled
   ? createRewriteService(createAuthorRewriteGenerator(process.env.OPENROUTER_API_KEY ?? ''), {
       verifier: createAuthorRewriteVerifier(process.env.OPENROUTER_API_KEY ?? ''),

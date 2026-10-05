@@ -114,6 +114,9 @@ Use `npm ci` in CI for locked dependencies. If a dependency changes, regenerate 
 
 ## Optional local semantic experiment
 
+The existing loopback profile below remains the default. An independently opted-in
+Railway staging profile is described in [hosted research setup](HOSTED_RESEARCH_STAGING.md).
+
 Apply migration `0007_complete_quotation_findings` before source review. Keep
 `FOUNDATION_SEMANTIC_ENABLED=false` unless an operator has authorized the test
 payload to be sent to OpenRouter and its selected provider. Activation requires
@@ -140,7 +143,12 @@ stored reports or enable rewriting. See the [pilot evidence](../evidence/2026-10
 
 ## Research cache and discovery profile — 5 October
 
-All foundation, semantic, retrieval, discovery, and cache flags default off. Live research activation requires `NODE_ENV` other than production, `HOST=127.0.0.1` or `::1`, and `FOUNDATION_RESEARCH_PREVIEW=true`. It is not a production deployment setting.
+All foundation, semantic, retrieval, discovery, and cache flags default off. The
+default local profile requires `NODE_ENV` other than production, `HOST=127.0.0.1`
+or `::1`, and `FOUNDATION_RESEARCH_PREVIEW=true`. The separate
+[hosted staging profile](HOSTED_RESEARCH_STAGING.md) permits real connected testing
+in the explicitly selected Railway staging service, retaining provisional research
+status. It does not authorize a main/production release.
 
 Enable `FOUNDATION_ENABLED`, `FOUNDATION_SEMANTIC_ENABLED`, `FOUNDATION_CLAIM_RETRIEVAL_ENABLED`, `FOUNDATION_WEB_DISCOVERY_ENABLED`, and `FOUNDATION_WEB_CACHE_ENABLED` only for an authorized research run. Keep the local Python executable/index, report runtime login, and separate worker login configured as described in `.env.example`. The report database needs migration 0007 for source review and at least 0009 for claim retrieval. The separate Neon corpus/cache database needs the populated versioned corpus and migration `0010_research_page_cache`. Apply checked-in migrations only to the explicitly selected isolated development database with its direct migration credential; never place owner credentials in runtime configuration.
 

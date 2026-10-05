@@ -1,5 +1,13 @@
 # Current delivery status
 
+**Hosted research staging (#69/#14/#20):** A separate explicit profile now permits
+the selected Railway staging service to run real Foundation research, with matching
+service/environment/development declarations, verified TLS and unchanged ownership,
+quotas and source/citation guards. Local/default-off behavior remains. This is a
+review proposal; no hosted activation is claimed. See [boundary and remaining
+evidence](evidence/2026-10-05-hosted-staging-profile.md) and
+[operator setup](operations/HOSTED_RESEARCH_STAGING.md).
+
 ## Latest development evidence — 5 October
 
 **Guest capacity feedback (#79):** Known documents/revisions/reviews capacity responses now have a separate Arabic explanation and return-to-text action, with no fixed-limit retry, automatic resubmission or session replacement. Transient rate/network retries remain distinct. Offline UI/client validation precedes lead live rechecking; server quotas and ownership are unchanged. See [capacity evidence](evidence/2026-10-05-capacity-feedback.md).

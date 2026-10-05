@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   validate:
-    if: ${{ vars.DEPLOY_STAGING_ENABLED == 'true' }}
+    if: ${{ github.ref == 'refs/heads/development' && vars.DEPLOY_STAGING_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: staging
@@ -29,7 +29,7 @@ jobs:
       - run: npm audit --audit-level=high
 
   railway:
-    if: ${{ vars.DEPLOY_STAGING_ENABLED == 'true' && vars.DEPLOY_RAILWAY_ENABLED == 'true' }}
+    if: ${{ github.ref == 'refs/heads/development' && vars.DEPLOY_STAGING_ENABLED == 'true' && vars.DEPLOY_RAILWAY_ENABLED == 'true' }}
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -48,7 +48,7 @@ jobs:
         run: npx -y @railway/cli@5.63.1 up --ci --environment staging --service "$RAILWAY_SERVICE_ID"
 
   vercel:
-    if: ${{ vars.DEPLOY_STAGING_ENABLED == 'true' && vars.DEPLOY_VERCEL_ENABLED == 'true' }}
+    if: ${{ github.ref == 'refs/heads/development' && vars.DEPLOY_STAGING_ENABLED == 'true' && vars.DEPLOY_VERCEL_ENABLED == 'true' }}
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 15
