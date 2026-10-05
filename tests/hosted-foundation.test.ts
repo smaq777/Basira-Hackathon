@@ -289,3 +289,151 @@ it('compares an explicitly cited Quran quotation against the pinned hosted origi
   expect(intake.segments.some((segment) => segment.role === 'claimed_source')).toBe(true);
   expect(intake.warnings).toEqual([]);
 });
+
+async function hostedComparison(quote: string, original: string) {
+  const source: SourceEvidence = {
+    snapshotKey: 'synthetic-boundary:31:15',
+    sourceId: 'synthetic-boundary',
+    sourceVersion: 'v1',
+    sourceRole: 'quran_text',
+    reference: '31:15',
+    originalText: original,
+    originalSha256: sha256(original),
+    work: 'Synthetic quotation-boundary control',
+    author: null,
+    edition: null,
+    sourceUrl: null,
+    approvalStatus: 'pending',
+    researchOnly: true,
+    parentSnapshotKey: null,
+    delivery: 'snapshot',
+    retrievalModes: ['exact'],
+    provenance: { surah_name: 'لقمان' },
+  };
+  const adapter = createHostedDraftAdapter('boundary-control', {
+    async search() {
+      return [source];
+    },
+    async restore() {
+      return [];
+    },
+  });
+  const text = `🙂 قال تعالى: ﴿${quote}﴾ [لقمان: 31:15].`;
+  try {
+    const intake = await adapter.analyze(text, revisionId);
+    expect(intake.originalText).toBe(text);
+    expect(intake.revisionSha256).toBe(sha256(text));
+    expect(intake.evidence[0]).toEqual(source);
+    const segment = intake.segments.find((row) => row.role === 'ayah')!;
+    expect(text.slice(segment.startOffset, segment.endOffset)).toBe(quote);
+    expect(Array.from(text).slice(segment.codePointStart, segment.codePointEnd).join('')).toBe(
+      quote,
+    );
+    return intake.quotationFindings[0]!;
+  } finally {
+    await adapter.close();
+  }
+}
+
+it.each([
+  ['صَاحِبْهُم', 'وَصَاحِبْهُمَا فِى ٱلدُّنْيَا مَعْرُوفًا'],
+  ['قال الله', 'وقال الله'],
+  ['قال الله', 'قال اللهما'],
+  ['قال الل', 'قال الله'],
+])('rejects raw token fragments %s without source offsets', async (quote, source) => {
+  expect(await hostedComparison(quote, source)).toMatchObject({
+    status: 'mismatch',
+    matchedStart: null,
+    matchedEnd: null,
+    comparison: { fidelity: 'different', extent: 'unknown' },
+  });
+});
+
+it.each([
+  ['قال الله', 'قال الله ثم قال الله'],
+  ['قال قال', 'قال قال قال'],
+  ['قال الله', 'قَالَ اللَّهُ ثُمَّ قَالَ اللَّهُ'],
+  ['قال الله', 'قال الله ثم قَالَ اللَّهُ'],
+])('leaves repeated raw or orthographic alignments unresolved for %s', async (quote, source) => {
+  expect(await hostedComparison(quote, source)).toMatchObject({
+    status: 'unresolved',
+    matchedStart: null,
+    matchedEnd: null,
+    comparison: { fidelity: 'unresolved', extent: 'unknown', basis: 'none' },
+  });
+});
+
+it.each([
+  ['قال الله', 'قال الله', 'exact', 'exact', 'full', 0, 8],
+  ['قال الله', '🕌 قال الله، ثم مضى.', 'partial', 'exact', 'excerpt', 3, 11],
+  ['قال الله', '«قال الله»، ثم مضى.', 'partial', 'exact', 'excerpt', 1, 9],
+  ['قال الله', 'قَالَ اللَّهُ', 'normalized', 'orthographic', 'full', 0, 13],
+  ['قال الله', 'ثم قَالَ اللَّهُ ومضى.', 'partial', 'orthographic', 'excerpt', 3, 16],
+  ['ان الله', 'أن الله', 'normalized', 'orthographic', 'full', 0, 7],
+])(
+  'preserves unique comparison and original UTF16 offsets for %s',
+  async (quote, source, status, fidelity, extent, start, end) => {
+    const result = await hostedComparison(quote, source);
+    expect(result).toMatchObject({
+      status,
+      matchedStart: start,
+      matchedEnd: end,
+      comparison: { fidelity, extent },
+    });
+    expect(source.slice(result.matchedStart!, result.matchedEnd!)).toBe(
+      source.slice(start as number, end as number),
+    );
+  },
+);
+
+// Exact public Tanzil 31:15 original retained in the issue #133 offline diagnostic.
+// The adapter transport is a test fixture; it does not assert source approval.
+const retainedLuqmanOriginal =
+  'وَإِن جَـٰهَدَاكَ عَلَىٰٓ أَن تُشْرِكَ بِى مَا لَيْسَ لَكَ بِهِۦ عِلْمٌ فَلَا تُطِعْهُمَا ۖ وَصَاحِبْهُمَا فِى ٱلدُّنْيَا مَعْرُوفًا ۖ وَٱتَّبِعْ سَبِيلَ مَنْ أَنَابَ إِلَىَّ ۚ ثُمَّ إِلَىَّ مَرْجِعُكُمْ فَأُنَبِّئُكُم بِمَا كُنتُمْ تَعْمَلُونَ';
+
+it('rejects the retained publisher mid-word fragment without changing its source bytes', async () => {
+  expect(await hostedComparison('صَاحِبْهُم', retainedLuqmanOriginal)).toMatchObject({
+    status: 'mismatch',
+    matchedStart: null,
+    matchedEnd: null,
+  });
+});
+
+it('preserves the full retained Ayah and its unique qualified negative excerpt', async () => {
+  expect(await hostedComparison(retainedLuqmanOriginal, retainedLuqmanOriginal)).toMatchObject({
+    status: 'exact',
+    matchedStart: 0,
+    matchedEnd: retainedLuqmanOriginal.length,
+    comparison: { fidelity: 'exact', extent: 'full' },
+  });
+  const excerpt = 'فَلَا تُطِعْهُمَا';
+  const start = retainedLuqmanOriginal.indexOf(excerpt);
+  expect(await hostedComparison(excerpt, retainedLuqmanOriginal)).toMatchObject({
+    status: 'partial',
+    matchedStart: start,
+    matchedEnd: start + excerpt.length,
+    comparison: { fidelity: 'exact', extent: 'excerpt' },
+  });
+});
+
+it('uses orthographic rather than raw exact fidelity when a final combining mark is omitted', async () => {
+  expect(await hostedComparison('قال الله', 'قال اللهُ')).toMatchObject({
+    status: 'normalized',
+    matchedStart: 0,
+    matchedEnd: 'قال اللهُ'.length,
+    comparison: { fidelity: 'orthographic', extent: 'full' },
+  });
+});
+
+it.each(['قال ۖ الله', ' ۖ '])(
+  'leaves a stop mark without lexical words unresolved in %s',
+  async (source) => {
+    expect(await hostedComparison(' ۖ ', source)).toMatchObject({
+      status: 'unresolved',
+      reason: 'no_lexical_quotation',
+      matchedStart: null,
+      matchedEnd: null,
+      comparison: { fidelity: 'unresolved', extent: 'unknown', differences: [], basis: 'none' },
+    });
+  },
+);

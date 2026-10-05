@@ -138,8 +138,63 @@ function comparisonTokens(text: string): Token[] {
 }
 
 function compareQuote(quote: string, source: string) {
-  const rawStart = source.indexOf(quote);
-  if (rawStart >= 0)
+  const quoteTokens = comparisonTokens(quote);
+  if (!quoteTokens.length)
+    return {
+      status: 'unresolved' as const,
+      reason: 'no_lexical_quotation',
+      matchedStart: null,
+      matchedEnd: null,
+      comparison: {
+        fidelity: 'unresolved' as const,
+        extent: 'unknown' as const,
+        differences: [],
+        basis: 'none' as const,
+      },
+    };
+  const sourceTokens = comparisonTokens(source);
+  // Boundaries and returned offsets always refer to the immutable original UTF-16 text.
+  const tokenInteriors = new Set<number>();
+  for (const token of sourceTokens)
+    for (let offset = token.start + 1; offset < token.end; offset++) tokenInteriors.add(offset);
+  const rawMatches: number[] = [];
+  if (quote.length)
+    for (let from = 0; from <= source.length - quote.length;) {
+      const start = source.indexOf(quote, from);
+      if (start < 0) break;
+      if (!tokenInteriors.has(start) && !tokenInteriors.has(start + quote.length))
+        rawMatches.push(start);
+      if (rawMatches.length > 1) break;
+      from = start + 1; // Include overlapping occurrences when checking uniqueness.
+    }
+  const normalizedMatches: number[] = [];
+  if (quoteTokens.length)
+    for (let index = 0; index <= sourceTokens.length - quoteTokens.length; index++) {
+      if (quoteTokens.every((token, offset) => sourceTokens[index + offset]!.value === token.value))
+        normalizedMatches.push(index);
+      if (normalizedMatches.length > 1) break;
+    }
+  const rawStart = rawMatches[0];
+  const at = normalizedMatches[0];
+  const differentAlignment =
+    rawStart !== undefined &&
+    at !== undefined &&
+    (sourceTokens[at]!.start < rawStart ||
+      sourceTokens[at + quoteTokens.length - 1]!.end > rawStart + quote.length);
+  if (rawMatches.length > 1 || normalizedMatches.length > 1 || differentAlignment)
+    return {
+      status: 'unresolved' as const,
+      reason: 'ambiguous_contiguous_alignment',
+      matchedStart: null,
+      matchedEnd: null,
+      comparison: {
+        fidelity: 'unresolved' as const,
+        extent: 'unknown' as const,
+        differences: [],
+        basis: 'none' as const,
+      },
+    };
+  if (rawStart !== undefined)
     return {
       status:
         rawStart === 0 && quote.length === source.length
@@ -161,12 +216,7 @@ function compareQuote(quote: string, source: string) {
         basis: 'canonical' as const,
       },
     };
-  const quoteTokens = comparisonTokens(quote);
-  const sourceTokens = comparisonTokens(source);
-  const at = sourceTokens.findIndex((_token, index) =>
-    quoteTokens.every((token, offset) => sourceTokens[index + offset]?.value === token.value),
-  );
-  if (quoteTokens.length >= 2 && at >= 0) {
+  if (quoteTokens.length >= 2 && at !== undefined) {
     const full = at === 0 && quoteTokens.length === sourceTokens.length;
     return {
       status: full ? ('normalized' as const) : ('partial' as const),
