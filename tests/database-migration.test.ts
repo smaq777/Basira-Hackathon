@@ -114,6 +114,20 @@ describe('database TLS policy', () => {
     });
   });
 
+  it('allows a separate verified CA policy for the corpus connection', () => {
+    const environment = {
+      RAILWAY_ENVIRONMENT_NAME: 'production',
+      DATABASE_CA_CERT: 'report-database-ca',
+    } as NodeJS.ProcessEnv;
+    expect(databaseTls('verify-full', environment, { ca: undefined })).toEqual({
+      rejectUnauthorized: true,
+    });
+    expect(databaseTls('verify-full', environment, { ca: 'corpus-ca' })).toEqual({
+      rejectUnauthorized: true,
+      ca: 'corpus-ca',
+    });
+  });
+
   it('requires an explicit valid mode', () => {
     expect(databaseTls('disable')).toBe(false);
     expect(() => databaseTls('unexpected')).toThrow('DATABASE_TLS_MODE');
