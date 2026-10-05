@@ -233,7 +233,11 @@ export function RewritePanel({ report }: { report: FoundationReport }) {
         throw new Error('تغيّر الاقتراح؛ أعد تحميله.');
       await navigator.clipboard.writeText(body.text);
       if (!abort.signal.aborted && activeBinding.current === expectedBinding)
-        setMessage('نُسخ النص المقترح مع التوثيق.');
+        setMessage(
+          candidate.operations?.citations.length
+            ? 'نُسخ النص المقترح مع التوثيق.'
+            : 'نُسخ النص المقترح.',
+        );
     } catch {
       if (!abort.signal.aborted && activeBinding.current === expectedBinding)
         setMessage('تعذر نسخ الاقتراح أو انتهت صلاحيته. بقي الأصل كما هو.');
@@ -259,6 +263,14 @@ export function RewritePanel({ report }: { report: FoundationReport }) {
         <>
           <h3>النص المقترح — للمراجعة</h3>
           <p style={{ whiteSpace: 'pre-wrap' }}>{candidate.text}</p>
+          {!candidate.operations?.citations.length &&
+            !candidate.operations?.paragraphBreaks.length && (
+              <p>لم ينتج الاقتراح إضافة مناسبة؛ النص المعروض هو الأصل كما ورد، دون توثيق جديد.</p>
+            )}
+          {!!candidate.operations?.paragraphBreaks.length &&
+            !candidate.operations?.citations.length && (
+              <p>اقتُرح ترتيب الفقرات فقط؛ لم تُضف مراجع جديدة.</p>
+            )}
           <details>
             <summary>مقارنة التغييرات مع الأصل</summary>
             <p style={{ whiteSpace: 'pre-wrap' }}>{report.intake.originalText}</p>

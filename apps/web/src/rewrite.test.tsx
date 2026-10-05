@@ -56,7 +56,12 @@ it('offers copy only after validation and requests a fresh server copy check bef
   expect(polls).toBeGreaterThan(0);
   expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/copy'))).toBe(true);
   expect(clipboard).toHaveBeenCalledWith(report.intake.originalText);
-  expect(await screen.findByText('نُسخ النص المقترح مع التوثيق.')).not.toBeNull();
+  expect(await screen.findByText('نُسخ النص المقترح.')).not.toBeNull();
+  expect(
+    screen.getByText(
+      'لم ينتج الاقتراح إضافة مناسبة؛ النص المعروض هو الأصل كما ورد، دون توثيق جديد.',
+    ),
+  ).not.toBeNull();
 });
 
 it('cancels by request key on unmount before late create resolves and never displays or copies its result', async () => {
