@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { SourceContentSelectionSchema } from './source-content.js';
 const CacheChunkerVersion = z.enum(['cache-sentence-context-v1', 'exact-content-block-context-v1']);
 
-export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.8';
-export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.8';
+export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.9';
+export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.9';
 
 const EvidenceKeys = z.array(z.string().min(1).max(160)).max(20);
 const Details = z.array(z.string().min(1).max(500)).max(6);
@@ -74,6 +74,46 @@ export const ClaimExtractionOutputSchema = z
     claims: z.array(ExtractedClaimProposalSchema).max(5),
   })
   .strict();
+
+/** v1.9 wire aliases are translated only through the request-owned canonical map. */
+export const AliasedClaimSelectionOutputSchema = z
+  .object({
+    claims: z
+      .array(
+        z
+          .object({
+            candidateId: z.string().regex(/^C[1-9][0-9]{0,3}$/u),
+            evidenceKeys: z.array(z.string().regex(/^E[1-9][0-9]{0,3}$/u)).max(20),
+          })
+          .strict(),
+      )
+      .max(5),
+  })
+  .strict();
+export const SelectionBindingDiagnosticsSchema = z
+  .object({
+    protocol: z.literal('exact-selection-alias-v1'),
+    attempt: z.enum(['initial', 'empty_reconsideration']),
+    aliasMapSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    payloadSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    proposalCount: z.number().int().nonnegative().max(5),
+    acceptedCount: z.number().int().nonnegative().max(5),
+    rejectedCount: z.number().int().nonnegative().max(5),
+    rejectionCounts: z
+      .object({
+        unknown_candidate_alias: z.number().int().nonnegative().max(5),
+        unknown_evidence_alias: z.number().int().nonnegative().max(5),
+        duplicate_candidate_alias: z.number().int().nonnegative().max(5),
+        duplicate_evidence_alias: z.number().int().nonnegative().max(5),
+      })
+      .strict(),
+  })
+  .strict()
+  .refine(
+    (row) => row.acceptedCount + row.rejectedCount === row.proposalCount,
+    'Selection counts must cover all proposals',
+  );
+export type SelectionBindingDiagnostics = z.infer<typeof SelectionBindingDiagnosticsSchema>;
 
 /** v1.7 selects server-owned spans; the legacy proposal schema remains readable. */
 export const ClaimSelectionOutputSchema = z
@@ -260,6 +300,7 @@ export const SemanticAssessmentReportSchema = z
           'provisional-semantic-v1.5',
           'provisional-semantic-v1.6',
           'provisional-semantic-v1.7',
+          'provisional-semantic-v1.8',
           SEMANTIC_PIPELINE_VERSION,
         ]),
         promptVersion: z.enum([
@@ -270,6 +311,7 @@ export const SemanticAssessmentReportSchema = z
           'evidence-support-v1.5',
           'evidence-support-v1.6',
           'evidence-support-v1.7',
+          'evidence-support-v1.8',
           SEMANTIC_PROMPT_VERSION,
         ]),
         inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),
@@ -327,6 +369,7 @@ export const SemanticAssessmentReportSchema = z
           .string()
           .regex(/^[a-f0-9]{64}$/u)
           .nullable(),
+        selectionBinding: z.array(SelectionBindingDiagnosticsSchema).max(2).optional(),
         selectionRecovery: z
           .object({
             outcome: z.enum(['recovered', 'still_empty', 'budget_skipped', 'failed']),

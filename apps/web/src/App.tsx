@@ -1822,7 +1822,7 @@ function TicketScreen({
   return (
     <div className="app-page ticket-page">
       <BackHeader onHome={onHome} />
-      {saved && <Toast message="تم حفظ بيانات المتابعة لهذه التذكرة." />}
+      {saved && <Toast message="تم حفظ بيانات المتابعة وإرسال رقم التذكرة إلى بريدك." />}
       <main className="ticket-main page-shell page-enter">
         {loading && <p role="status">جار إنشاء تذكرة مرتبطة بتقريرك…</p>}
         {!reviewId && !revisionId && (
