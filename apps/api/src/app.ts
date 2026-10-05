@@ -578,7 +578,7 @@ export function createApp(options: AppOptions = {}) {
         const credentials = guestCredentials(req);
         if (!credentials) return res.status(401).json({ code: 'INVALID_OR_EXPIRED_SESSION' });
         const { ticketCode: code } = ReviewerTicketParams.parse(req.params);
-        const contact = TicketContactInput.extend({ email: EmailAddress }).parse(req.body);
+        const contact = TicketContactInput.safeExtend({ email: EmailAddress }).parse(req.body);
         const receipt = await options.tickets.store.updateContact(
           credentials.publicId,
           credentials.ownershipSecret,
