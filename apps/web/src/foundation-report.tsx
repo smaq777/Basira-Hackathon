@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { RewritePanel } from './rewrite.js';
 import { ArrowLeft } from '@phosphor-icons/react/ArrowLeft';
+import { BookOpen } from '@phosphor-icons/react/BookOpen';
+import { CheckSquare } from '@phosphor-icons/react/CheckSquare';
+import { FileText } from '@phosphor-icons/react/FileText';
+import { Info } from '@phosphor-icons/react/Info';
+import { SlidersHorizontal } from '@phosphor-icons/react/SlidersHorizontal';
 import { UsersThree } from '@phosphor-icons/react/UsersThree';
+import { Warning } from '@phosphor-icons/react/Warning';
 import { WarningCircle } from '@phosphor-icons/react/WarningCircle';
+import { XSquare } from '@phosphor-icons/react/XSquare';
 import type {
   FoundationReport,
   IntakeSegment,
@@ -210,6 +217,155 @@ const findingGroups = [
   },
 ] as const;
 
+type SourceCollectionKey = 'matched' | 'candidates' | 'context' | 'additional';
+
+const sourceCollectionLabels: Record<SourceCollectionKey, string> = {
+  matched: 'مصادر المقارنة',
+  candidates: 'مصادر مرشحة',
+  context: 'التفسير والسياق',
+  additional: 'قراءة إضافية',
+};
+
+const sourceRelationshipLabels: Record<SourceCollectionKey, string> = {
+  matched: 'مرتبط بمقارنة نقل في التقرير',
+  candidates: 'مرشح للقراءة ولم تثبت مطابقته',
+  context: 'يشرح مصدرًا أو يضيف سياقه',
+  additional: 'مرتبط بالموضوع للقراءة فقط',
+};
+
+function SourceLibrary({
+  report,
+  collections,
+  selectedSourceKey,
+  onSelect,
+}: {
+  report: FoundationReport;
+  collections: ReturnType<typeof sourceCollections>;
+  selectedSourceKey: string | undefined;
+  onSelect: (source: SourceEvidence) => void;
+}) {
+  const [activeCategory, setActiveCategory] = useState<'all' | SourceCollectionKey>('all');
+  const [showAll, setShowAll] = useState(false);
+  const categories = (Object.keys(sourceCollectionLabels) as SourceCollectionKey[]).map((key) => ({
+    key,
+    label: sourceCollectionLabels[key],
+    count: collections[key].length,
+  }));
+  const allRows = categories.flatMap(({ key }) =>
+    collections[key].map((source) => ({ source, category: key })),
+  );
+  const filteredRows =
+    activeCategory === 'all' ? allRows : allRows.filter((row) => row.category === activeCategory);
+  const visibleRows = showAll ? filteredRows : filteredRows.slice(0, 5);
+  const hiddenCount = filteredRows.length - visibleRows.length;
+
+  return (
+    <section className="foundation-library" aria-labelledby="foundation-library-title">
+      <div className="foundation-library-heading">
+        <div>
+          <p className="foundation-eyebrow">قاعدة بيانات بصيرة</p>
+          <h2 id="foundation-library-title">
+            المصادر والسياقات المرتبطة بالنص ({report.intake.evidence.length} مصدرًا)
+          </h2>
+          <p>اختر مصدرًا لقراءته في مساحة المقارنة. ظهوره هنا لا يثبت المطابقة أو الاستدلال.</p>
+        </div>
+        <div className="foundation-source-tabs" role="group" aria-label="تصفية المصادر">
+          <button
+            type="button"
+            aria-pressed={activeCategory === 'all'}
+            onClick={() => {
+              setActiveCategory('all');
+              setShowAll(false);
+            }}
+          >
+            الكل ({allRows.length})
+          </button>
+          {categories.map(({ key, label, count }) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={activeCategory === key}
+              disabled={count === 0}
+              onClick={() => {
+                setActiveCategory(key);
+                setShowAll(false);
+              }}
+            >
+              {label} ({count})
+            </button>
+          ))}
+        </div>
+      </div>
+      {visibleRows.length > 0 ? (
+        <div className="foundation-source-table-wrap">
+          <table className="foundation-source-table">
+            <thead>
+              <tr>
+                <th scope="col">المصدر المرجعي</th>
+                <th scope="col">التصنيف</th>
+                <th scope="col">موضع الشاهد</th>
+                <th scope="col">صلة المصدر</th>
+                <th scope="col">الإجراء</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRows.map(({ source, category }) => {
+                const excerpt = source.originalText.replace(/\s+/gu, ' ').trim();
+                return (
+                  <tr
+                    key={source.snapshotKey}
+                    className={source.snapshotKey === selectedSourceKey ? 'is-selected' : undefined}
+                  >
+                    <th scope="row">
+                      <span className="foundation-source-status" aria-hidden="true" />
+                      {sourceCitation(source, report.intake.evidence)}
+                    </th>
+                    <td>
+                      <span
+                        className={`foundation-source-type foundation-source-type--${category}`}
+                      >
+                        {sourceRoleLabel(source)}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="foundation-source-excerpt">
+                        {excerpt.length > 110 ? `${excerpt.slice(0, 110)}…` : excerpt}
+                      </span>
+                    </td>
+                    <td>{sourceRelationshipLabels[category]}</td>
+                    <td>
+                      <button
+                        className="text-action"
+                        type="button"
+                        aria-pressed={source.snapshotKey === selectedSourceKey}
+                        aria-label={`عرض المصدر: ${sourceCitation(source, report.intake.evidence)}`}
+                        onClick={() => onSelect(source)}
+                      >
+                        عرض المصدر
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="foundation-empty-sources">لا توجد مصادر في هذا التصنيف.</p>
+      )}
+      {filteredRows.length > 5 && (
+        <button
+          type="button"
+          className="foundation-show-sources text-action"
+          onClick={() => setShowAll((current) => !current)}
+        >
+          {showAll ? 'عرض أول خمسة مصادر' : `عرض ${hiddenCount} مصادر إضافية`}
+        </button>
+      )}
+    </section>
+  );
+}
+
 export function FoundationReportContent({ report }: { report: FoundationReport }) {
   const { intake } = report;
   const rows = reportFindings(report);
@@ -220,8 +376,16 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
   const [selectedId, setSelectedId] = useState<string | undefined>(initial?.segment.id);
   const [sourceOverride, setSourceOverride] = useState<string | null>(null);
   const [showTypes, setShowTypes] = useState(true);
+  const [activeSection, setActiveSection] = useState('summary');
+  const [flashSection, setFlashSection] = useState<string | null>(null);
+  const [openSections, setOpenSections] = useState({
+    sources: false,
+    context: false,
+    limits: false,
+  });
   const comparisonRef = useRef<HTMLElement>(null);
   const assessmentHeadingRef = useRef<HTMLHeadingElement>(null);
+  const flashTimer = useRef<number | null>(null);
   const selected = rows.find((row) => row.segment.id === selectedId);
   const source = sourceOverride
     ? intake.evidence.find((row) => row.snapshotKey === sourceOverride)
@@ -238,7 +402,11 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
   const select = (row: ReportFinding) => {
     setSelectedId(row.segment.id);
     setSourceOverride(null);
-    comparisonRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+    setActiveSection('comparison');
+    setFlashSection('comparison');
+    comparisonRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    if (flashTimer.current) window.clearTimeout(flashTimer.current);
+    flashTimer.current = window.setTimeout(() => setFlashSection(null), 1_400);
   };
   const selectSource = (item: SourceEvidence) => {
     const linked =
@@ -246,7 +414,11 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
       rows.find((row) => row.segment.sourceKeys.includes(item.snapshotKey));
     setSelectedId(linked?.segment.id);
     setSourceOverride(item.snapshotKey);
-    comparisonRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+    setActiveSection('comparison');
+    setFlashSection('comparison');
+    comparisonRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    if (flashTimer.current) window.clearTimeout(flashTimer.current);
+    flashTimer.current = window.setTimeout(() => setFlashSection(null), 1_400);
   };
   const overrideIsCandidate = !!selected && !!source && !comparisonIsBound;
   const selectedContexts = source
@@ -257,210 +429,146 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
   const selectedCoverage = source
     ? intake.contextCoverage.find((row) => row.reference === source.reference)
     : null;
+
+  useEffect(
+    () => () => {
+      if (flashTimer.current) window.clearTimeout(flashTimer.current);
+    },
+    [],
+  );
+
+  const navigateTo = (
+    key: 'summary' | 'comparison' | 'analysis' | 'sources' | 'context' | 'limits' | 'review',
+  ) => {
+    if (key === 'sources' || key === 'context' || key === 'limits') {
+      setOpenSections((current) => ({ ...current, [key]: true }));
+    }
+    setActiveSection(key);
+    setFlashSection(key);
+    if (flashTimer.current) window.clearTimeout(flashTimer.current);
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById(`report-${key}`);
+      target?.scrollIntoView?.({
+        behavior: 'smooth',
+        block: 'center',
+      });
+      if (key === 'review' && target) target.classList.add('is-focus-pulse');
+    });
+    flashTimer.current = window.setTimeout(() => {
+      setFlashSection(null);
+      if (key === 'review')
+        document.getElementById('report-review')?.classList.remove('is-focus-pulse');
+    }, 1_400);
+  };
+
+  const differenceExplanation = selected
+    ? comparisonIsBound
+      ? selected.presentation.explanation
+      : source
+        ? 'المصدر المعروض مرشح للقراءة، ولم تثبت مطابقته للنقل المحدد.'
+        : unresolvedExplanation(selected)
+    : 'اختر نقلًا من النص أو من ملخص النتائج لعرض الفرق وتفسيره.';
+
   return (
-    <div className="foundation-report">
-      <span
-        className={`status-pill status-pill--${report.status === 'completed' ? 'neutral' : 'warning'}`}
-      >
-        {report.status === 'partial'
-          ? 'تقرير جزئي'
-          : report.status === 'needs_review'
-            ? 'يحتاج مراجعة'
-            : 'اكتمل إعداد التقرير'}
-      </span>
-      <h1>راجع النقل وحدود الاستدلال</h1>
-      <p className="hero-copy">ابدأ بما يحتاج مراجعة، ثم قارن النقل بموضعه في المصدر.</p>
-      <section className="foundation-action-summary" aria-label="ملخص مراجعة النقل">
-        <h2>ما الذي يحتاج انتباهك؟</h2>
-        <div className="foundation-summary-actions">
-          {findingGroups.map((group) => {
-            const items = rows.filter((row) => row.group === group.key);
-            return (
-              <button
-                key={group.key}
-                type="button"
-                disabled={items.length === 0}
-                className={`foundation-summary-action foundation-summary-action--${group.key}`}
-                onClick={() => items[0] && select(items[0])}
-              >
-                {group.label} ({items.length})
-              </button>
-            );
-          })}
-        </div>
-        <p>
-          {rows.length
-            ? 'اختر نقلًا من النتائج أو من النص لعرض المقارنة.'
-            : 'لا توجد نقول قابلة للمقارنة في هذا التقرير.'}
-        </p>
-      </section>
-      <section className="foundation-interpretation" aria-label="مؤشر كفاية الاستدلال">
-        <h2 id="foundation-evidence-assessment" ref={assessmentHeadingRef} tabIndex={-1}>
-          مؤشر كفاية الاستدلال
-        </h2>
-        <strong>{interpretation.label}</strong>
-        <p>{interpretation.explanation}</p>
-        {retrievalNotice && <p role="note">{retrievalNotice}</p>}
-        {report.semanticAssessment?.claims.map((claim) => {
-          const finding = report.semanticAssessment!.assessments.find(
-            (row) => row.claimId === claim.id,
-          );
-          const labels = {
-            supported: 'الدليل المعروض يؤيد العبارة مبدئيًا',
-            contradicted: 'تعارض ظاهر بين العبارة والدليل المعروض',
-            not_established: 'لم يثبت هذا الاستنتاج من الدليل المعروض',
-            insufficient_context: 'السياق المتاح لا يكفي للتقييم',
-            not_applicable: 'لا يوجد استنتاج واضح للتقييم',
-          };
-          return (
-            <details key={claim.id} className="foundation-semantic-claim">
-              <summary>
-                {claim.originalText.length > 140
-                  ? claim.originalText.slice(0, 140) + '…'
-                  : claim.originalText}
-                <span> — {finding ? labels[finding.status] : 'لم يكتمل تقييم هذه العبارة'}</span>
-              </summary>
-              <blockquote>{claim.originalText}</blockquote>
-              {finding && (
-                <>
-                  <p>{finding.explanation}</p>
-                  {(
-                    [
-                      ['الشروط', finding.conditions],
-                      ['النفي', finding.negations],
-                      ['الاستثناءات', finding.exceptions],
-                      ['نطاق الدلالة', finding.scope],
-                    ] as const
-                  )
-                    .filter(([, items]) => items.length)
-                    .map(([label, items]) => (
-                      <p key={label}>
-                        <strong>{label}: </strong>
-                        {items.join('؛ ')}
-                      </p>
-                    ))}
-                  {finding.citations.map((citation, index) => {
-                    const source = report.intake.evidence.find(
-                      (row) => row.snapshotKey === citation.evidenceKey,
-                    );
-                    return source ? (
-                      <div key={`${citation.evidenceKey}-${index}`}>
-                        <strong>{sourceCitation(source, report.intake.evidence)}</strong>
-                        <blockquote>{citation.excerpt}</blockquote>
-                      </div>
-                    ) : null;
-                  })}
-                </>
-              )}
-            </details>
-          );
-        })}
-      </section>
-      <section className="source-panel foundation-draft">
-        <div className="section-title">
-          <div>
-            <h2>النص الأصلي</h2>
-            <p>الإطار يحدد النقل الذي تقارنه الآن؛ الألوان تبين نوع العبارة.</p>
-          </div>
-        </div>
-        <OriginalText
-          report={report}
-          selected={selected?.segment.id}
-          showTypes={showTypes}
-          onSelect={select}
-        />
-        <footer className="foundation-original-footer">
-          <label className="foundation-types-toggle">
-            <input
-              type="checkbox"
-              checked={showTypes}
-              onChange={(event) => setShowTypes(event.target.checked)}
-            />{' '}
-            إظهار أنواع العبارات المنقولة
-          </label>
-          <ul className="foundation-type-legend" aria-label="دليل ألوان أنواع العبارات">
-            {legendRoles.map((role) => (
-              <li key={role}>
-                <span
-                  className={`foundation-legend-swatch semantic-highlight--${roleColorClasses[role]}`}
-                  aria-hidden="true"
-                />
-                {roleLabels[role]}
-              </li>
-            ))}
-            <li>كلام الكاتب بلا تلوين</li>
-          </ul>
-          <p>
-            الألوان توضح نوع العبارة، ولا تحكم على صحتها. يُلوّن الإسناد إذا ورد ضمن العبارات
-            المصنّفة في هذا التقرير.
-          </p>
-        </footer>
-      </section>
-      <div className="foundation-workspace">
-        <aside className="foundation-finding-list" aria-label="نتائج مقارنة النقل">
-          <h2>مؤشر النقل الحرفي</h2>
-          {findingGroups.map((group) => {
-            const items = rows.filter((row) => row.group === group.key);
-            if (!items.length) return null;
-            return (
-              <details
-                key={group.key}
-                className={`foundation-finding-group foundation-finding-group--${group.key}`}
-                open={group.key !== 'faithful' || selected?.group === 'faithful'}
-              >
-                <summary>
-                  {group.label} <span>{items.length}</span>
-                </summary>
-                <p>{group.description}</p>
-                <ol>
-                  {items.map((row) => (
-                    <li key={row.segment.id}>
-                      <button
-                        type="button"
-                        className="foundation-finding-select"
-                        aria-pressed={row.segment.id === selected?.segment.id}
-                        aria-label={`مقارنة النقل ${row.position}: ${row.segment.originalText}`}
-                        onClick={() => select(row)}
-                      >
-                        <span className="foundation-finding-number">{row.position}</span>
-                        <span>{row.segment.originalText}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ol>
-              </details>
-            );
-          })}
-        </aside>
+    <div className="foundation-report-shell">
+      <nav className="foundation-report-nav" aria-label="أقسام التقرير">
+        {[
+          ['summary', 'الملخص والنتائج'],
+          ['comparison', 'مقارنة النصوص'],
+          ['analysis', 'تحليل الفرق'],
+          ['sources', 'المصادر والمراجع'],
+          ['context', 'التفسير والسياق'],
+          ['limits', 'حدود المقارنة'],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            aria-current={activeSection === key ? 'true' : undefined}
+            onClick={() =>
+              navigateTo(
+                key as 'summary' | 'comparison' | 'analysis' | 'sources' | 'context' | 'limits',
+              )
+            }
+          >
+            <span aria-hidden="true" />
+            {label}
+          </button>
+        ))}
+        {materialReviewReasons(report).length > 0 && (
+          <button
+            type="button"
+            aria-current={activeSection === 'review' ? 'true' : undefined}
+            onClick={() => navigateTo('review')}
+          >
+            <span aria-hidden="true" />
+            المراجعة البشرية
+          </button>
+        )}
+      </nav>
+      <div className="foundation-report">
+        <header
+          id="report-summary"
+          className={`foundation-report-intro ${flashSection === 'summary' ? 'is-focus-pulse' : ''}`}
+        >
+          <span
+            className={`status-pill status-pill--${report.status === 'completed' ? 'neutral' : 'warning'}`}
+          >
+            {report.status === 'partial'
+              ? 'تقرير جزئي'
+              : report.status === 'needs_review'
+                ? 'يحتاج مراجعة'
+                : 'اكتمل إعداد التقرير'}
+          </span>
+          <h1>راجع النقل وحدود الاستدلال</h1>
+          <p className="hero-copy">ابدأ بما يحتاج مراجعة، ثم قارن النقل بموضعه في المصدر.</p>
+          <section className="foundation-action-summary" aria-label="ملخص مراجعة النقل">
+            <div className="foundation-summary-actions">
+              {findingGroups.map((group) => {
+                const items = rows.filter((row) => row.group === group.key);
+                const Icon =
+                  group.key === 'different'
+                    ? XSquare
+                    : group.key === 'unresolved'
+                      ? Warning
+                      : CheckSquare;
+                return (
+                  <button
+                    key={group.key}
+                    type="button"
+                    disabled={items.length === 0}
+                    aria-label={`${group.label} (${items.length})`}
+                    className={`foundation-summary-action foundation-summary-action--${group.key}`}
+                    onClick={() => items[0] && select(items[0])}
+                  >
+                    <Icon size={23} aria-hidden="true" />
+                    <span>{group.label}</span>
+                    <b>({items.length})</b>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        </header>
+
         <section
-          className="foundation-comparison"
+          id="report-comparison"
+          className={`foundation-comparison foundation-comparison--primary ${flashSection === 'comparison' ? 'is-focus-pulse' : ''}`}
           aria-label="مقارنة النقل المحدد"
           ref={comparisonRef}
         >
-          <h2>{sourceOverride && !selected ? 'المصدر المحدد' : 'مقارنة النقل المحدد'}</h2>
           {selected && (
             <>
-              <strong
-                className={`foundation-result-label foundation-result-label--${comparisonIsBound ? selected.group : 'unresolved'}`}
-              >
-                {comparisonIsBound
-                  ? selected.presentation.label
-                  : source
-                    ? 'مصدر مرشح لم تثبت مطابقته'
-                    : 'لم تُحسم مطابقة النقل'}
-              </strong>
-              <p>
-                {!comparisonIsBound && source
-                  ? 'لم تثبت مطابقة النقل للمصدر المعروض؛ قارن النصين للتحقق من الموضع والنسبة.'
-                  : !comparisonIsBound || selected.group === 'unresolved'
-                    ? unresolvedExplanation(selected)
-                    : selected.presentation.explanation}
-              </p>
               <div className="foundation-compare-texts">
-                <div
+                <article
                   className={`foundation-compare-card foundation-compare-card--draft ${comparisonIsBound && selected.group === 'different' ? 'foundation-compare-card--different' : ''}`}
                 >
-                  <h3>النقل في المسودة</h3>
+                  <header>
+                    <FileText size={24} aria-hidden="true" />
+                    <div>
+                      <h2>النص في المسودة</h2>
+                      <p>النص كما ورد في المسودة</p>
+                    </div>
+                  </header>
                   <blockquote>
                     <ComparedWords
                       text={selected.segment.originalText}
@@ -468,15 +576,21 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
                       side="draft"
                     />
                   </blockquote>
-                </div>
-                <div className="foundation-compare-card foundation-compare-card--reference">
+                </article>
+                <article className="foundation-compare-card foundation-compare-card--reference">
+                  <header>
+                    <BookOpen size={24} aria-hidden="true" />
+                    <div>
+                      <h2>النص المرجعي</h2>
+                      <p>
+                        {source ? sourceCitation(source, intake.evidence) : 'لم يتحدد مصدر بعد'}
+                      </p>
+                    </div>
+                  </header>
                   {source && comparisonText ? (
                     <>
-                      <h3>{sourceCitation(source, intake.evidence)}</h3>
                       {overrideIsCandidate && (
-                        <p className="foundation-candidate-notice">
-                          مصدر مرشح؛ لم تثبت المطابقة معه.
-                        </p>
+                        <p className="foundation-candidate-notice">مصدر مرشح لم تثبت مطابقته.</p>
                       )}
                       <p className="foundation-compare-caption">{comparisonText.label}</p>
                       <blockquote>
@@ -489,45 +603,16 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
                       </blockquote>
                     </>
                   ) : (
-                    <>
-                      <h3>النص المرجعي</h3>
-                      <p>لم يتحدد مصدر للمقارنة. راجع النسبة أو افتح أحد المصادر المرشحة أدناه.</p>
-                    </>
+                    <p>راجع النسبة أو افتح أحد المصادر المرشحة أدناه.</p>
                   )}
-                </div>
+                </article>
               </div>
-              {(highlightedDifferences.draft.length > 0 ||
-                highlightedDifferences.source.length > 0) && (
-                <p className="foundation-difference-key">
-                  الكلمات المحددة فروق في النقل؛ يوضح النص المرجعي الألفاظ المقابلة وما حُذف منه.
-                </p>
-              )}
               {comparisonIsBound && (
-                <p>
+                <p className="foundation-comparison-extent">
                   <b>حدود المقتطف: </b>
                   {selected.presentation.extent}
                 </p>
               )}
-              {comparisonIsBound &&
-                selected.finding.comparison &&
-                selected.finding.comparison.differences.length > 0 && (
-                  <ul className="foundation-differences" aria-label="فروق النقل عن المصدر">
-                    {selected.finding.comparison.differences.map((difference, index) => (
-                      <li key={index}>
-                        {difference.kind === 'omit' ? (
-                          <>ورد في المصدر ولم يرد في النقل: «{difference.sourceText}».</>
-                        ) : difference.kind === 'insert' ? (
-                          <>زيادة في النقل: «{difference.quotedText}».</>
-                        ) : (
-                          <>
-                            ورد في النقل: «{difference.quotedText}»؛ وفي المصدر: «
-                            {difference.sourceText}».
-                          </>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
               {comparisonIsBound && selected.segment.conflict && (
                 <p className="foundation-candidate-notice">
                   تعارضت النسبة المذكورة مع المصدر المرشح؛ راجع المرجع الملحق بهذا النقل.
@@ -536,6 +621,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
               {!selected.source && selected.segment.sourceKeys.length > 0 && (
                 <div className="foundation-candidates">
                   <h3>مصادر مرشحة لهذا النقل</h3>
+                  {selected.segment.sourceKeys.length > 1 && <p>توجد عدة مصادر مرشحة.</p>}
                   {intake.evidence
                     .filter((item) => selected.segment.sourceKeys.includes(item.snapshotKey))
                     .map((item) => (
@@ -553,123 +639,328 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
             </>
           )}
           {!selected && source && comparisonText && (
-            <>
-              <h3>{sourceCitation(source, intake.evidence)}</h3>
+            <article className="foundation-compare-card foundation-compare-card--reference">
+              <h2>{sourceCitation(source, intake.evidence)}</h2>
               <p>هذا النص متاح للقراءة؛ لم تُعرض هنا مطابقة لنقل محدد من المسودة.</p>
               <p className="foundation-compare-caption">{comparisonText.label}</p>
               <blockquote>
                 {comparisonText.text}
                 {comparisonText.truncated ? '…' : ''}
               </blockquote>
-            </>
+            </article>
           )}
           {!selected && !source && <p>اختر نقلًا أو مصدرًا لعرض تفاصيله هنا.</p>}
-          {source && (
-            <>
-              <FullSource source={source} report={report} />
-              {selectedCoverage?.status === 'partial' && (
-                <p className="foundation-context-note">بعض نصوص التفسير المرتبطة بالآية متاحة.</p>
-              )}
-              {selectedCoverage?.status === 'unavailable' && (
-                <p className="foundation-context-note">لم تتوفر نصوص التفسير المرتبطة بالآية.</p>
-              )}
-              {selectedContexts.length > 0 && (
-                <details className="foundation-linked-context">
-                  <summary>تفسير وسياق مرتبط ({selectedContexts.length})</summary>
+        </section>
+
+        <section
+          id="report-analysis"
+          className={`foundation-difference-analysis ${flashSection === 'analysis' ? 'is-focus-pulse' : ''}`}
+          aria-labelledby="foundation-difference-title"
+        >
+          <Info size={27} weight="fill" aria-hidden="true" />
+          <h2 id="foundation-difference-title">تحليل الفرق</h2>
+          <div>
+            <strong
+              className={`foundation-result-label foundation-result-label--${comparisonIsBound && selected ? selected.group : 'unresolved'}`}
+            >
+              {selected
+                ? comparisonIsBound
+                  ? selected.presentation.label
+                  : 'مطابقة غير محسومة'
+                : 'اختر نقلًا للمقارنة'}
+            </strong>
+            <p>{differenceExplanation}</p>
+            {(highlightedDifferences.draft.length > 0 ||
+              highlightedDifferences.source.length > 0) && (
+              <p className="foundation-difference-key">
+                الكلمات المحددة توضح موضع الاختلاف بين المسودة والنص المرجعي.
+              </p>
+            )}
+            {comparisonIsBound && selected?.finding.comparison?.differences.length ? (
+              <ul className="foundation-differences" aria-label="فروق النقل عن المصدر">
+                {selected.finding.comparison.differences.map((difference, index) => (
+                  <li key={index}>
+                    {difference.kind === 'omit'
+                      ? `ورد في المصدر ولم يرد في النقل: «${difference.sourceText}».`
+                      : difference.kind === 'insert'
+                        ? `زيادة في النقل: «${difference.quotedText}».`
+                        : `ورد في النقل: «${difference.quotedText}»؛ وفي المصدر: «${difference.sourceText}».`}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        </section>
+
+        <section id="report-original" className="source-panel foundation-draft">
+          <header>
+            <FileText size={24} aria-hidden="true" />
+            <div>
+              <h2>النص الأصلي</h2>
+              <p>انقر أي عبارة ملوّنة لعرض مقارنتها مباشرة.</p>
+            </div>
+          </header>
+          <OriginalText
+            report={report}
+            selected={selected?.segment.id}
+            showTypes={showTypes}
+            onSelect={select}
+          />
+          <footer className="foundation-original-footer">
+            <label className="foundation-types-toggle">
+              <input
+                type="checkbox"
+                checked={showTypes}
+                onChange={(event) => setShowTypes(event.target.checked)}
+              />{' '}
+              إظهار أنواع العبارات المنقولة
+            </label>
+            <ul className="foundation-type-legend" aria-label="دليل ألوان أنواع العبارات">
+              {legendRoles.map((role) => (
+                <li key={role}>
+                  <span
+                    className={`foundation-legend-swatch semantic-highlight--${roleColorClasses[role]}`}
+                    aria-hidden="true"
+                  />
+                  {roleLabels[role]}
+                </li>
+              ))}
+              <li>كلام الكاتب بلا تلوين</li>
+            </ul>
+            <p>الألوان توضح نوع العبارة، ولا تحكم على صحتها.</p>
+          </footer>
+        </section>
+
+        <details
+          id="report-sources"
+          className={`foundation-workspace-disclosure ${flashSection === 'sources' ? 'is-focus-pulse' : ''}`}
+          open={openSections.sources}
+          onToggle={(event) => {
+            const open = event.currentTarget.open;
+            setOpenSections((current) => ({ ...current, sources: open }));
+          }}
+        >
+          <summary>
+            <BookOpen size={22} aria-hidden="true" />
+            المصادر والمراجع ({intake.evidence.length})
+          </summary>
+          <div className="foundation-disclosure-content">
+            <section className="foundation-finding-list" aria-label="نتائج مقارنة النقل">
+              <h2>النقول المحددة للمقارنة</h2>
+              {findingGroups.map((group) => {
+                const items = rows.filter((row) => row.group === group.key);
+                if (!items.length) return null;
+                return (
+                  <details
+                    key={group.key}
+                    className={`foundation-finding-group foundation-finding-group--${group.key}`}
+                    open={selected?.group === group.key}
+                  >
+                    <summary>
+                      {group.label} <span>{items.length}</span>
+                    </summary>
+                    <p>{group.description}</p>
+                    <ol>
+                      {items.map((row) => (
+                        <li key={row.segment.id}>
+                          <button
+                            type="button"
+                            className="foundation-finding-select"
+                            aria-pressed={row.segment.id === selected?.segment.id}
+                            aria-label={`مقارنة النقل ${row.position}: ${row.segment.originalText}`}
+                            onClick={() => select(row)}
+                          >
+                            <span className="foundation-finding-number">{row.position}</span>
+                            <span>{row.segment.originalText}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ol>
+                  </details>
+                );
+              })}
+            </section>
+            <SourceLibrary
+              report={report}
+              collections={collections}
+              selectedSourceKey={source?.snapshotKey}
+              onSelect={selectSource}
+            />
+          </div>
+        </details>
+
+        <details
+          id="report-context"
+          className={`foundation-workspace-disclosure ${flashSection === 'context' ? 'is-focus-pulse' : ''}`}
+          open={openSections.context}
+          onToggle={(event) => {
+            const open = event.currentTarget.open;
+            setOpenSections((current) => ({ ...current, context: open }));
+          }}
+        >
+          <summary>
+            <FileText size={22} aria-hidden="true" />
+            التفسير والسياق المرتبط ({selectedContexts.length})
+          </summary>
+          <div className="foundation-disclosure-content foundation-context-grid">
+            <section className="foundation-source-inspector" aria-label="تفاصيل المصدر المحدد">
+              <p className="foundation-eyebrow">المصدر المحدد</p>
+              <h2>{source ? sourceCitation(source, intake.evidence) : 'لم يتحدد مصدر بعد'}</h2>
+              {source ? (
+                <>
+                  <p className="foundation-source-role">{sourceRoleLabel(source)}</p>
+                  <FullSource source={source} report={report} />
+                  {selectedCoverage?.status === 'partial' && (
+                    <p className="foundation-context-note">
+                      بعض نصوص التفسير المرتبطة بالآية متاحة.
+                    </p>
+                  )}
+                  {selectedCoverage?.status === 'unavailable' && (
+                    <p className="foundation-context-note">
+                      لم تتوفر نصوص التفسير المرتبطة بالآية.
+                    </p>
+                  )}
                   {selectedContexts.map((context) => (
                     <FullSource key={context.snapshotKey} source={context} report={report} />
                   ))}
-                </details>
-              )}
-            </>
-          )}
-        </section>
-      </div>
-      {notes.length > 0 && (
-        <details className="foundation-editorial-notes">
-          <summary>ملاحظات تحريرية مرتبطة بالنص</summary>
-          {notes.map((note) => (
-            <article key={note.id}>
-              <h3>{note.title}</h3>
-              <p>{note.explanation}</p>
-              {note.occurrences.length > 1 ? (
-                <details>
-                  <summary>مواضع تحتاج مراجعة ({note.occurrences.length})</summary>
-                  <ol>
-                    {note.occurrences.map((occurrence) => (
-                      <li key={occurrence.id}>
-                        <blockquote>{occurrence.text}</blockquote>
-                      </li>
-                    ))}
-                  </ol>
-                </details>
+                </>
               ) : (
-                note.occurrences.map((occurrence) => (
-                  <blockquote key={occurrence.id}>{occurrence.text}</blockquote>
-                ))
+                <p>اختر نقلًا أو مصدرًا لعرض نصه وسياقه هنا.</p>
               )}
-              {note.occurrences.some((occurrence) => occurrence.hasAssessment) && (
-                <button
-                  type="button"
-                  className="text-action"
-                  onClick={() => {
-                    assessmentHeadingRef.current?.scrollIntoView?.({
-                      behavior: 'smooth',
-                      block: 'start',
-                    });
-                    assessmentHeadingRef.current?.focus({ preventScroll: true });
-                  }}
-                >
-                  راجع نتائج كفاية الاستدلال
-                </button>
-              )}
-            </article>
-          ))}
-          <p>اقرأ المصدر كاملًا قبل الاستناد إليه.</p>
-        </details>
-      )}
-      <details className="foundation-library">
-        <summary>المصادر والسياقات ({intake.evidence.length})</summary>
-        <p>المصدر المرشح نتيجة بحث؛ اختياره للقراءة لا يعني ثبوت المطابقة أو الاستدلال.</p>
-        {(
-          [
-            ['matched', 'مصادر المقارنة'],
-            ['candidates', 'مصادر مرشحة'],
-            ['context', 'تفسير وسياق مرتبط بالنقول'],
-            ['additional', 'قراءة إضافية مرتبطة بالموضوع'],
-          ] as const
-        ).map(
-          ([key, title]) =>
-            collections[key].length > 0 && (
-              <section key={key} className="foundation-source-category">
-                <h3>{title}</h3>
-                {key === 'additional' && (
-                  <p>هذه قراءة إضافية؛ لم تُنقل في النص ولا تثبت الاستدلال.</p>
-                )}
-                <ul>
-                  {collections[key].map((item) => (
-                    <li key={item.snapshotKey} className="foundation-source">
+            </section>
+            <section className="foundation-interpretation" aria-label="مؤشر كفاية الاستدلال">
+              <p className="foundation-eyebrow">تحليل الدليل</p>
+              <h2 id="foundation-evidence-assessment" ref={assessmentHeadingRef} tabIndex={-1}>
+                مؤشر كفاية الاستدلال
+              </h2>
+              <strong>{interpretation.label}</strong>
+              <p>{interpretation.explanation}</p>
+              {retrievalNotice && <p role="note">{retrievalNotice}</p>}
+              {report.semanticAssessment?.claims.map((claim) => {
+                const finding = report.semanticAssessment!.assessments.find(
+                  (row) => row.claimId === claim.id,
+                );
+                const labels = {
+                  supported: 'الدليل المعروض يؤيد العبارة مبدئيًا',
+                  contradicted: 'تعارض ظاهر بين العبارة والدليل المعروض',
+                  not_established: 'لم يثبت هذا الاستنتاج من الدليل المعروض',
+                  insufficient_context: 'السياق المتاح لا يكفي للتقييم',
+                  not_applicable: 'لا يوجد استنتاج واضح للتقييم',
+                };
+                return (
+                  <details key={claim.id} className="foundation-semantic-claim">
+                    <summary>
+                      {claim.originalText.length > 140
+                        ? claim.originalText.slice(0, 140) + '…'
+                        : claim.originalText}
+                      <span>
+                        {' '}
+                        — {finding ? labels[finding.status] : 'لم يكتمل تقييم هذه العبارة'}
+                      </span>
+                    </summary>
+                    <blockquote>{claim.originalText}</blockquote>
+                    {finding && (
+                      <>
+                        <p>{finding.explanation}</p>
+                        {(
+                          [
+                            ['الشروط', finding.conditions],
+                            ['النفي', finding.negations],
+                            ['الاستثناءات', finding.exceptions],
+                            ['نطاق الدلالة', finding.scope],
+                          ] as const
+                        )
+                          .filter(([, items]) => items.length)
+                          .map(([label, items]) => (
+                            <p key={label}>
+                              <strong>{label}: </strong>
+                              {items.join('؛ ')}
+                            </p>
+                          ))}
+                        {finding.citations.map((citation, index) => {
+                          const citationSource = report.intake.evidence.find(
+                            (row) => row.snapshotKey === citation.evidenceKey,
+                          );
+                          return citationSource ? (
+                            <div key={`${citation.evidenceKey}-${index}`}>
+                              <strong>
+                                {sourceCitation(citationSource, report.intake.evidence)}
+                              </strong>
+                              <blockquote>{citation.excerpt}</blockquote>
+                            </div>
+                          ) : null;
+                        })}
+                      </>
+                    )}
+                  </details>
+                );
+              })}
+            </section>
+            {notes.length > 0 && (
+              <details className="foundation-editorial-notes">
+                <summary>ملاحظات تحريرية مرتبطة بالنص</summary>
+                {notes.map((note) => (
+                  <article key={note.id}>
+                    <h3>{note.title}</h3>
+                    <p>{note.explanation}</p>
+                    {note.occurrences.length > 1 ? (
+                      <details>
+                        <summary>مواضع تحتاج مراجعة ({note.occurrences.length})</summary>
+                        <ol>
+                          {note.occurrences.map((occurrence) => (
+                            <li key={occurrence.id}>
+                              <blockquote>{occurrence.text}</blockquote>
+                            </li>
+                          ))}
+                        </ol>
+                      </details>
+                    ) : (
+                      note.occurrences.map((occurrence) => (
+                        <blockquote key={occurrence.id}>{occurrence.text}</blockquote>
+                      ))
+                    )}
+                    {note.occurrences.some((occurrence) => occurrence.hasAssessment) && (
                       <button
-                        className="foundation-library-select"
                         type="button"
-                        onClick={() => selectSource(item)}
+                        className="text-action"
+                        onClick={() => {
+                          assessmentHeadingRef.current?.scrollIntoView?.({
+                            behavior: 'smooth',
+                            block: 'start',
+                          });
+                          assessmentHeadingRef.current?.focus({ preventScroll: true });
+                        }}
                       >
-                        <span>{sourceCitation(item, intake.evidence)}</span>
-                        <small>{sourceRoleLabel(item)}</small>
+                        راجع نتائج كفاية الاستدلال
                       </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ),
-        )}
-        {intake.evidence.length === 0 && <p>لم يتوفر مصدر قابل للعرض. لا يثبت ذلك خطأ النص.</p>}
-      </details>
-      <details className="foundation-report-limits">
-        <summary>حدود المقارنة</summary>
-        <p>تعرض المقارنة النص من النسخة الرقمية المتاحة؛ لا تثبت وحدها سلامة الطبعة.</p>
-        <p>حدود المقتطف تصف موضعه في المصدر، ولا تحكم على أثره في معنى الاستدلال.</p>
-      </details>
+                    )}
+                  </article>
+                ))}
+                <p>اقرأ المصدر كاملًا قبل الاستناد إليه.</p>
+              </details>
+            )}
+          </div>
+        </details>
+
+        <details
+          id="report-limits"
+          className={`foundation-workspace-disclosure ${flashSection === 'limits' ? 'is-focus-pulse' : ''}`}
+          open={openSections.limits}
+          onToggle={(event) => {
+            const open = event.currentTarget.open;
+            setOpenSections((current) => ({ ...current, limits: open }));
+          }}
+        >
+          <summary>
+            <SlidersHorizontal size={22} aria-hidden="true" />
+            حدود المقارنة
+          </summary>
+          <div className="foundation-disclosure-content foundation-report-limits">
+            <p>تعرض المقارنة النص من النسخة الرقمية المتاحة؛ لا تثبت وحدها سلامة الطبعة.</p>
+            <p>حدود المقتطف تصف موضعه في المصدر، ولا تحكم على أثره في معنى الاستدلال.</p>
+          </div>
+        </details>
+      </div>
     </div>
   );
 }
@@ -839,26 +1130,31 @@ export function FoundationResultScreen({
         {report && !loading && !error && (
           <>
             <FoundationReportContent report={report} />
-            <RewritePanel
-              key={`${report.reviewId}:${report.inputSha256}:${report.evidenceStateSha256}`}
-              report={report}
-            />
-            <button
-              className="button button--outline foundation-refresh"
-              disabled={rerunning}
-              onClick={() => setAttempt((value) => value + 1)}
-            >
-              تحديث التقرير المحفوظ
-            </button>
-            <button
-              className="button button--primary foundation-refresh"
-              disabled={rerunning}
-              onClick={() => void reanalyze()}
-            >
-              {rerunning ? 'جار بدء تحليل جديد' : 'إعادة تحليل النص'}
-            </button>
+            <div id="report-rewrite" className="foundation-external-section">
+              <RewritePanel
+                key={`${report.reviewId}:${report.inputSha256}:${report.evidenceStateSha256}`}
+                report={report}
+              />
+            </div>
+            <div className="foundation-report-actions" aria-label="إجراءات التقرير">
+              <button
+                className="button button--outline foundation-refresh"
+                disabled={rerunning}
+                onClick={() => setAttempt((value) => value + 1)}
+              >
+                تحديث التقرير المحفوظ
+              </button>
+              <button
+                className="button button--primary foundation-refresh"
+                disabled={rerunning}
+                onClick={() => void reanalyze()}
+              >
+                {rerunning ? 'جار بدء تحليل جديد' : 'إعادة تحليل النص'}
+              </button>
+            </div>
             {reviewReasons.length > 0 && (
               <section
+                id="report-review"
                 className="foundation-review-escalation"
                 role="note"
                 aria-labelledby="foundation-review-escalation-title"

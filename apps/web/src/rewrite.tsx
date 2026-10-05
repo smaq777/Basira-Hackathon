@@ -252,7 +252,7 @@ export function RewritePanel({ report }: { report: FoundationReport }) {
   if (!enabled) return null;
   return (
     <section
-      className="source-panel"
+      className="source-panel foundation-rewrite-panel"
       aria-label={wordingMode ? 'اقتراح تحسين صياغة النص' : 'اقتراح تنسيق وتوثيق النص'}
     >
       <h2>{wordingMode ? 'تحسين الصياغة وإضافة التوثيق' : 'تنسيق النص وإضافة التوثيق'}</h2>

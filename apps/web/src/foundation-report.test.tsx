@@ -89,10 +89,23 @@ describe('foundation report presentation', () => {
     expect(screen.getByText('مقتطف متصل من المصدر؛ لا يشمل النص الكامل.')).not.toBeNull();
     expect(screen.getByText('لم يُجرَ تقييم الاستدلال في هذا التقرير')).not.toBeNull();
     expect(screen.getByLabelText('النص الأصلي مع مواضع النقل').textContent).toBe(ORIGINAL_TEXT);
-    expect(screen.getByText(`بداية ${SYNTHETIC_QUOTE} نهاية`)).not.toBeNull();
+    expect(screen.getAllByText(`بداية ${SYNTHETIC_QUOTE} نهاية`).length).toBeGreaterThan(0);
     expect(screen.queryByText(/نسخة اختبار/)).toBeNull();
     expect(screen.queryByText(/synthetic; not a religious source/)).toBeNull();
     expect(screen.queryByRole('button', { name: 'نسخ النص كاملًا' })).toBeNull();
+  });
+
+  it('opens collapsed report sections and marks the selected navigation destination', () => {
+    const report = foundationReportFixture();
+    render(<FoundationReportContent report={report} />);
+    const sources = document.getElementById('report-sources') as HTMLDetailsElement;
+    const navigation = screen.getByRole('button', { name: 'المصادر والمراجع' });
+    expect(sources.open).toBe(false);
+    expect(navigation.getAttribute('aria-current')).toBeNull();
+    fireEvent.click(navigation);
+    expect(sources.open).toBe(true);
+    expect(navigation.getAttribute('aria-current')).toBe('true');
+    expect(sources.classList.contains('is-focus-pulse')).toBe(true);
   });
 
   it('never labels normalized, partial, mismatched or invalid exact comparisons accurate', () => {
@@ -171,7 +184,7 @@ describe('foundation report presentation', () => {
     report.intake.evidence[0]!.sourceUrl = 'javascript:alert(1)';
     render(<FoundationReportContent report={report} />);
     expect(document.querySelector('img')).toBeNull();
-    expect(screen.getByText('<img src=x onerror=alert(1)>')).not.toBeNull();
+    expect(screen.getAllByText('<img src=x onerror=alert(1)>').length).toBeGreaterThan(0);
     expect(screen.queryByRole('link', { name: 'فتح رابط المصدر' })).toBeNull();
   });
 
@@ -224,12 +237,12 @@ describe('foundation report presentation', () => {
     source.sourceUrl = 'https://tanzil.net/pub/download/index.php?quranType=uthmani';
     render(<FoundationReportContent report={report} />);
     expect(
-      screen.getByRole('heading', { name: 'القرآن الكريم — سورة الزمر، الآية 38' }),
+      screen.getAllByRole('heading', { name: 'القرآن الكريم — سورة الزمر، الآية 38' })[0],
     ).not.toBeNull();
     const reader = screen.getByRole('link', { name: 'قراءة الآية على Quran.com' });
     expect(reader.getAttribute('href')).toBe('https://quran.com/39/38');
     expect(document.body.innerHTML).not.toContain(source.sourceUrl);
-    expect(screen.getByText(`بداية ${SYNTHETIC_QUOTE} نهاية`)).not.toBeNull();
+    expect(screen.getAllByText(`بداية ${SYNTHETIC_QUOTE} نهاية`).length).toBeGreaterThan(0);
     expect(screen.queryByText('39:38')).toBeNull();
   });
 
@@ -271,7 +284,7 @@ describe('foundation report presentation', () => {
     source.work = 'صحيح مسلم - كتاب الإيمان';
     source.sourceUrl = 'https://github.com/example/research/blob/main/hadith.json';
     render(<FoundationReportContent report={report} />);
-    expect(screen.getByRole('heading', { name: source.work })).not.toBeNull();
+    expect(screen.getAllByRole('heading', { name: source.work }).length).toBeGreaterThan(0);
     expect(screen.getByText('لم يثبت رقم الحديث في طبعة محددة ضمن هذا التقرير.')).not.toBeNull();
     expect(document.body.innerHTML).not.toContain('11666');
     expect(document.body.innerHTML).not.toContain('book=2');
@@ -356,6 +369,16 @@ describe('foundation report presentation', () => {
     expect(screen.getAllByText('لم يُجرَ تقييم الاستدلال في هذا التقرير')).toHaveLength(1);
   });
 
+  it('places the active comparison before the reading workspace', () => {
+    const view = render(<FoundationReportContent report={actionableFixture()} />);
+    const comparison = screen.getByRole('region', { name: 'مقارنة النقل المحدد' });
+    const original = screen.getByLabelText('النص الأصلي مع مواضع النقل');
+    expect(
+      comparison.compareDocumentPosition(original) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(view.container.querySelector('#report-original')).not.toBeNull();
+  });
+
   it('selects a draft quote and compares its source without highlighting authored paragraphs', () => {
     const report = actionableFixture();
     const view = render(<FoundationReportContent report={report} />);
@@ -376,21 +399,18 @@ describe('foundation report presentation', () => {
     );
   });
 
-  it('collapses source text and distinguishes selected sources, candidates and optional topic context', () => {
+  it('shows the real source table while keeping full source text collapsed', () => {
     const view = render(<FoundationReportContent report={actionableFixture()} />);
-    const library = view.container.querySelector(
-      'details.foundation-library',
-    ) as HTMLDetailsElement;
-    expect(library.open).toBe(false);
-    expect(view.container.querySelectorAll('.foundation-source > blockquote')).toHaveLength(0);
-    fireEvent.click(screen.getByText('المصادر والسياقات (4)'));
-    expect(library.open).toBe(true);
-    expect(screen.getByRole('heading', { name: 'مصادر المقارنة' })).not.toBeNull();
-    expect(screen.getByRole('heading', { name: 'مصادر مرشحة' })).not.toBeNull();
-    expect(screen.getByRole('heading', { name: 'قراءة إضافية مرتبطة بالموضوع' })).not.toBeNull();
-    expect(
-      screen.getByText('هذه قراءة إضافية؛ لم تُنقل في النص ولا تثبت الاستدلال.'),
-    ).not.toBeNull();
+    expect(view.container.querySelector('.foundation-source-table')).not.toBeNull();
+    expect(view.container.querySelectorAll('.foundation-full-source[open]')).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'الكل (4)' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'مصادر المقارنة (1)' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'مصادر مرشحة (1)' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'قراءة إضافية (2)' })).not.toBeNull();
+    expect(screen.getAllByRole('button', { name: /^عرض المصدر:/ })).toHaveLength(4);
+    fireEvent.click(screen.getByRole('button', { name: 'مصادر مرشحة (1)' }));
+    expect(screen.getAllByRole('button', { name: /^عرض المصدر:/ })).toHaveLength(1);
+    expect(screen.getByRole('rowheader', { name: /مصدر مرشح للاختبار/ })).not.toBeNull();
   });
 
   it('uses Arabic surah names with marks and tries another stored name when the first is invalid', () => {
@@ -401,13 +421,13 @@ describe('foundation report presentation', () => {
     source.provenance = { surah_name: 'invalid 21 metadata', surah_name_original: 'الأنبياء' };
     const view = render(<FoundationReportContent report={report} />);
     expect(
-      screen.getByRole('heading', { name: 'القرآن الكريم — سورة الأنبياء، الآية 25' }),
+      screen.getAllByRole('heading', { name: 'القرآن الكريم — سورة الأنبياء، الآية 25' })[0],
     ).not.toBeNull();
     view.unmount();
     source.provenance = { surah_name: 'الأنبيَاء ' };
     render(<FoundationReportContent report={report} />);
     expect(
-      screen.getByRole('heading', { name: 'القرآن الكريم — سورة الأنبيَاء، الآية 25' }),
+      screen.getAllByRole('heading', { name: 'القرآن الكريم — سورة الأنبيَاء، الآية 25' })[0],
     ).not.toBeNull();
   });
 });
@@ -649,14 +669,14 @@ describe('readable report comparison refinements', () => {
       originalText: text,
     });
     render(<FoundationReportContent report={report} />);
-    fireEvent.click(screen.getByText('المصادر والسياقات (2)'));
     fireEvent.click(screen.getByRole('button', { name: /مصدر طويل للاختبار/ }));
     const comparison = screen.getByRole('region', { name: 'مقارنة النقل المحدد' });
     expect(comparison.querySelector('.foundation-compare-caption')?.textContent).toBe(
       'بداية النص المرجعي؛ موضع المقتطف غير محدد',
     );
     expect(comparison.querySelector('blockquote')?.textContent).toBe('ب'.repeat(399) + '…');
-    expect(comparison.querySelector('.foundation-full-source blockquote')?.textContent).toBe(text);
+    const inspector = screen.getByRole('region', { name: 'تفاصيل المصدر المحدد' });
+    expect(inspector.querySelector('.foundation-full-source blockquote')?.textContent).toBe(text);
   });
 
   it('does not carry the bound source verdict or differences into a selected candidate source', () => {
@@ -673,18 +693,16 @@ describe('readable report comparison refinements', () => {
     });
     const view = render(<FoundationReportContent report={report} />);
     const comparison = screen.getByRole('region', { name: 'مقارنة النقل المحدد' });
-    expect(comparison.textContent).toContain('اختلاف في ألفاظ النقل');
-    expect(comparison.querySelector('.foundation-differences')).not.toBeNull();
-    fireEvent.click(screen.getByText('المصادر والسياقات (2)'));
+    const analysis = screen.getByRole('region', { name: 'تحليل الفرق' });
+    expect(analysis.textContent).toContain('اختلاف في ألفاظ النقل');
+    expect(analysis.querySelector('.foundation-differences')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /مصدر بديل للاختبار/ }));
-    expect(comparison.textContent).toContain('مصدر مرشح لم تثبت مطابقته');
-    expect(comparison.textContent).not.toContain('اختلاف في ألفاظ النقل');
-    expect(comparison.textContent).not.toContain(
-      'توجد ألفاظ مختلفة أو محذوفة أو مضافة داخل النقل.',
-    );
+    expect(analysis.textContent).toContain('مطابقة غير محسومة');
+    expect(analysis.textContent).not.toContain('اختلاف في ألفاظ النقل');
+    expect(analysis.textContent).not.toContain('توجد ألفاظ مختلفة أو محذوفة أو مضافة داخل النقل.');
     expect(comparison.textContent).not.toContain('حدود المقتطف');
     expect(comparison.textContent).not.toContain('يتضمن النقل حذفًا داخل موضعه في المصدر.');
-    expect(comparison.querySelector('.foundation-differences')).toBeNull();
+    expect(analysis.querySelector('.foundation-differences')).toBeNull();
     expect(comparison.querySelector('.foundation-word-difference')).toBeNull();
     expect(comparison.querySelector('.foundation-compare-card--different')).toBeNull();
     expect(
@@ -697,7 +715,7 @@ describe('readable report comparison refinements', () => {
       'نص جديد',
     );
     fireEvent.click(screen.getByRole('button', { name: 'إظهار مقارنة: نص جديد' }));
-    expect(comparison.textContent).toContain('اختلاف في ألفاظ النقل');
+    expect(analysis.textContent).toContain('اختلاف في ألفاظ النقل');
     expect(comparison.querySelectorAll('.foundation-word-difference')).toHaveLength(2);
   });
 
