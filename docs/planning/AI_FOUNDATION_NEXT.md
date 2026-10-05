@@ -38,25 +38,26 @@ continue isolated implementation and integrated local tests before acceptance.
   new-parent discovery. The separate 8772 UI report reached real corpus/model
   assessment but had no cached-parent candidates or preferred windows; it proves
   app activation, not passage-window UI delivery.
-- Three composed-corpus diagnostic arms delivered no cached parents despite valid direct rankings; the
-  bounded cache budget and surfaced outcome follow-up belongs to #17. Navigation
-  fragments remain in some exact windows, so byte integrity is not content quality.
+- Three historical composed-corpus arms delivered no cached parents despite valid
+  direct rankings. Issue #17 now exposes bounded per-call outcomes. One fresh audited
+  full UI report at `53c757f` delivered six cleaned-window preferences and an exact
+  8881 citation with real models; it does not establish the historical failure cause
+  or general retrieval coverage. Some unrelated candidates and large packets remain.
 - Existing document capacity needs distinct UI feedback (#79). Fresh databases
   on copied Neon branches fail historical role creation (#81); applied historical
   checksums and the failed isolated database remain retained.
 
 ## Ordered implementation and evaluation
 
-| Order | Task                                            | Current evidence and next requirement                                                                                                                                                                                                                                                               | Issue              |
-| ----- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| Done  | Conservative cleaning and passage delivery      | Ranking correction/replay passed. Corrected isolated0014 (current deployment0015), fourteen probes, eight selected classifier outcomes and first-repeat admission passed; topic drift and limited controls remain recorded. The corpus-only UI run does not establish preferred-window UI delivery. | #8                 |
-| 1     | Bounded cache delivery and diagnostics          | Bounded search/restore and report-local stage/selection outcomes are implemented with unchanged ordinary defaults; finish checks/review and actual UI delivery. Cold/warm lexical adapters deliver windows in selected diagnostics; full-UI absence remains unresolved.                             | #17                |
-| 2     | Capacity feedback                               | Distinguish the existing 20-document limit in the UI.                                                                                                                                                                                                                                               | #79                |
-| 3     | Remaining claim consistency                     | Bounded empty-selection recovery reaches evidence in one source-free case; mixed malformed selections still fail. Preserve outcomes and expand editor confirmation/coverage.                                                                                                                        | #11                |
-| 5     | Compaction, source coverage and unified ranking | Full-parent durable budgets, cleaned semantic vectors, unified parent ranking, 170-passage expansion and underrepresented topics remain open.                                                                                                                                                       | #5/#7/#8           |
-| 6     | Calibration and broader rewrite preservation    | Coarse fixed-packet relations agree but detailed fields vary. Stronger reasoning benefit and broader independently reviewed modality preservation remain unproven.                                                                                                                                  | #13/#18/#38        |
-| 7     | Shared staging and bootstrap                    | Saleh accepts remaining dependencies before staging; verify API/proxy/provider readiness and fix copied-role bootstrap additively.                                                                                                                                                                  | #14/#20/#69/#81    |
-| 8     | Committee and beneficiary evidence              | Produce the working demo, reproducible failures, editor observations and measured beneficiary benefit. Source/rights/scholarly acceptance stays separate.                                                                                                                                           | #4/#18/#21/#22/#27 |
+| Order  | Task                                               | Current evidence and next requirement                                                                                                                                                                                                                                                                                                                          | Issue              |
+| ------ | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| Review | Cleaning, passage delivery and bounded diagnostics | Corrected isolated SQL/14 probes, eight selected classifier outcomes, four first-repeat views/eight windows and reader readback passed. Frozen source `53c757f` also delivered six cleaned preferences and an exact 8881 citation in one real UI report. Current deployment cleaning is 0015; no deployment-chain parity or general relevance gain is claimed. | #8/#17             |
+| 1      | Capacity feedback                                  | Known-resource capacity UI/client handling and full offline checks pass. Finish owner review and isolated live recheck; existing quotas and ownership remain unchanged.                                                                                                                                                                                        | #79                |
+| 2      | Remaining claim consistency                        | Empty-selection recovery reached evidence in one source-free case; malformed mixed selections still fail. Expand editor confirmation and coverage while retaining failures.                                                                                                                                                                                    | #11                |
+| 3      | Compaction, source coverage and unified ranking    | Full-parent durable budgets, cleaned vectors, unified ranking, the 170-passage expansion and underrepresented topics remain open. The selected UI packet still had unrelated candidates and 14,490 assessment input tokens.                                                                                                                                    | #5/#7/#8           |
+| 4      | Calibration and broader rewrite preservation       | Detailed fields vary; one new scope field omitted negation despite preserved conditions/explanation. Stronger reasoning benefit and broad modality preservation remain unproven.                                                                                                                                                                               | #13/#18/#38        |
+| 5      | Shared staging and bootstrap                       | Owner accepts current drafts before staging; verify API/proxy/provider readiness and fix copied-role bootstrap additively.                                                                                                                                                                                                                                     | #14/#20/#69/#81    |
+| 6      | Committee and beneficiary evidence                 | Produce the demo, reproducible failures, editor observations and measured beneficiary benefit. Source/rights/scholarly acceptance stays separate.                                                                                                                                                                                                              | #4/#18/#21/#22/#27 |
 
 The JSON source policy controls discovery; newly acquired pages may be classified
 and retained in the separate pending research cache after admission checks. A
@@ -66,14 +67,25 @@ retrieval remains a separate acceptance requirement.
 
 ## Merge and testing order
 
-PRs #59, #70–#78 and #80 are merged at the 5 October 15:36 UTC checkpoint.
-Cleaning PR #85 remains draft: offline checks passed, but an actual isolated
-content-window insert failed with SQL `42702`. Preserve that failed child and
-experimental migration. Corrective integration uses unique deployment migration
-`0014` after accepted secure-ticket `0013`, with new-child SQL/operator validation
-before the eight frozen classifier calls. Preserve merge commits; no squash,
-rebase or force-push. Shared staging, source approval and scientific acceptance
-remain separate.
+PRs #59, #70–#78 and #80 are merged; owner #88/#89 added ticket intake through
+migration 0014 at development `661fef89`; #91 added saved-result/human-ticket fallback at `845d608`. Reviewed cleaning draft #85 preserves
+those migrations and assigns unapplied deployment cleaning 0015. Historical failed
+experimental 0013 and successful isolated 0014 retain their original checksums.
+Corrected child validation, all eight selected joint-classifier calls, first-repeat
+sidecar admission and exact reader readback passed. Topic drift and protected
+no-removal controls remain documented; no migration-chain parity is inferred.
+
+Bounded retrieval draft #92 depends on #85. One audited actual UI report at frozen
+`53c757f` used Luna extraction and Sol assessment, recorded successful cache stages,
+eight cached parent candidates/two selected/two restored, six exact cleaned-window
+preferences and an exact 8881 citation. The historical absent-cache UI cause remains
+unknown; unrelated candidates, large packets and a scope negation omission remain
+open. See [bounded delivery evidence](../evidence/2026-10-05-cache-delivery-budgets.md)
+and its external `LEAD_UI_RESULT_AUDIT_V1.json` reference.
+
+Capacity feedback is the next stacked bounded UI change. Preserve merge commits;
+no squash, rebase or force-push. Owner acceptance, shared staging, source approval
+and scientific reliability remain separate from these selected local checks.
 
 Local tests may merge reviewed feature branches into an isolated integration
 checkout without changing development or the primary checkout. Paid public-text
