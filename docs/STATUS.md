@@ -10,6 +10,16 @@ evidence](evidence/2026-10-05-hosted-staging-profile.md) and
 
 ## Latest development evidence — 5 October
 
+**18:55 UTC checkpoint (#11):** Saleh merged #85/#92/#95/#99/#100/#104/#87;
+development was observed at `ce54db6`. Two real first-outcome mixed-writing tests
+on frozen b99 source passed exact claim/source/window/citation delivery checks;
+both provisionally supported the author claim. [UI evidence](evidence/2026-10-05-mixed-writing-ui.md)
+retains locator-as-quotation, Arabic qualifier/copy and escalation defects.
+The [resumption checklist](planning/AI_FOUNDATION_RESUME.md) gives the updated
+order. Owner acceptance and local proof do not establish shared live activation.
+Unused failed Neon cleaning leaf was deleted after data-equivalence/usage checks;
+four used branches and their data remain unchanged. Historical failures are kept.
+
 **Copied-role bootstrap (#81):** An explicit migration-runner compatibility profile
 validates and reuses an existing safe research group role without changing
 historical SQL/checksums or other role grants. It records a separate atomic
