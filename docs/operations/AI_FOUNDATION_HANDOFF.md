@@ -6,6 +6,18 @@ here are real, but are not automatically present in a Vercel/Railway deployment.
 
 ## Message to the integration agent
 
+Latest checkpoint, 5 October 2026, 16:48 UTC: owner development `661fef89` includes
+#88/#89 direct human-ticket intake and contact validation. Cleaning draft #85 is
+updated at `845ae1a`, preserving owner ticket migrations 0013/0014 and assigning
+unapplied deployment cleaning 0015. Cache draft #92 at tested source `53c757f` has
+51 files / 673 tests passing and includes #85 ancestry. Both remain for Saleh's
+acceptance. The separate handoff draft is #87. Recheck exact heads and required CI.
+
+The fresh loopback review on port 8773 delivered both cleaned cached parents,
+six exact body windows and a real cached-source citation to Luna/Sol assessment.
+This is new selected UI evidence, distinct from the earlier 8772 cache omission.
+It does not activate shared hosting or establish general semantic accuracy.
+
 PR #59, follow-ups #70–#78 and passage PR #80 are now merged. Preserve merge
 commits into `development`; do not squash, force-push or close issues automatically.
 The implementation branches have passed their documented checks. A working local
@@ -80,7 +92,7 @@ copied roles, rewrite migration history or run production migrations to bypass i
 ## Cleaning implementation and isolated validation
 
 Cleaning is a separate, default-off implementation in PR #85 at reviewed commit
-`ae11c0dabd69b4a3f67931c2467c0b625b7b5d1b`, with 51 test files / 654 tests and
+`845ae1a89b100e54c7faed61b487983464a4d5ae`, with 51 test files / 659 tests and
 type, documentation, policy, formatting and build checks passing. The same Luna
 request returns topics and exact block labels. Only model agreement plus a
 structural navigation/audio check permits removal; article prose, citations,
@@ -101,9 +113,11 @@ synthetic records were rolled back. No classifier calls or durable cleaned-page
 records were produced. Preserve this failure; passing unit tests did not establish
 database operation.
 
-Current development already contains `0013_secure_review_tickets.sql`.
-Corrected cleaning uses `0014_source_content_views.sql`; it preserves the accepted
-ticket migration and keeps the earlier experiment in immutable Git history.
+Current development contains `0013_secure_review_tickets.sql` and
+`0014_direct_review_ticket_intake.sql`. Unapplied deployment cleaning uses
+`0015_source_content_views.sql`; it preserves both owner migrations. Only the
+advisory-lock and metadata labels differ from tested `ae11c0d` cleaning 0014.
+The two isolated experiments and their applied checksums stay unchanged.
 
 A fresh child `br-little-pond-b2y5usie`, direct endpoint
 `ep-long-frost-b2ebbc7n.c-6.eu-central-1.aws.neon.tech`, database
@@ -145,7 +159,7 @@ indicate configuration; they do not certify current provider availability.
 
 ## Local activation versus shared staging
 
-The reviewed integration checkout is
+The earlier reviewed integration checkout is
 `Project_Code/Basira-worktrees/14-next-priority-validation`, currently merged through
 `7b080546ad27a81ff29f77f9b9f1c480c5a037c7`. Its combined check passed 48 test files,
 617 tests, type checking, documentation, policy, formatting and build.
@@ -158,8 +172,28 @@ The reviewed integration checkout is
   Luna claim extraction and Sol assessment, and supported the public obedience
   claim with Muyassar 31:15 while preserving its conditions and negation.
   The report contained no cache-parent candidates or preferred cache windows:
-  actual passage-window delivery through the UI remains unproven. No owning
+  that earlier run did not prove passage-window UI delivery. No owning
   `.env` file or active parent was changed.
+- `http://127.0.0.1:8773/`: current cleaned-cache preview, source
+  `53c757f1d4e7f3ccbf5a8bc5b0f511d154998acb`, in
+  `Project_Code/Basira-worktrees/17-cache-delivery-diagnostics`. It uses isolated
+  child `br-little-pond-b2y5usie` and process-only reader/writer overrides with
+  passage/content flags enabled. Startup and fresh public report
+  `fed992b6-9e99-49d5-aeb0-bd57b410c9b1` passed. Review took 14.081 seconds;
+  all cache stages succeeded, with eight parent candidates, two selected/restored
+  parents and six verified cleaned windows delivered to the actual assessor.
+  The model cited Bin Baz 8881 and Muyassar 31:15. The independent audit recomputed
+  original/window hashes, matched first-repeat classifier receipts and checked
+  the exact cached citation inside a delivered window. No gap discovery was needed.
+  External protocol/report/audit/screenshot are in
+  `AI_Foundation/experiments/cache-delivery-diagnostics-2026-10-05`.
+
+The port 8773 local report fixture remains migration 0009, with tickets disabled.
+It is not a full current-ticket or deployment 0015 database-chain test. Its source
+includes Saleh's ticket UI changes; hosted credentials/schema remain separate.
+The selected report still includes unrelated candidate sources, and its scope
+wording omits a negation preserved elsewhere. Claim relevance, compact evidence
+and qualifier consistency remain priorities; successful delivery does not erase them.
 
 All research/provider flags default off. Current live semantic/retrieval/discovery
 activation requires a non-production loopback research preview. It cannot simply
@@ -186,11 +220,12 @@ budget and explicit partial-outcome follow-up is [issue #17](https://github.com/
 Later [read-only cache diagnostics](../evidence/2026-10-05-cache-delivery-diagnostic.md)
 delivered two cached parents and durable claim preferences through the actual
 adapter; they do not explain or replace the earlier UI cache absence.
-Navigation fragments remain in some windows. A separate default-off source-content
-cleaning task will combine topic classification with exact block labels and retain
+Navigation fragments remain in legacy windows. Default-off source-content
+cleaning combines topic classification with exact block labels and retains
 immutable originals, substantive text, citations and corrective footnotes.
 
-At 15:40 UTC on 5 October, Vercel's user-facing capabilities URL still returned 404. Railway readiness advanced to `0013_secure_review_tickets`, and its
+At 16:32 UTC on 5 October, Vercel's user-facing capabilities URL still returned 404.
+Railway readiness advanced to `0014_direct_review_ticket_intake`, and its
 capabilities now include review tickets, but foundation review, semantic assessment,
 research preview and rewrite remained off with no live providers. This proves
 backend migration progress, not connected hosted AI. Recheck the selected proxy,

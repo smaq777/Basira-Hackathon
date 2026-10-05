@@ -1,113 +1,103 @@
 # AI Foundation resumption checklist — 5 October 2026
 
-This checkpoint supports continuation after a context or goal interruption.
-The active objective remains local research activation, owner PR-state review and
-remaining AI Foundation priorities. Do not mark it complete merely because the
-dependency queue awaits Saleh.
+Checkpoint: 16:48 UTC. Continue local research integration and remaining priorities;
+owner PR acceptance does not prevent isolated implementation. Saleh alone accepts,
+merges and deploys shared releases. This document is a continuation record, not a
+completion or acceptance receipt. Read the [integration handoff](../operations/AI_FOUNDATION_HANDOFF.md).
 
-## Rules and authorization to preserve
+## Rules to preserve
 
-- Use Basira-Hackathon UI/API, issue-linked `saleh/` branches and isolated worktrees.
-  Preserve merge commits; do not change the primary checkout, rebase or force-push.
-- Saleh (`smaq777`) alone accepts and merges the shared repository/release.
-  Isolated implementation and local integration may continue before acceptance.
-- The user requests Sol agents at Medium effort; the lead reviews their work.
-  Existing agent `/root/model_comparison_v2` is handling the next source-cleaning
-  task. Respect agent capacity; do not resume an old agent under an unknown model.
-- Public-text OpenRouter tests, approved discovery/cache and isolated Neon research
-  validation are authorized. Freeze test inputs/guards and retain every failure.
-  Do not ask again for the same public-model permission. Production migration and
-  shared release are not authorized by local testing.
-- Keep credentials in the owning environment, never output or commit them. Source
-  originals, hashes, edition identities, citations and historical receipts stay
-  immutable. Machine topics/content labels are not scholarly approval.
+- Basira-Hackathon UI/API; issue-linked `saleh/` branches and isolated worktrees.
+  Preserve merge commits, primary checkout, user changes and applied SQL/checksums.
+- User requests Sol agents at Medium effort; lead reviews before publication/activation.
+  Reuse `/root/model_comparison_v2`; do not repeatedly spawn beyond available capacity.
+- Public-text OpenRouter/web tests and isolated Neon research are authorized.
+  Freeze source/input/scope; retain failures and all outcomes. Do not repeat a paid
+  case just to select a passing result. Owning `.env` and production remain unchanged.
+- Credentials stay outside Git/browser/logs. Originals, citations, hashes, source
+  identities and first accepted sidecars are immutable. Machine topics/cleanup,
+  checksums and CI are separate from edition/rights/scholarly approval.
+- Keep the 3000 UTF16-unit / five-claim scope; preserve conditions, negation, exceptions and scope.
+  Partial Ayah fidelity is separate from quotation extent; Hadith authenticity is
+  separate from matn matching. Do not put IslamicEval gold/wrong answers in RAG.
 
-## Completed checkpoint
+## Verified progress and exact locations
 
-- At the read-only GitHub checkpoint on 5 October 2026, 15:36 UTC, #59, #70–#78
-  and #80 were merged into development `0b13a8c5278efcf25126056f444119045b88c3db`.
-  Required checks passed at their accepted heads, including #80 `d173de37`.
-  Recheck before making statements about current acceptance or deployment.
-- Claim recovery v1.8 reaches real evidence for one fresh source-free assertion.
-  A mixed-writing `invalid_claims` failure is retained. Rewrite v2 preserves
-  explicit obligation/non-obligation in a retained supported UI report and keeps
-  the Ayah unchanged. Neither establishes general semantic reliability.
-- Accepted passage PR #80: validated schema/roles/immutable bindings on isolated
-  child `br-weathered-tooth-b2luwnxr`. Migration 0012 fixes the empty-prefix defect
-  without changing applied 0011. Twelve actual-role rollback probes and separate
-  metadata-only/read-only CLI paths passed; owner-only trigger probes are unclaimed.
-- Paid fixed comparison retained 20 embedding attempts, 19 valid responses and one
-  unknown-billing transport failure. Passage-first composition demoted an unindexed
-  title. Corrected source `589de58f46895acd27c4ac178f424fa2b76779fc` preserves parent
-  ranks and enriches exact windows. Zero-provider replay passed 24 rank comparisons,
-  four rank-one controls and four selected full-paragraph deliveries versus baseline
-  zero. Three historical cold-cache failures remain; warm replay did not resolve them.
-- Passage documentation is at `c150027` before this handoff addition. Source worktree
-  is `Project_Code/Basira-worktrees/8-cache-passage-index`. PR #80 was accepted;
-  actual cache-window UI delivery evidence remains incomplete.
-- Isolated integrated worktree `14-next-priority-validation` merged reviewed source
-  through `7b080546ad27a81ff29f77f9b9f1c480c5a037c7`. Combined check passed 48 files,
-  617 tests, type/docs/policy/format/build. The only merge conflict was the priority
-  plan, resolved retaining current claim/rewrite findings and new passage priorities.
-- Port8771 process retains its existing research-parent configuration. Separate
-  port8772 child preview launched hidden via `start_passage_preview.ps1`, launcher
-  PID36116 at this checkpoint; `/ready` passed and stderr was empty. PIDs/readiness
-  can change. Fresh persisted report `0bb5b9ff-fbbd-4854-84f5-ec86b882dfce` on8772
-  completed real Luna extraction/Sol assessment using the pinned Neon corpus and
-  cited Muyassar31:15 for the public obedience claim. Its durable trace contained
-  zero cache-parent candidates and zero preferred cache windows. This confirms
-  real UI/model/corpus activation, not passage-window UI delivery. No owning `.env`
-  edits or active parent/production migration occurred.
+- Development `661fef89` includes accepted #59, #70–#78, #80, #88/#89. Ticket
+  migrations 0013/0014 are unchanged. Recheck GitHub before reporting current status.
+- Cleaning draft #85 is corrected at `845ae1a` (51 files / 659 tests and other checks).
+  Deployment cleaning is 0015. Historical failed experimental 0013 / SQL 42702 child and
+  corrected experimental 0014 child/checksums remain untouched.
+- Cleaning child: project `weathered-pond-44811639`, branch
+  `br-little-pond-b2y5usie`, host `ep-long-frost-b2ebbc7n.c-6.eu-central-1.aws.neon.tech`,
+  DB `basirah_research`. Fourteen actual-role/window probes pass. Eight public
+  joint-classifier calls on four complete originals were valid; removal IDs stable,
+  one topic drifted. First repeats stored four views / eight windows; 16 originals / eight old vectors
+  retained. Reader enrichment verified six hints. No general accuracy claim.
+- Cache draft #92, tested source `53c757f1d4e7f3ccbf5a8bc5b0f511d154998acb`, is in
+  `Project_Code/Basira-worktrees/17-cache-delivery-diagnostics`; 51 files / 673 tests
+  and type/docs/policy/format/build pass. Search/restore hard deadlines, coherent
+  research budgets and per-call outcomes preserve source order and citation guards.
+- Actual fresh UI report on 8773: `fed992b6-9e99-49d5-aeb0-bd57b410c9b1` completed
+  in 14.081 seconds. Luna extracted, Sol assessed; cache embedding/pages/passages/content
+  all succeeded. Two selected/restored cached parents supplied six exact cleaned
+  windows, and a Bin Baz 8881 citation fell inside a delivered window alongsideMuyassar 31:15.
+  Independent audit matches first-repeat selections and recomputes every window hash.
+  Earlier 8772 zero-cache report and cold-cache failures remain; this does not prove their cause.
+- Port 8771 retains active-parent setup; 8772 older passage child; 8773 new cleaned child.
+  Launcher `start_cleaned_cache_preview_v1.ps1` lives externally in integration-lead-v1.
+  Local reports use PostgreSQL on port 55439 `basirah_integration_20261004`, migration 0009;
+  tickets are disabled on 8773. This is not deployment 0015/ticket schema parity.
+- At 16:32 UTC, shared Railway is ready at owner migration 0014 but Foundation/live
+  providers/rewrite remain off; Vercel capabilities URL 404. Current research gates
+  require non-production loopback. Do not silently weaken them to host the preview.
+- Claim recovery and evidence-bound rewrite v2 exist; selected UI modality/copy tests
+  passed. Mixed-writing invalid claims and detailed qualifier inconsistencies remain.
 
-## Ordered remaining work (updated after 16:10 UTC)
+## Remaining priorities, in order
 
-Cache delivery now precedes capacity/claim follow-ups because source cleaning adds
-another lookup to the existing tight budget. Independent lexical and simulated
-unavailable-embedding diagnostics delivered cache parents and durable preferences,
-but neither explains the historical UI omission. See the
-[retained diagnostic](../evidence/2026-10-05-cache-delivery-diagnostic.md).
-At15:40UTC, Vercel capabilities still returns404. Railway advanced to
-0013_secure_review_tickets but foundation review/live providers remain off;
-owner merges alone do not activate the AI Foundation.
+1. **Finish delivery review (#8/#17):** publish selected fresh UI audit in cache PR
+   without replacing frozen source 53c757f; inspect exact-head quality/policy/dependency
+   checks. Saleh accepts #85 before #92. Source originals and experimental history stay intact.
+2. **Capacity feedback (#79):** active Sol worktree `79-capacity-feedback`, based on53c757f.
+   Distinguish documents/revisions/reviews 429 capacity from network/burst failures.
+   Preserve draft/session/reports, remove fixed-cap retry and keep cancellation safe.
+   Focused 40 tests pass; finish full checks, lead review, draft and actual UI verification.
+   No quota increase, session reset or automatic resubmission.
+3. **Claim consistency and relevance (#11/#8):** representative mixed-writing
+   original-span/source-ID selection, valid-empty versus malformed output, safe editor
+   confirmation and passage-level reranking. The fresh case returned 13 sources including
+   unrelated material and used 14,490 assessment input tokens. Reduce distraction while
+   preserving restorable originals, attribution and source-family integrity.
+4. **Semantic calibration and AI-ReWrite (#13/#18/#38):** fresh scope field omitted
+   negation despite correct conditions/explanation. Test qualifier consistency across
+   explanation/conditions/negations/scope/citations; deduplicate Arabic copy. Preserve
+   modality, quotation and unsupported text through independent rewrite checks.
+   Stronger-thinking advantage remains unproven; use held-out independent judgments.
+5. **RAG expansion and report compaction (#5/#7/#8):** execute reviewed 170 contextual
+   passage plan across nine labels/independent works after source/rights selection.
+   Current 86 corpus and 16 pending cache originals are selected coverage. Cleaning is
+   lexical; cleaned embeddings/unified parent ranking need separate measured phases.
+   Do not discard remote footnotes/conditions or contaminate evaluation retrieval.
+6. **Bootstrap and shared staging (#81/#14/#20/#69), owner parallel:** copied cluster
+   roles break historical 0008 on fresh DBs. Add reviewed compatible bootstrap; never
+   rewrite history/drop roles. Verify current full deployment chain on a fresh/copy
+   environment, permitted hosted profile/assets/secrets/proxy, then a fresh actual
+   shared-UI report. Local research readiness is insufficient deployment proof.
+7. **Source/content acceptance and pilot (#4/#18/#21/#22/#27):** edition/rights pack,
+   independently adjudicated source-family-separated cases, editor observations and
+   measured benefit. Automated checks/model agreement are not scholarly acceptance.
+8. **Judging/demo handoff:** three reproducible supported/partial/failure cases,
+   outage/cancellation recovery and source/citation/rewrite narrative. Weights:
+   technical 25%, reliability 15%, innovation 15%, UX 10%, impact 20%, operations 10%,
+   presentation 5%; these are supplied weights, not awarded scores.
 
-| Order | Priority                                                                               | Current status and next action                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ----- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | Source-content cleaning with classification (#8)                                       | PR #85 corrected at ae11c0d; 51 files / 654 tests pass. Failed experimental0013/42702 child and receipts retained. Fresh child br-little-pond-b2y5usie applies accepted ticket 0013 plus unique cleaning 0014; all 14 actual-role probes pass. All 8 joint Luna calls valid on four selected public pages; removed block IDs stable, one topic set varied. Four first-repeat views/eight exact windows stored and read back; all 16 originals and old 8 vectors/windows unchanged. Actual reader delivers six verified hints for two cleaned parents; no-removal controls unchanged. No general accuracy, cleaned-vector or whole-UI activation claim. Await #17 then integrated UI proof before enabling cleaning. |
-| 2     | Cache deadline and explicit partial outcomes (#17)                                     | Sol Medium implementing saleh/17-cache-delivery-diagnostics from accepted development plus reviewed ae11. Initial focused checkpoint: 3 files / 35 tests pass for slow/hung/late cache, cancellation, zero-row partial outcomes and per-query isolation. Coherent research retrieval/cache/embedding/SQL budgets, assessment reserve, durable trace and plain Arabic notes remain under implementation/review. No automatic auth/permission retries; original ordering and citation proof preserved.                                                                                                                                                                                                                |
-| 3     | Distinct capacity feedback (#79)                                                       | Not implemented. Recognize only documents/revisions/reviews capacity responses, show simple Arabic copy, retain draft/reports and avoid pointless fixed-capacity retries. Keep ordinary network/rate failures recoverable. Do not reset sessions or increase the20-document limit.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| 4     | Claim selection consistency (#11)                                                      | Bounded valid-empty recovery exists; malformed selections still fail. Test candidate/source-ID constraints and safe failure reasons with representative mixed writing. Never force questions/quotations into claims or guess an unretained invalid response. Editor confirmation is pending.                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| 5     | RAG topic coverage and durable report capacity (#5/#7/#8)                              | 86 corpus passages and16 pending cache parents are selected research coverage. Finish the170 contextual-passage plan across nine labels/independent works, remove navigation pollution conservatively, and compact report/model representations without losing restorable full originals/restrictions/footnotes. Current rank-preserving enrichment intentionally does not improve parent discovery; unified comparable parent ranking needs separate measurement.                                                                                                                                                                                                                                                  |
-| 6     | Semantic calibration, Arabic clarity and broader AI-ReWrite preservation (#13/#18/#38) | Selected fixed-packet relations and v2 rewrite guards exist; detailed qualifier attachment varies and stronger-thinking benefit is unproven. Test negation, conditions, exceptions, scope, unrelated/missing evidence and conflicting interpretations. Produce plain, deduplicated Arabic explanations; expand independently reviewed modality/ambiguity controls and source-bound rewrite cases. Keep unsupported source-strengthening separate from style changes.                                                                                                                                                                                                                                                |
-| 7     | Fresh-database bootstrap and shared staging (#81/#14/#20/#69)                          | Copied roles break historical0008 on a fresh database; preserve failed DB and applied checksums, implement an additive/idempotent bootstrap strategy without dropping roles. Dependency PRs59,70–78,80 are accepted at15:36UTC. Confirm deployed revision, selected API/proxy and permitted hosted research profile, then verify a new persisted report through the actual shared UI. Latest15:40UTC hosted probe advanced to0013_secure_review_tickets but Foundation/provider flags remain off and Vercel capabilities still404. Current live research gates require non-production loopback; do not silently weaken them.                                                                                        |
-| 8     | Source/content review, beneficiary pilot and committee handoff (#4/#18/#21/#22/#27)    | Prepare a small edition/rights review pack, independently adjudicated source-family-separated cases, editor observations and three reproducible demo cases including failure recovery. Measure actual editor benefit; automated schema tests and model agreement are not beneficiary outcomes or judge scores.                                                                                                                                                                                                                                                                                                                                                                                                      |
+## Resume procedure
 
-Additional regression requirements remain: accurate partial Ayah fidelity separate
-from extent; explicit separated-excerpt/ellipsis alignment; Hadith authenticity and
-canonical reference verification separate from matn matching; provider/gateway outage
-and overall-deadline behavior; no IslamicEval gold/wrong answers in reusable retrieval.
-
-## Immediate continuation steps
-
-1. Read [Saleh's handoff](../operations/AI_FOUNDATION_HANDOFF.md) and this file.
-2. Inspect exact branch/worktree status and live agent state; preserve uncommitted
-   user/agent edits. Read the retained8772 UI report and screenshot; its successful
-   base-corpus assessment does not prove cache-window delivery. Diagnose the
-   missing cache candidates under #17 before treating the passage UI gate as passed.
-   Do not repeat paid calls merely to replace retained failures with a passing run.
-3. Cleaning source/schema/classifier/first-repeat delivery checks are complete at
-   ae11c0d on the fresh child. Preserve the earlier 42702 and compiler preflight
-   failures; do not repeat paid tests merely to replace them. Review/finish #17
-   in its separate worktree before cleaning activation and a fresh integrated UI
-   report. Then #79 capacity feedback and the remaining ordered tasks above.
-4. Publish the handoff and verified evidence with the current PR; recheck exact-head
-   quality/policy/dependency CI and Saleh state. Leave merge/closure to Saleh.
-
-External experiment receipts remain under
-`Project_Code/AI_Foundation/experiments/cache-passage-index-2026-10-05` and
-`experiments/integration-lead-v1`. Cleaning freezes and Phase1 receipts are in
-`experiments/source-content-cleaning-2026-10-05`. The owning environment is outside the repository;
-use its documented variable names, not invented connection strings.
-
-Judging weights are technical25%, reliability15%, innovation15%, UX10%, impact20%,
-operations10% and presentation5%. Current missing proof includes accepted hosted
-end-to-end behavior, qualified evaluation, measured editor benefit and final demo.
+Inspect current Git/agent status first; preserve dirty work. Read exclusive protocols,
+UI_REPORT_V1, LEAD_UI_RESULT_AUDIT_V1 and UI_REVIEW_V1.jpg in
+`AI_Foundation/experiments/cache-delivery-diagnostics-2026-10-05`. Historical cleaning
+receipts remain in `source-content-cleaning-2026-10-05`; passage failures in
+`cache-passage-index-2026-10-05`. Confirm actual endpoint/roles before any SQL.
+Keep the primary checkout untouched. Recheck current PR/CI/deployment states;
+continue the first unfinished task rather than repeating completed paid diagnostics.
