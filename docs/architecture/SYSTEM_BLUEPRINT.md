@@ -2,7 +2,17 @@
 
 **Purpose:** give a developer one implementation map for the complete Basirah system: what exists, what is planned, how parts connect, when each part is called, and which work must happen first.
 
-**Last reconciled:** 1 October 2026 against the foundation and architecture baseline and delivery issues through [#27](https://github.com/smaq777/Basira-Hackathon/issues/27).
+**Runtime reconciliation:** 5 October 2026, development work in draft PR #59. The target design and historical merged-baseline table below remain planning references; they do not describe the current local integration build or imply production deployment.
+
+## Current development records flow
+
+1. Owned guest session → immutable document revision and hash → idempotent leased review run.
+2. Local canonical index → quotation discovery/comparison; live Tafsir MCP supplies bounded related context.
+3. OpenRouter claim extraction → per-claim exact/lexical/dense retrieval from the separate versioned Neon research corpus → frozen evidence packet → support assessment.
+4. If one claim lacks support/context and time remains, optional Firecrawl discovery uses the server JSON source policy, validates at most two extracted originals, and reassesses only that claim. Supported findings do not trigger search. Failures preserve first-pass findings and a bounded trace.
+5. Lease-bound completion persists the report, evidence originals/hashes and attribution. Semantic claims and provider/retrieval/discovery traces live in report JSON; the proposed normalized confirmed-claim tables below are not yet implemented.
+
+The report database is local PostgreSQL in this development setup; the reusable 62-passage corpus is on an isolated Neon branch. New web snapshots are persisted with their report, not automatically approved or promoted into the reusable Neon corpus. Website eligibility, digital-edition review, reuse rights, and scholarly approval are separate states. See [dataset and records audit](../evidence/2026-10-05-islamiceval-records-audit.md) and [source policy](../../config/source-policy.json).
 
 > This is a **target architecture**, not evidence that the target system is already working. The status labels below are part of the design. Passing software tests cannot establish religious correctness or scholarly approval.
 
@@ -23,7 +33,7 @@ Basirah is not an unrestricted religious chatbot, a personal fatwa (فتوى ش�
 | **Blocked**     | A named external, access, rights, or governance dependency prevents completion.               |
 | **Later**       | Explicitly outside the hackathon MVP critical path.                                           |
 
-### Current versus target system
+### Historical merged baseline (1 October) versus target system
 
 | Area                                 | Current merged state                                                                                                                                                | Target MVP owner                                                                                                                                                                                                              |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

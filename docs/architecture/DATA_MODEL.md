@@ -1,8 +1,10 @@
 # Proposed PostgreSQL data model and retrieval indexes
 
-**Not yet migrated or deployed.** PostgreSQL is planned; Drizzle migrations are a candidate implementation mechanism.
+**Target relational model, partly superseded by implemented migrations.** As of 5 October, migrations 0001–0009 implement guest/document/review lifecycle, durable foundation reports, corpus snapshots, context and typed links. Local PostgreSQL stores development reports; a separate isolated Neon database hosts the versioned research corpus with pgvector. This is not production promotion.
 
-This document is the physical database handoff for [Issue #5](https://github.com/smaq777/Basira-Hackathon/issues/6), [Issue #6](https://github.com/smaq777/Basira-Hackathon/issues/7), [Issue #7](https://github.com/smaq777/Basira-Hackathon/issues/8), and the [complete system blueprint](SYSTEM_BLUEPRINT.md). Table and index names are proposed contracts, not evidence of a deployed Neon schema.
+The table catalog below remains a proposed normalized model. In particular, semantic claim proposals and support findings currently persist in revision-bound report JSON, not the proposed confirmed `claim` and `finding_evidence` relations. Cross-database evidence uses immutable snapshot keys, original hashes, attribution and corpus versions; it cannot assume a local foreign key into the hosted corpus. Web-acquired originals persist with the report and require separate review before corpus ingestion. See the [current records flow](SYSTEM_BLUEPRINT.md#current-development-records-flow) and [audit](../evidence/2026-10-05-islamiceval-records-audit.md).
+
+This document is the physical database handoff for [Issue #5](https://github.com/smaq777/Basira-Hackathon/issues/6), [Issue #6](https://github.com/smaq777/Basira-Hackathon/issues/7), [Issue #7](https://github.com/smaq777/Basira-Hackathon/issues/8), and the [complete system blueprint](SYSTEM_BLUEPRINT.md). Table and index names below are proposed contracts; migrations and verified receipts define the actual deployed research schema.
 
 ```mermaid
 erDiagram

@@ -1,5 +1,13 @@
 # Current delivery status
 
+## Latest development evidence — 5 October
+
+Draft PR #59 now connects the current UI to persisted review reports, local quotation lookup, live Tafsir context, OpenRouter claim assessment, and a persistent isolated Neon hybrid-retrieval corpus. Optional gap-triggered Firecrawl acquisition is controlled by `config/source-policy.json`; UI follow-up is assigned to Saleh in [#68](https://github.com/smaq777/Basira-Hackathon/issues/68). Features remain research-only/default-off and are not deployed or owner-accepted merely because local checks pass.
+
+The Neon research corpus has 62 originals; the larger local index has 6,236 Quran, 6,235 Tafsir and 31,811 hadith entries. Only four IslamicEval hadith originals are currently hosted. Benchmark answers/gold are evaluation material, not retrieval evidence. The trained role classifiers are not live. See [dataset/records audit](evidence/2026-10-05-islamiceval-records-audit.md).
+
+The tables below retain deployment/baseline context; this development evidence does not promote production, resolve source rights, or establish scholarly accuracy.
+
 **Hosted retrieval follow-up, 5 October:** The
 [persistent Neon development corpus](evidence/2026-10-05-hosted-source-corpus.md)
 contains 62 attributed research passages and compatible embeddings with a
@@ -83,12 +91,10 @@ Software validation results and GitHub workflow evidence are recorded in the [wo
 
 ## Immediate priorities
 
-1. Separate missing evidence from assessment calibration. Compare fixed claims on original/enriched packets with old/new instructions, including negative controls. Explain compound assertions without treating an unsupported qualifier as a contradiction (#13/#18).
-2. Split claim extraction from assessment and retrieve evidence for each assertion before freezing its final evidence packet. Preserve the independent quotation-comparison path and existing outage recovery (#8/#11/#14/#17).
-3. Add explicit scholarly-book/explanation source roles and typed cross-work links; ingest a versioned, reviewable source corpus into Neon with context, footnotes and compatible pgvector embeddings. Evaluate retrieval recall separately from support accuracy (#5/#6/#7/#8).
-4. Add bounded web discovery for identified gaps through configured sources, verified originals and attributed snapshots. Build a held-out, topic-diverse evaluation with human adjudication; keep editorial guidance concise and linked to actual passages (#8/#9/#16/#18).
-5. Gate AI-ReWrite on stable claims, evidence citations and repeatable assessment; preserve and recheck quoted text (#38).
+1. **Evidence coverage and measured routing quality (#8/#11/#18):** expand a small topic-diverse, attributed research corpus; evaluate lexical/dense recall and shadow-test the saved role classifier on untouched groups. Keep benchmark examples/gold separate from originals. Do not bulk-import research-only answers.
+2. **Support calibration and web budget (#13/#18):** use frozen public-sermon excerpts and explicit negative controls; separate source gaps, model errors, and provider failures. Preserve qualifying context. Require human scholarly adjudication before claiming correctness scores.
+3. **Source/discovery UX (#16/#68, Saleh):** show concise Arabic outcomes, readable titles and citations, and source eligibility distinct from approval. Developer trace stays out of ordinary result cards.
+4. **Submission operations and impact (#17/#18):** reproducible hosted demo, provider failure rehearsal, measured editor task timing, license/rights inventory, owner-reviewed public release, presentation/video and final portal receipt. No production promotion or release is implied by local testing.
+5. **Evidence-bound AI-ReWrite (#38):** generate a separate draft from validated findings, preserve quoted text and original revision, cite actual sources, recheck the result, then offer copy. Do not make stronger unsupported assertions or silently turn research findings into approval.
 
-These priorities follow the [5 October coverage review](evidence/2026-10-05-evidence-coverage-calibration.md).
-The earlier quotation/UI fixes and isolated Neon/model pilots are completed development
-evidence, not a persistent hosted source corpus or scholarly accuracy measurement.
+Current runtime flow and proposed normalized records are reconciled in [system blueprint](architecture/SYSTEM_BLUEPRINT.md) and [data model](architecture/DATA_MODEL.md).
