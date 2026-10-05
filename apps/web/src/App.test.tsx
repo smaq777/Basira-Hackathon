@@ -4,6 +4,13 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App, { ExpandableText, reloadSignedOutHome, ReviewerShell } from './App.js';
+import {
+  foundationReportFixture,
+  ownedReviewFixture,
+  ORIGINAL_TEXT,
+  REVIEW_ID,
+  REVISION_ID,
+} from './foundation-report.fixtures.js';
 
 const initialViewportHeight = window.innerHeight;
 
@@ -199,6 +206,100 @@ describe('Basirah web flow', () => {
     expect(screen.getByText('تحليل تلقائي في الخلفية')).not.toBeNull();
     expect(screen.getByText(/لا تحتاج إلى تصنيف أي عبارة/)).not.toBeNull();
     expect(screen.queryByRole('combobox')).toBeNull();
+  });
+
+  it('keeps one analysis request alive across a parent rerender and opens the result', async () => {
+    const json = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    let resolveDocument!: (response: Response) => void;
+    const pendingDocument = new Promise<Response>((resolve) => {
+      resolveDocument = resolve;
+    });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = String(input);
+      if (path === '/api/v1/capabilities') return json({ foundationReview: true });
+      if (path === '/api/v1/documents') return pendingDocument;
+      if (path === `/api/v1/revisions/${REVISION_ID}/extractions`)
+        return json({ extraction: { candidates: [], warnings: [] } });
+      if (path === '/api/v1/reviews') return json(ownedReviewFixture(), 202);
+      if (path === `/api/v1/reviews/${REVIEW_ID}/report`)
+        return json({ report: foundationReportFixture() });
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const user = userEvent.setup();
+    const view = render(<App />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'النص المراد مراجعته' }), {
+      target: { value: ORIGINAL_TEXT },
+    });
+    await user.click(screen.getByRole('button', { name: 'ابدأ المراجعة' }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.filter(([path]) => path === '/api/v1/documents')).toHaveLength(1),
+    );
+    view.rerender(<App />);
+    expect(fetchMock.mock.calls.filter(([path]) => path === '/api/v1/documents')).toHaveLength(1);
+    const draft = fetchMock.mock.calls.find(([path]) => path === '/api/v1/documents')!;
+    expect(draft[1]?.signal?.aborted).toBe(false);
+    await act(async () =>
+      resolveDocument(json({ documentId: 'doc', revisionId: REVISION_ID }, 201)),
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'راجع النقل وحدود الاستدلال' }),
+    ).not.toBeNull();
+    expect(window.location.hash).toBe(`#/result?reviewId=${REVIEW_ID}`);
+    expect(screen.getByLabelText('النص الأصلي مع مواضع النقل').textContent).toBe(ORIGINAL_TEXT);
+    expect(JSON.parse(String(draft[1]?.body)).text).toBe(ORIGINAL_TEXT);
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+      '/api/v1/capabilities',
+      '/api/v1/documents',
+      `/api/v1/revisions/${REVISION_ID}/extractions`,
+      '/api/v1/reviews',
+      `/api/v1/reviews/${REVIEW_ID}/report`,
+    ]);
+  });
+
+  it('aborts the in-flight analysis request when the user leaves the analysis route', async () => {
+    const request: { signal: AbortSignal | null } = { signal: null };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) => {
+      if (String(_input) === '/api/v1/capabilities')
+        return Promise.resolve(
+          new Response(JSON.stringify({ foundationReview: true }), {
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      if (String(_input) !== '/api/v1/documents')
+        throw new Error(`Unexpected request: ${String(_input)}`);
+      request.signal = init?.signal ?? null;
+      return new Promise<Response>((_resolve, reject) => {
+        request.signal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('The operation was aborted.', 'AbortError')),
+          { once: true },
+        );
+      });
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'النص المراد مراجعته' }), {
+      target: { value: ORIGINAL_TEXT },
+    });
+    await user.click(screen.getByRole('button', { name: 'ابدأ المراجعة' }));
+    await waitFor(() => expect(request.signal).not.toBeNull());
+    await user.click(screen.getByRole('button', { name: 'إلغاء والعودة للنص' }));
+
+    expect(request.signal?.aborted).toBe(true);
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+      '/api/v1/capabilities',
+      '/api/v1/documents',
+    ]);
+    expect(
+      (screen.getByRole('textbox', { name: 'النص المراد مراجعته' }) as HTMLTextAreaElement).value,
+    ).toBe(ORIGINAL_TEXT);
   });
 
   it('preserves the submitted draft when returning from analysis', async () => {

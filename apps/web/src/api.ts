@@ -78,9 +78,20 @@ export class BasirahApiError extends Error {
   }
 }
 
-async function requestJson(path: string, init: RequestInit): Promise<unknown> {
+async function requestJson(
+  path: string,
+  init: RequestInit,
+  requestSignal?: AbortSignal,
+): Promise<unknown> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 12_000);
+  let timedOut = false;
+  const abortFromCaller = () => controller.abort();
+  if (requestSignal?.aborted) controller.abort();
+  else requestSignal?.addEventListener('abort', abortFromCaller, { once: true });
+  const timeout = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 12_000);
   try {
     const response = await fetch(path, {
       ...init,
@@ -93,23 +104,33 @@ async function requestJson(path: string, init: RequestInit): Promise<unknown> {
     return body;
   } catch (error) {
     if (error instanceof BasirahApiError) throw error;
-    if (error instanceof DOMException && error.name === 'AbortError')
-      throw new BasirahApiError('REQUEST_TIMEOUT', 0);
+    if (controller.signal.aborted) {
+      if (requestSignal?.aborted) throw new BasirahApiError('REQUEST_ABORTED', 0);
+      if (timedOut) throw new BasirahApiError('REQUEST_TIMEOUT', 0);
+    }
     throw new BasirahApiError('NETWORK_ERROR', 0);
   } finally {
     window.clearTimeout(timeout);
+    requestSignal?.removeEventListener('abort', abortFromCaller);
   }
 }
 
-async function createSession(): Promise<void> {
-  await requestJson('/api/v1/sessions', { method: 'POST', body: '{}' });
+async function createSession(signal?: AbortSignal): Promise<void> {
+  await requestJson('/api/v1/sessions', { method: 'POST', body: '{}' }, signal);
 }
 
-async function createDocument(text: string): Promise<{ documentId: string; revisionId: string }> {
-  const body = await requestJson('/api/v1/documents', {
-    method: 'POST',
-    body: JSON.stringify({ text }),
-  });
+async function createDocument(
+  text: string,
+  signal?: AbortSignal,
+): Promise<{ documentId: string; revisionId: string }> {
+  const body = await requestJson(
+    '/api/v1/documents',
+    {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    },
+    signal,
+  );
   if (
     typeof body !== 'object' ||
     body === null ||
@@ -122,20 +143,27 @@ async function createDocument(text: string): Promise<{ documentId: string; revis
   return { documentId: body.documentId, revisionId: body.revisionId };
 }
 
-export async function persistDraftForAnalysis(text: string): Promise<DraftAnalysisReceipt> {
+export async function persistDraftForAnalysis(
+  text: string,
+  signal?: AbortSignal,
+): Promise<DraftAnalysisReceipt> {
   let document: { documentId: string; revisionId: string };
   try {
-    document = await createDocument(text);
+    document = await createDocument(text, signal);
   } catch (error) {
     if (!(error instanceof BasirahApiError) || error.status !== 401) throw error;
-    await createSession();
-    document = await createDocument(text);
+    await createSession(signal);
+    document = await createDocument(text, signal);
   }
 
-  const body = await requestJson(`/api/v1/revisions/${document.revisionId}/extractions`, {
-    method: 'POST',
-    body: '{}',
-  });
+  const body = await requestJson(
+    `/api/v1/revisions/${document.revisionId}/extractions`,
+    {
+      method: 'POST',
+      body: '{}',
+    },
+    signal,
+  );
   if (
     typeof body !== 'object' ||
     body === null ||

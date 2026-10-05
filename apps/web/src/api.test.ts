@@ -78,6 +78,27 @@ describe('same-origin draft analysis client', () => {
     expect(fetchMock.mock.calls.some(([url]) => url === '/api/v1/sessions')).toBe(false);
   });
 
+  it('aborts an abandoned analysis before it can continue the request sequence', async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) => {
+      const signal = init?.signal;
+      return new Promise<Response>((_resolve, reject) => {
+        signal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('The operation was aborted.', 'AbortError')),
+          { once: true },
+        );
+      });
+    });
+
+    const analysis = persistDraftForAnalysis('نص عربي صالح للمراجعة', controller.signal);
+    controller.abort();
+
+    await expect(analysis).rejects.toMatchObject({ code: 'REQUEST_ABORTED', status: 0 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).signal?.aborted).toBe(true);
+  });
+
   it('maps transport failures to a recoverable Arabic message', () => {
     expect(analysisErrorMessage(new BasirahApiError('NETWORK_ERROR', 0))).toContain('تعذر الاتصال');
   });

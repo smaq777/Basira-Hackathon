@@ -1,5 +1,5 @@
 import type { ComponentType, FormEvent, ReactNode } from 'react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Archive } from '@phosphor-icons/react/Archive';
 import { ArrowLeft } from '@phosphor-icons/react/ArrowLeft';
 import { ArrowUp } from '@phosphor-icons/react/ArrowUp';
@@ -166,12 +166,12 @@ function useRoute() {
     return () => window.removeEventListener('hashchange', update);
   }, []);
 
-  const navigate = (next: Route, reviewId?: string) => {
+  const navigate = useCallback((next: Route, reviewId?: string) => {
     const hash = pathFor(next) + (reviewId ? `?reviewId=${encodeURIComponent(reviewId)}` : '');
     window.location.hash = hash;
     setLocation({ route: next, hash });
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }, []);
 
   return { route: location.route, navigate };
 }
@@ -874,7 +874,8 @@ function AnalysisScreen({
       if (!run) {
         await requireFoundationReview();
         if (cancelledRef.current || !active) return;
-        if (!receiptRef.current) receiptRef.current = await persistDraftForAnalysis(text);
+        if (!receiptRef.current)
+          receiptRef.current = await persistDraftForAnalysis(text, controller.signal);
         if (cancelledRef.current || !active) return;
         setPhase(1);
         pendingRunRef.current = createOwnedReview(
@@ -2258,17 +2259,28 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
   const [foundationReport, setFoundationReport] = useState<FoundationReport | null>(null);
   const reviewId = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('reviewId');
 
-  const startReview = (text: string) => {
-    setReviewText(text);
-    setFoundationReport(null);
-    navigate('analysis');
-  };
+  const startReview = useCallback(
+    (text: string) => {
+      setReviewText(text);
+      setFoundationReport(null);
+      navigate('analysis');
+    },
+    [navigate],
+  );
 
-  const startNewReview = () => {
+  const startNewReview = useCallback(() => {
     setReviewText('');
     setFoundationReport(null);
     navigate('home');
-  };
+  }, [navigate]);
+
+  const completeAnalysis = useCallback(
+    (report: FoundationReport) => {
+      setFoundationReport(report);
+      navigate('result', report.reviewId);
+    },
+    [navigate],
+  );
 
   if (route.startsWith('reviewer-')) {
     if (!clerkConfigured) return <ReviewerAuthUnavailable onHome={() => navigate('home')} />;
@@ -2294,10 +2306,7 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
         text={reviewText}
         initialReviewId={reviewId}
         onCancel={() => navigate('home')}
-        onComplete={(report) => {
-          setFoundationReport(report);
-          navigate('result', report.reviewId);
-        }}
+        onComplete={completeAnalysis}
       />
     );
   if (route === 'result')
