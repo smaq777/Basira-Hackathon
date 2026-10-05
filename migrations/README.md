@@ -1,5 +1,10 @@
 # Database migrations
 
+Migration `0013` adds separate insert-only source-content views and contiguous body
+windows after `0012`; original/v1 records remain unchanged. It adds no vectors or
+roles. The content-view flag defaults off and requires isolated validation. See
+[conservative cleaning evidence](../docs/evidence/2026-10-05-source-content-views.md).
+
 Migration `0011` adds insert-only retained-page metadata and pinned vectors with
 exact UTF16/codepoint parent bindings. It requires `0010` and isolated fresh/copy
 validation. Forward `0012` fixes empty-prefix UTF16 length discovered by a valid

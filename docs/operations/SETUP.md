@@ -1,5 +1,15 @@
 # Local development setup
 
+## Optional conservative source content views
+
+`FOUNDATION_WEB_CACHE_CONTENT_VIEWS_ENABLED=false` preserves topic-only admission
+and original/v1 delivery. Enabling requires the existing research cache configuration
+and reviewed migration `0013`. New public pages receive one joint topic/block-label
+request; existing retained originals need an explicit frozen zero-provider sidecar
+backfill after their classification diagnostic. Derived body windows use lexical
+selection, with no cleaned-view embeddings. Read the [source-bound selection,
+operator and rollback limits](../evidence/2026-10-05-source-content-views.md).
+
 ## Optional retained-page passage index
 
 `FOUNDATION_WEB_CACHE_PASSAGES_ENABLED=false` keeps the legacy cache path. Enabling

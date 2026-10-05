@@ -2,6 +2,13 @@
 
 ## Latest development evidence — 5 October
 
+**Conservative source cleaning (#8):** A separate default-off joint classifier
+labels exact original blocks alongside topics. Derived lexical sidecars remove only
+model-labelled, structurally recognized boilerplate; originals/v1 records remain
+unchanged. Protected prose/footnotes and ambiguous tails remain. Offline source-bound
+delivery regressions pass; actual SQL/public paid validation remains pending review.
+See [scope and limitations](evidence/2026-10-05-source-content-views.md).
+
 **Passage index (#8, related #11):** A separate default-off implementation adds
 offline bounded vector backfill and per-claim verified retained-page delivery.
 [Evidence](evidence/2026-10-05-cache-passage-index.md) records bounds and pending

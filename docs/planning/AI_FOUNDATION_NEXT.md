@@ -26,8 +26,8 @@ continue isolated implementation and integrated local tests before acceptance.
   retaining absence of obligation and obligation, preserved the Ayah, displayed
   before/after and completed its copy action using a retained supported report.
   This does not establish general reliability or fresh extraction success.
-- PRs #59 and #70–#78 are ready for Saleh review and remain unmerged; passage
-  PR #80 is draft. Required exact-head checks passed for the published dependency
+- At the 5 October 13:53 UTC checkpoint, #59/#70–#72 were merged.
+  #73–#78 remain pending acceptance; passage PR #80 is draft. Required exact-head checks passed for the published dependency
   queue. Local activation is not shared staging, source approval or acceptance.
 - The default-off [passage index](../evidence/2026-10-05-cache-passage-index.md)
   passed selected isolated SQL/least-privilege tests after forward migration
@@ -35,7 +35,11 @@ continue isolated implementation and integrated local tests before acceptance.
   eight windows, and made 20 paid attempts (19 validated responses). Unconditional
   passage-first composition demoted an unindexed rank-1 source in all four
   controls. The correction preserves legacy ranks and enriches matching parents;
-  replay is pending. This intentionally does not establish new-parent discovery.
+  zero-provider replay preserved all 24 parent ranking pairs, all four unindexed
+  rank-1 controls and selected middle-context delivery. This does not establish
+  new-parent discovery. The separate 8772 UI report reached real corpus/model
+  assessment but had no cached-parent candidates or preferred windows; it proves
+  app activation, not passage-window UI delivery.
 - Three composed-corpus diagnostic arms delivered no cached parents despite valid direct rankings; the
   bounded cache budget and surfaced outcome follow-up belongs to #17. Navigation
   fragments remain in some exact windows, so byte integrity is not content quality.
@@ -45,15 +49,16 @@ continue isolated implementation and integrated local tests before acceptance.
 
 ## Ordered implementation and evaluation
 
-| Order | Task                                                   | Current evidence and next requirement                                                                                                                                                                    | Issue              |
-| ----- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| 1     | Passage correction and replay                          | Preserve legacy parent ranks, replay the same retained vectors, then verify isolated UI context delivery. Partial 4/16 indexing does not establish improved discovery.                                   | #8                 |
-| 2     | Capacity feedback                                      | Distinguish the existing 20-document capacity response in the UI.                                                                                                                                        | #79                |
-| 3     | Remaining claim consistency                            | Bounded empty-selection recovery reaches evidence in one source-free UI case; malformed mixed selections still fail. Preserve those outcomes and add representative coverage/editor confirmation.        | #11                |
-| 4     | Bounded cache delivery, compaction and source coverage | Surface cache-budget failures and evaluate a bounded operator budget separately. Durable report compaction, unified parent ranking, body cleaning, 170 passages and underrepresented topics remain open. | #17/#5/#7/#8       |
-| 5     | Calibration and broader rewrite preservation           | Detailed qualifier fields vary despite coarse fixed-packet agreement; stronger reasoning benefit is unproven. Expand independent semantic/modality/ambiguity review beyond selected controls.            | #13/#18/#38        |
-| 6     | Shared staging and bootstrap                           | Saleh accepts and merges dependency PRs before shared staging. Verify API/proxy/provider readiness and fix copied-role fresh-database bootstrap additively.                                              | #14/#20/#69/#81    |
-| 7     | Committee and beneficiary evidence                     | Produce the working demo, reproducible failures and editor observations; measure real beneficiary benefit. Source/rights/scholarly review is separate from software acceptance.                          | #4/#18/#21/#22/#27 |
+| Order | Task                                            | Current evidence and next requirement                                                                                                                                                                                                                            | Issue              |
+| ----- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| 1     | Conservative cleaning and passage delivery      | Ranking correction/replay passed. Freeze and validate one-call topic/block cleaning with immutable lexical sidecars. The corpus-only UI run does not establish preferred-window UI delivery.                                                                     | #8                 |
+| 2     | Bounded cache delivery and diagnostics          | Distinguish actual timeout/provider/selection/packet-budget causes with per-query report-local outcomes and an explicitly bounded accurate-wait profile. Cold/warm lexical adapters deliver windows in selected diagnostics; full-UI absence remains unresolved. | #17                |
+| 3     | Capacity feedback                               | Distinguish the existing 20-document limit in the UI.                                                                                                                                                                                                            | #79                |
+| 4     | Remaining claim consistency                     | Bounded empty-selection recovery reaches evidence in one source-free case; mixed malformed selections still fail. Preserve outcomes and expand editor confirmation/coverage.                                                                                     | #11                |
+| 5     | Compaction, source coverage and unified ranking | Full-parent durable budgets, cleaned semantic vectors, unified parent ranking, 170-passage expansion and underrepresented topics remain open.                                                                                                                    | #5/#7/#8           |
+| 6     | Calibration and broader rewrite preservation    | Coarse fixed-packet relations agree but detailed fields vary. Stronger reasoning benefit and broader independently reviewed modality preservation remain unproven.                                                                                               | #13/#18/#38        |
+| 7     | Shared staging and bootstrap                    | Saleh accepts remaining dependencies before staging; verify API/proxy/provider readiness and fix copied-role bootstrap additively.                                                                                                                               | #14/#20/#69/#81    |
+| 8     | Committee and beneficiary evidence              | Produce the working demo, reproducible failures, editor observations and measured beneficiary benefit. Source/rights/scholarly acceptance stays separate.                                                                                                        | #4/#18/#21/#22/#27 |
 
 The JSON source policy controls discovery; newly acquired pages may be classified
 and retained in the separate pending research cache after admission checks. A
@@ -63,13 +68,13 @@ retrieval remains a separate acceptance requirement.
 
 ## Merge and testing order
 
-PR #59 supplies the foundation. Review the bounded follow-ups in dependency order:
+Merged PR #59 supplies the foundation. Review the bounded follow-ups in dependency order:
 #70 expansion plan, #71 staging routing, #72 original-span claims/passages, #73
 layout/citation action, #74 batch compiler/corpus pilot, #75 source-quality guard
 and #76 substantive rewrite including its modality follow-up, then #77 claim
 recovery and #78 routing evidence/priority plan. Passage PR #80 is independently implemented under #8 and remains draft pending
 corrected replay, isolated UI evidence and acceptance. Preserve merge commits; no squash, rebase or force-push.
-PRs and issue acceptance remain open until Saleh acts. CI success does not imply
+Remaining PRs and issue acceptance stay open until Saleh acts. CI success does not imply
 deployment or scientific acceptance.
 
 Local tests may merge reviewed feature branches into an isolated integration

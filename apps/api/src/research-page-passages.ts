@@ -7,128 +7,24 @@ import {
   type EvidencePassageView,
 } from '../../../packages/contracts/src/semantic-assessment.js';
 import { canonical, sha256 } from './foundation.js';
+import {
+  cachePassages,
+  CACHE_CHUNKER_VERSION,
+  CachePassageHintSchema as HintSchema,
+  type CachePassage,
+  type CachePassageHint,
+} from './cache-source-windows.js';
+export {
+  cachePassages,
+  CACHE_CHUNKER_VERSION,
+  CACHE_PASSAGE_REPRESENTATION,
+  MAX_CACHE_PASSAGES,
+  type CachePassage,
+  type CachePassageHint,
+} from './cache-source-windows.js';
+import { SOURCE_BODY_CHUNKER_VERSION } from '../../../packages/contracts/src/source-content.js';
+import { sourceContentPassages } from './source-content-view.js';
 
-export const CACHE_CHUNKER_VERSION = 'cache-sentence-context-v1';
-export const CACHE_PASSAGE_REPRESENTATION = 'exact-contiguous-context-v1';
-export const MAX_CACHE_PASSAGES = 32;
-const CORE_LIMIT = 1800;
-const CONTEXT_LIMIT = 3000;
-const boundary = (text: string, n: number) =>
-  !(n > 0 && /[\uD800-\uDBFF]/u.test(text[n - 1]!) && /[\uDC00-\uDFFF]/u.test(text[n]!));
-const HintSchema = z
-  .object({
-    passageId: z.string().regex(/^cache-passage:[a-f0-9]{48}$/u),
-    originalSha256: z.string().regex(/^[a-f0-9]{64}$/u),
-    passageSha256: z.string().regex(/^[a-f0-9]{64}$/u),
-    chunkerVersion: z.literal(CACHE_CHUNKER_VERSION),
-    startOffset: z.number().int().nonnegative(),
-    endOffset: z.number().int().positive(),
-  })
-  .strict();
-export type CachePassageHint = z.infer<typeof HintSchema>;
-export type CachePassage = CachePassageHint & {
-  parentSnapshotKey: string;
-  coreStart: number;
-  coreEnd: number;
-  codePointStart: number;
-  codePointEnd: number;
-  codePointCoreStart: number;
-  codePointCoreEnd: number;
-  originalText: string;
-  contextTruncated: boolean;
-  boundaryTruncated: boolean;
-};
-
-/** Query-independent exact source units; relevance and religious completeness are not inferred. */
-export function cachePassages(source: SourceEvidence) {
-  const text = source.originalText;
-  if (text.length > 30000 || !text.length || sha256(text) !== source.originalSha256)
-    throw Error('CACHE_PASSAGE_PARENT_INVALID');
-  const units = [...text.matchAll(/[^.؛؟?!\n]+[.؛؟?!\n]*|[.؛؟?!\n]+/gu)].map((m) => ({
-    start: m.index,
-    end: m.index + m[0].length,
-  }));
-  const cores: Array<{ start: number; end: number; cut: boolean; first: number; last: number }> =
-    [];
-  for (let i = 0; i < units.length; i++) {
-    const unit = units[i]!;
-    if (unit.end - unit.start > CORE_LIMIT) {
-      for (let start = unit.start; start < unit.end;) {
-        let end = Math.min(unit.end, start + CORE_LIMIT);
-        if (!boundary(text, end)) end--;
-        cores.push({ start, end, cut: true, first: i, last: i });
-        start = end;
-      }
-    } else {
-      let end = unit.end,
-        last = i;
-      while (last + 1 < units.length && units[last + 1]!.end - unit.start <= CORE_LIMIT) {
-        last++;
-        end = units[last]!.end;
-      }
-      cores.push({ start: unit.start, end, cut: false, first: i, last });
-      i = last;
-    }
-  }
-  const selected = cores.slice(0, MAX_CACHE_PASSAGES);
-  const passages: CachePassage[] = selected.map((core) => {
-    let start = core.start,
-      end = core.end;
-    if (!core.cut) {
-      const previous = units[Math.max(0, core.first - 1)]!.start;
-      const next = units[Math.min(units.length - 1, core.last + 1)]!.end;
-      // Add whole neighbors only; never manufacture complete context by slicing a sentence.
-      if (next - previous <= CONTEXT_LIMIT) {
-        start = previous;
-        end = next;
-      } else if (core.end - previous <= CONTEXT_LIMIT) start = previous;
-      else if (next - core.start <= CONTEXT_LIMIT) end = next;
-    }
-    const originalText = text.slice(start, end);
-    return {
-      passageId:
-        'cache-passage:' +
-        sha256(
-          canonical([
-            source.snapshotKey,
-            source.originalSha256,
-            CACHE_CHUNKER_VERSION,
-            start,
-            end,
-            core.start,
-            core.end,
-          ]),
-        ).slice(0, 48),
-      parentSnapshotKey: source.snapshotKey,
-      originalSha256: source.originalSha256,
-      passageSha256: sha256(originalText),
-      chunkerVersion: CACHE_CHUNKER_VERSION,
-      startOffset: start,
-      endOffset: end,
-      coreStart: core.start,
-      coreEnd: core.end,
-      codePointStart: Array.from(text.slice(0, start)).length,
-      codePointEnd: Array.from(text.slice(0, end)).length,
-      codePointCoreStart: Array.from(text.slice(0, core.start)).length,
-      codePointCoreEnd: Array.from(text.slice(0, core.end)).length,
-      originalText,
-      contextTruncated: start > 0 || end < text.length,
-      boundaryTruncated: core.cut,
-    };
-  });
-  const coveredUtf16Units = selected.reduce((n, c) => n + c.end - c.start, 0);
-  return {
-    passages,
-    coverage: {
-      chunkerVersion: CACHE_CHUNKER_VERSION,
-      passageCount: passages.length,
-      coveredUtf16Units,
-      totalUtf16Units: text.length,
-      fullTextIndexed: coveredUtf16Units === text.length,
-      boundaryTruncatedCount: passages.filter((p) => p.boundaryTruncated).length,
-    },
-  };
-}
 export function passageHint(p: CachePassage): CachePassageHint {
   return HintSchema.parse({
     passageId: p.passageId,
@@ -150,15 +46,23 @@ export function preferredCachePassages(
   preferences?: readonly CachePassagePreference[],
 ): EvidencePassageView[] {
   let raw: unknown;
+  let selection: unknown = source.provenance.sourceContentSelection;
   if (preferences) {
     const selected = preferences.find(
       (p) => p.evidenceKey === source.snapshotKey && p.querySha256 === sha256(query ?? ''),
     );
     if (!selected) return [];
     const parsed = CachePassagePreferenceSchema.parse(selected);
+    selection = parsed.contentSelection;
+    const built =
+      parsed.chunkerVersion === SOURCE_BODY_CHUNKER_VERSION
+        ? sourceContentPassages(source, selection)
+        : cachePassages(source);
     if (
       parsed.originalSha256 !== source.originalSha256 ||
-      canonical(parsed.coverage) !== canonical(cachePassages(source).coverage)
+      canonical(parsed.coverage) !== canonical(built.coverage) ||
+      parsed.hits.some((h) => h.chunkerVersion !== parsed.chunkerVersion) ||
+      (parsed.chunkerVersion === CACHE_CHUNKER_VERSION && selection !== undefined)
     )
       throw Error('CACHE_PASSAGE_PREFERENCE_INVALID');
     raw = parsed.hits;
@@ -169,7 +73,12 @@ export function preferredCachePassages(
     raw = source.provenance.cachePassageHits;
   if (raw === undefined) return [];
   const hints = HintsSchema.parse(raw);
-  const originals = cachePassages(source).passages;
+  const version = hints[0]?.chunkerVersion;
+  if (hints.some((h) => h.chunkerVersion !== version)) throw Error('CACHE_PASSAGE_HINT_INVALID');
+  const originals =
+    version === SOURCE_BODY_CHUNKER_VERSION
+      ? sourceContentPassages(source, selection).passages
+      : cachePassages(source).passages;
   return hints.map((hint) => {
     const p = originals.find((p) => p.passageId === hint.passageId);
     if (!p || canonical(passageHint(p)) !== canonical(hint))
@@ -196,14 +105,20 @@ export function cachePassagePreference(
     hits = maps[sha256(claim.originalText)];
   if (!hits?.length) return undefined;
   preferredCachePassages(source, claim.originalText);
+  const bodyView = hits[0]!.chunkerVersion === SOURCE_BODY_CHUNKER_VERSION;
+  const content = bodyView
+    ? sourceContentPassages(source, source.provenance.sourceContentSelection)
+    : undefined;
+  const built = content ?? cachePassages(source);
   return CachePassagePreferenceSchema.parse({
     claimId: claim.id,
     evidenceKey: source.snapshotKey,
     originalSha256: source.originalSha256,
     querySha256: sha256(claim.originalText),
-    chunkerVersion: CACHE_CHUNKER_VERSION,
+    chunkerVersion: hits[0]!.chunkerVersion,
+    ...(content ? { contentSelection: content.selection } : {}),
     hits,
-    coverage: cachePassages(source).coverage,
+    coverage: built.coverage,
   });
 }
 export function validateCachePassagePreferences(
@@ -237,6 +152,8 @@ export function stripCachePassageProvenance(source: SourceEvidence): SourceEvide
     cachePassageHitsByQuery: _map,
     passageIndexCoverage: _coverage,
     passageIndexStatus: _status,
+    sourceContentSelection: _selection,
+    sourceContentViewStatus: _viewStatus,
     ...provenance
   } = source.provenance;
   return { ...source, provenance };
@@ -274,18 +191,35 @@ export function mergeCachePassageHits(
     throw Error('CACHE_PASSAGE_IDENTITY_COLLISION');
   const before = BindingsSchema.parse(first.provenance.cachePassageHitsByQuery ?? {}),
     after = BindingsSchema.parse(next.provenance.cachePassageHitsByQuery ?? {});
+  const selectedView =
+    next.provenance.sourceContentSelection ?? first.provenance.sourceContentSelection;
+  if (
+    first.provenance.sourceContentSelection &&
+    next.provenance.sourceContentSelection &&
+    canonical(first.provenance.sourceContentSelection) !==
+      canonical(next.provenance.sourceContentSelection)
+  )
+    throw Error('SOURCE_CONTENT_VIEW_COLLISION');
   const maps = preferNext ? [after, before] : [before, after],
     merged: Record<string, CachePassageHint[]> = {};
   for (const m of maps)
     for (const [key, hints] of Object.entries(m)) {
       if (!merged[key] && Object.keys(merged).length === 5) continue;
-      merged[key] = [
+      const candidates = [
         ...new Map([...(merged[key] ?? []), ...hints].map((h) => [h.passageId, h])).values(),
-      ].slice(0, 3);
+      ];
+      const hasBody = candidates.some((h) => h.chunkerVersion === SOURCE_BODY_CHUNKER_VERSION);
+      merged[key] = candidates
+        .filter((h) => !hasBody || h.chunkerVersion === SOURCE_BODY_CHUNKER_VERSION)
+        .slice(0, 3);
     }
   return {
     ...first,
     retrievalModes: [...new Set([...first.retrievalModes, ...next.retrievalModes])],
-    provenance: { ...first.provenance, cachePassageHitsByQuery: merged },
+    provenance: {
+      ...first.provenance,
+      ...(selectedView ? { sourceContentSelection: selectedView } : {}),
+      cachePassageHitsByQuery: merged,
+    },
   };
 }

@@ -74,6 +74,13 @@ For the first working slice, bounded processing in the Node service is acceptabl
 
 ## Failure handling
 
+The optional [source content view](../evidence/2026-10-05-source-content-views.md)
+derives exact contiguous body windows from immutable originals. Model labels alone
+cannot remove content; a narrow structural gate must agree. Existing parent ranks
+remain unchanged, and body preferences bind the same spans in assessment/citations.
+Ambiguous blocks and sidecar failure retain original delivery. This representation
+has no separate semantic vectors or source approval.
+
 The optional [retained-page passage index](../evidence/2026-10-05-cache-passage-index.md)
 composes exact bounded middle-page hits with legacy full-parent cache retrieval.
 Per-claim preferences bind immutable originals and travel in report trace, while
