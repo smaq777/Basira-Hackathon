@@ -19,6 +19,12 @@ describe('isolated Vercel staging routing', () => {
     ]);
     const production = JSON.parse(readFileSync('vercel.json', 'utf8'));
     expect(JSON.stringify(production)).not.toContain('api-staging-42bc');
+    expect(production.rewrites).toEqual([
+      {
+        source: '/api/:path*',
+        destination: 'https://api-production-4834.up.railway.app/api/:path*',
+      },
+    ]);
     expect(readFileSync('.github/workflows/deploy-production.yml', 'utf8')).not.toContain(
       'vercel.staging.json',
     );
