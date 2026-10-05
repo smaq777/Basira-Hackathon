@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft } from '@phosphor-icons/react/ArrowLeft';
+import { UsersThree } from '@phosphor-icons/react/UsersThree';
 import type {
   FoundationReport,
   IntakeSegment,
@@ -666,10 +667,12 @@ export function FoundationResultScreen({
   reviewId,
   initialReport,
   onHome,
+  onTicket,
 }: {
   reviewId: string;
   initialReport: FoundationReport | null;
   onHome: () => void;
+  onTicket: () => void;
 }) {
   const [report, setReport] = useState(initialReport);
   const [error, setError] = useState('');
@@ -808,6 +811,9 @@ export function FoundationResultScreen({
               onClick={() => void reanalyze()}
             >
               {rerunning ? 'جار بدء تحليل جديد' : 'إعادة تحليل النص'}
+            </button>
+            <button className="button button--outline foundation-refresh" onClick={onTicket}>
+              <UsersThree size={20} /> أحتاج مراجعة بشرية
             </button>
             <p>إعادة التحليل تنشئ تقريرًا جديدًا للنص نفسه بالمقارنة الحالية.</p>
             {rerunError && <p role="alert">تعذر بدء التحليل الجديد. {rerunError}</p>}

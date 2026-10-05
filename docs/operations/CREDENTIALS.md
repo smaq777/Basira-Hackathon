@@ -25,6 +25,8 @@ Judges should first run the credential-free path in the root [README](../../READ
 | Session voice evaluation         | Optional browser-native proof of value; disabled by default and uses no provider credential               | Existing Basirah result-page evaluation                                                                                                                                                                                           | `VITE_SESSION_VOICE_ENABLED`                                                                                     | Vercel Preview or local public configuration only; value is `true` or `false`                                        |
 | Clerk reviewer authentication    | Implemented as a default-deny reviewer gate; hosted verification still requires environment configuration | [Clerk API keys](https://dashboard.clerk.com/last-active?path=api-keys), [React setup](https://clerk.com/docs/react/getting-started/quickstart), and [Express setup](https://clerk.com/docs/expressjs/getting-started/quickstart) | `VITE_CLERK_PUBLISHABLE_KEY`, `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`                                        | Public key in the Railway build environment; secret key only in the Railway server environment                       |
 | Clerk reviewer authorization     | Server policy checked after token verification; allowlist is the production default                       | Basirah Clerk **Users** page                                                                                                                                                                                                      | `CLERK_REVIEWER_ACCESS_MODE`, `CLERK_REVIEWER_USER_IDS`, `CLERK_AUTHORIZED_PARTIES`, `CLERK_FRONTEND_API_ORIGIN` | Railway staging/production variables; never source, issue text or client storage                                     |
+| Secure review tickets            | Implemented after migration 0011; contact data is encrypted and lookup uses a separate keyed digest       | Generate independent random values per environment                                                                                                                                                                                | `TICKETS_ENABLED`, `TICKET_DATA_KEY`, `TICKET_LOOKUP_PEPPER`, `PUBLIC_APP_URL`                                   | Railway server environment only; never copy staging encryption material to production                                |
+| Brevo transactional email        | Implemented as an idempotent outbox consumer; activation requires a verified sender                       | [Brevo SMTP & API](https://app.brevo.com/settings/keys/api)                                                                                                                                                                       | `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`                                                       | Railway server environment only; API key must never use a `VITE_*` name                                              |
 
 Connection strings contain credentials even when their names do not include `KEY` or `TOKEN`. Rotate a leaked string before cleaning history.
 
@@ -35,6 +37,12 @@ approved reviewer access. A Clerk dashboard/team account is not automatically a 
 For the hackathon demo only, staging may set `CLERK_REVIEWER_ACCESS_MODE=authenticated` so judges
 and committee members can enter after sign-in without a manual allowlist step. Do not copy that
 setting to production; remove it or set `allowlist` when the open evaluation window ends.
+
+Ticket encryption and lookup keys are deliberately separate. Generate new values independently in
+staging and production; do not reuse or copy either value between environments. Brevo email remains
+off unless all sender/API variables are present. Verify the sender in Brevo before enabling delivery.
+Publishing a reviewer response can enqueue an email, but does not automatically admit that response
+to RAG. Retrieval admission is a separate provenance-bearing reviewer action.
 
 ## Deployment credentials
 
