@@ -133,9 +133,17 @@ retrieval recall, religious accuracy or stronger-thinking superiority.
 
 Three historical cold-cache diagnostic arms lost cached delivery. The configurable
 budget and explicit partial-outcome follow-up is [issue #17](https://github.com/smaq777/Basira-Hackathon/issues/17).
+Later [read-only cache diagnostics](../evidence/2026-10-05-cache-delivery-diagnostic.md)
+delivered two cached parents and durable claim preferences through the actual
+adapter; they do not explain or replace the earlier UI cache absence.
 Navigation fragments remain in some windows. A separate default-off source-content
 cleaning task will combine topic classification with exact block labels and retain
 immutable originals, substantive text, citations and corrective footnotes.
+
+At 14:13 UTC on 5 October, the user-facing Vercel capabilities URL still returned 404. Railway capabilities reported no foundation review or live providers, and
+readiness reported migration 0005. Owner merges have not established a connected
+hosted AI Foundation. Recheck the selected proxy, deployed revision and backend
+runtime/migrations under issue #69 before claiming shared staging activation.
 
 Do not silently turn on new flags, ingest benchmark gold answers, approve source
 editions, claim deployment or close acceptance issues based on this handoff.
