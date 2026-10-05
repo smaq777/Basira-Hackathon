@@ -26,7 +26,7 @@ const servers: Server[] = [];
 const database = {
   readiness: vi
     .fn()
-    .mockResolvedValue({ ready: true, migrationVersion: '0011_secure_review_tickets' }),
+    .mockResolvedValue({ ready: true, migrationVersion: '0013_secure_review_tickets' }),
   purgeExpiredGuestSessions: vi.fn(),
   createGuestSession: vi.fn(),
   deleteGuestSession: vi.fn(),

@@ -270,7 +270,7 @@ export function createApp(options: AppOptions = {}) {
       reviewTickets:
         Boolean(options.tickets) &&
         state.ready &&
-        Number(state.migrationVersion?.slice(0, 4)) >= 11,
+        Number(state.migrationVersion?.slice(0, 4)) >= 13,
     });
   });
   app.post('/api/v1/preflight', guestMutationRateLimit, (req, res, next) => {

@@ -1,5 +1,5 @@
 begin;
-select pg_advisory_xact_lock(hashtext('basirah:migration:0011'));
+select pg_advisory_xact_lock(hashtext('basirah:migration:0013'));
 
 create table basirah.review_ticket (
   id bigint generated always as identity primary key,
@@ -493,5 +493,5 @@ grant execute on function basirah_api.claim_review_notifications(integer) to bas
 grant execute on function basirah_api.complete_review_notification(bigint, boolean, text) to basirah_runtime;
 
 insert into basirah_private.schema_migration(version,checksum_sha256)
-  values('0011_secure_review_tickets','0000000000000000000000000000000000000000000000000000000000000000');
+  values('0013_secure_review_tickets','0000000000000000000000000000000000000000000000000000000000000000');
 commit;

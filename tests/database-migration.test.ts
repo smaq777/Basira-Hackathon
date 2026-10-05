@@ -17,7 +17,7 @@ const expiredGuestCleanupMigration = readFileSync(
   'migrations/0005_expired_guest_cleanup.sql',
   'utf8',
 );
-const secureTicketMigration = readFileSync('migrations/0011_secure_review_tickets.sql', 'utf8');
+const secureTicketMigration = readFileSync('migrations/0013_secure_review_tickets.sql', 'utf8');
 const tables = [
   'guest_session',
   'document',
@@ -190,6 +190,6 @@ describe('secure human-review ticket migration', () => {
     expect(secureTicketMigration).toContain('review_notification_outbox');
     expect(secureTicketMigration).toContain('reviewer_knowledge_candidate');
     expect(secureTicketMigration).toContain('approve_review_response_for_retrieval');
-    expect(secureTicketMigration).toContain("'0011_secure_review_tickets'");
+    expect(secureTicketMigration).toContain("'0013_secure_review_tickets'");
   });
 });

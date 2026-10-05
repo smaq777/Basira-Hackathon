@@ -47,7 +47,7 @@ review independent from reviewer authentication. Use the browser origin (`http:/
 for Vite), not the proxied API port. Production origins must be HTTPS; malformed origins abort
 startup instead of weakening token binding or the response CSP.
 
-Human-review tickets require migration `0011_secure_review_tickets` and `TICKETS_ENABLED=true`.
+Human-review tickets require migration `0013_secure_review_tickets` and `TICKETS_ENABLED=true`.
 Configure a base64 32-byte `TICKET_DATA_KEY` and a separate random `TICKET_LOOKUP_PEPPER` of at least
 32 characters. Both are server-only and environment-specific. The public follow-up route always
 requires both the non-sequential ticket code and normalized email, is rate limited, and returns the
