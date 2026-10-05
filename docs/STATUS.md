@@ -2,6 +2,16 @@
 
 ## Latest development evidence — 5 October
 
+**Active local research testing (#8):** The integrated app now uses the 86-passage
+Neon snapshot, verified in a newly completed durable UI report. Eleven additional
+approved-domain public originals were classified and added to the separate
+pending research cache (5 to 16 visible rows). A reviewer-navigation-only Dorar
+extraction was quarantined; a shared provider/cache guard now rejects that known
+article-missing pattern. See [activation and source-quality evidence](evidence/2026-10-05-source-cache-quality.md).
+This supersedes earlier inactive/62-passage local status below. Source approval,
+the planned 170-passage expansion, owner acceptance and shared staging deployment
+remain separate.
+
 **Optional citation/layout candidate (#38):** A default-off local research action
 now creates a separate candidate from the owned persisted report, preserves every
 original character, and adds only validated paragraph breaks and recorded
