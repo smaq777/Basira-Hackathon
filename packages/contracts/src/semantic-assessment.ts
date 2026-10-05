@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.7';
-export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.7';
+export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.8';
+export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.8';
 
 const EvidenceKeys = z.array(z.string().min(1).max(160)).max(20);
 const Details = z.array(z.string().min(1).max(500)).max(6);
@@ -167,6 +167,7 @@ export const SemanticAssessmentReportSchema = z
           'provisional-semantic-v1.4',
           'provisional-semantic-v1.5',
           'provisional-semantic-v1.6',
+          'provisional-semantic-v1.7',
           SEMANTIC_PIPELINE_VERSION,
         ]),
         promptVersion: z.enum([
@@ -176,6 +177,7 @@ export const SemanticAssessmentReportSchema = z
           'evidence-support-v1.4',
           'evidence-support-v1.5',
           'evidence-support-v1.6',
+          'evidence-support-v1.7',
           SEMANTIC_PROMPT_VERSION,
         ]),
         inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),
@@ -233,6 +235,13 @@ export const SemanticAssessmentReportSchema = z
           .string()
           .regex(/^[a-f0-9]{64}$/u)
           .nullable(),
+        selectionRecovery: z
+          .object({
+            outcome: z.enum(['recovered', 'still_empty', 'budget_skipped', 'failed']),
+            candidateCount: z.number().int().positive().max(1500),
+          })
+          .strict()
+          .optional(),
         assessmentInputSha256: z
           .string()
           .regex(/^[a-f0-9]{64}$/u)
@@ -286,7 +295,7 @@ export const SemanticAssessmentReportSchema = z
           })
           .strict()
           .optional(),
-        requests: z.array(SemanticRequestTraceSchema).max(4),
+        requests: z.array(SemanticRequestTraceSchema).max(5),
       })
       .strict(),
     limitations: z.array(z.string().min(1).max(1000)).max(10),

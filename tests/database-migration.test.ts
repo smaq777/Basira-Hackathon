@@ -17,6 +17,7 @@ const expiredGuestCleanupMigration = readFileSync(
   'migrations/0005_expired_guest_cleanup.sql',
   'utf8',
 );
+const secureTicketMigration = readFileSync('migrations/0013_secure_review_tickets.sql', 'utf8');
 const tables = [
   'guest_session',
   'document',
@@ -162,5 +163,33 @@ describe('expired guest cleanup migration', () => {
       'grant execute on function basirah_api.purge_expired_guest_sessions(integer) to basirah_runtime',
     );
     expect(expiredGuestCleanupMigration).not.toMatch(/grant\s+delete\s+on/iu);
+  });
+});
+
+describe('secure human-review ticket migration', () => {
+  it.each([
+    'review_ticket',
+    'review_ticket_response',
+    'reviewer_knowledge_candidate',
+    'review_notification_outbox',
+    'review_ticket_event',
+  ])('enables RLS and withholds direct runtime access for %s', (table) => {
+    expect(secureTicketMigration).toContain(`create table basirah.${table}`);
+    expect(secureTicketMigration).toContain(
+      `alter table basirah.${table} enable row level security`,
+    );
+  });
+
+  it('uses non-sequential public codes and constant-shape email lookup', () => {
+    expect(secureTicketMigration).toContain("ticket_code ~ '^BR-[A-Z0-9]{12}$'");
+    expect(secureTicketMigration).toContain('\'{"found": false}\'::jsonb');
+    expect(secureTicketMigration).toContain('email_lookup_hash = requested_email_hash');
+  });
+
+  it('separates publication, notification and retrieval admission', () => {
+    expect(secureTicketMigration).toContain('review_notification_outbox');
+    expect(secureTicketMigration).toContain('reviewer_knowledge_candidate');
+    expect(secureTicketMigration).toContain('approve_review_response_for_retrieval');
+    expect(secureTicketMigration).toContain("'0013_secure_review_tickets'");
   });
 });

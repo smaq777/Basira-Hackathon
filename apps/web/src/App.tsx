@@ -44,25 +44,35 @@ import {
   analysisErrorMessage,
   awaitFoundationReport,
   cancelOwnedReview,
+  createReviewTicket,
   createOwnedReview,
   getOwnedReview,
+  getReviewerTicket,
+  listReviewerTickets,
   persistDraftForAnalysis,
   requireFoundationReview,
+  lookupReviewTicket,
   requestDraftPreflight,
+  saveReviewerResponse,
+  updateReviewTicketContact,
   type DraftAnalysisReceipt,
   type PreflightAnnotation,
   type PreflightFinding,
   type PreflightResponse,
   type OwnedReview,
+  type TicketLookup,
+  type TicketReceipt,
+  type ReviewerTicket,
+  type ReviewerTicketSummary,
 } from './api.js';
-import { FoundationResultScreen } from './foundation-report.js';
+import { FoundationReportContent, FoundationResultScreen } from './foundation-report.js';
 import type { FoundationReport } from '../../../packages/contracts/src/foundation.js';
 import { ReviewerAccessBoundary, ReviewerAuthUnavailable } from './reviewer-auth.js';
 import { answerReviewQuestion, VOICE_GREETING, type VoiceTone } from './voice.js';
 import { MAX_DRAFT_LENGTH, isSafeDraftText } from '../../../packages/contracts/src/draft-text.js';
 import { compactDraftPreview } from './text-preview.js';
 
-type PublicRoute = 'home' | 'analysis' | 'result' | 'unresolved' | 'ticket';
+type PublicRoute = 'home' | 'analysis' | 'result' | 'unresolved' | 'ticket' | 'follow-up';
 type ReviewerRoute = 'dashboard' | 'queue' | 'detail' | 'sources';
 type Route = PublicRoute | `reviewer-${ReviewerRoute}`;
 
@@ -96,7 +106,16 @@ const PREFLIGHT_EXAMPLES = [
   },
 ];
 
-const SAMPLE_CASES = [
+type CaseListItem = {
+  id: string;
+  title: string;
+  submitter: string;
+  submittedAt: string;
+  status: string;
+  priority: string;
+};
+
+const SAMPLE_CASES: CaseListItem[] = [
   {
     id: 'BR-1042',
     title: 'إخفاء الصدقة في جميع الحالات',
@@ -132,6 +151,7 @@ function routeFromHash(): Route {
     result: 'result',
     unresolved: 'unresolved',
     ticket: 'ticket',
+    'follow-up': 'follow-up',
     'reviewer/dashboard': 'reviewer-dashboard',
     'reviewer/queue': 'reviewer-queue',
     'reviewer/detail': 'reviewer-detail',
@@ -167,7 +187,8 @@ function useRoute() {
   }, []);
 
   const navigate = useCallback((next: Route, reviewId?: string) => {
-    const hash = pathFor(next) + (reviewId ? `?reviewId=${encodeURIComponent(reviewId)}` : '');
+    const parameter = next === 'reviewer-detail' ? 'ticketCode' : 'reviewId';
+    const hash = pathFor(next) + (reviewId ? `?${parameter}=${encodeURIComponent(reviewId)}` : '');
     window.location.hash = hash;
     setLocation({ route: next, hash });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -188,7 +209,13 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function PublicHeader({ onReviewer }: { onReviewer: () => void }) {
+function PublicHeader({
+  onReviewer,
+  onFollowUp,
+}: {
+  onReviewer: () => void;
+  onFollowUp: () => void;
+}) {
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -197,10 +224,15 @@ function PublicHeader({ onReviewer }: { onReviewer: () => void }) {
     <header className="public-header-wrap">
       <div className="public-header page-shell">
         <Brand />
-        <button className="button button--outline reviewer-login" onClick={onReviewer}>
-          <User size={21} />
-          دخول المراجع
-        </button>
+        <div className="public-header-actions">
+          <button className="button button--ghost" onClick={onFollowUp}>
+            <MagnifyingGlass size={20} /> متابعة تذكرة
+          </button>
+          <button className="button button--outline reviewer-login" onClick={onReviewer}>
+            <User size={21} />
+            دخول المراجع
+          </button>
+        </div>
       </div>
       <nav className="public-subnav" aria-label="التنقل الرئيسي">
         <div className="page-shell">
@@ -314,10 +346,12 @@ function HomeScreen({
   initialText,
   onReview,
   onReviewer,
+  onFollowUp,
 }: {
   initialText: string;
   onReview: (text: string) => void;
   onReviewer: () => void;
+  onFollowUp: () => void;
 }) {
   const [text, setText] = useState(initialText);
   const [error, setError] = useState('');
@@ -469,7 +503,7 @@ function HomeScreen({
 
   return (
     <div className="app-page app-page--home">
-      <PublicHeader onReviewer={onReviewer} />
+      <PublicHeader onReviewer={onReviewer} onFollowUp={onFollowUp} />
       <main className="home-main page-shell">
         {notice && <Toast message={notice} />}
         <section className="hero-section page-enter" id="review">
@@ -1618,88 +1652,150 @@ function UnresolvedScreen({ onHome, onTicket }: { onHome: () => void; onTicket: 
   );
 }
 
-function TicketScreen({ onHome }: { onHome: () => void }) {
+function TicketScreen({ onHome, reviewId }: { onHome: () => void; reviewId: string | null }) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
+  const [receipt, setReceipt] = useState<TicketReceipt | null>(null);
+  const [loading, setLoading] = useState(Boolean(reviewId));
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!reviewId) return;
+    let active = true;
+    setLoading(true);
+    void createReviewTicket(reviewId)
+      .then((created) => {
+        if (active) setReceipt(created);
+      })
+      .catch(() => {
+        if (active) setError('تعذر إنشاء التذكرة الآن. احتفظ بالتقرير وحاول مرة أخرى.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [reviewId]);
+
+  const saveContact = async () => {
+    if (!receipt || !email || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await updateReviewTicketContact(receipt.ticketCode, {
+        email,
+        name: name || undefined,
+        notify: true,
+      });
+      setReceipt(updated);
+      setSaved(true);
+    } catch {
+      setError('تعذر حفظ بيانات المتابعة. تحقق من البريد وحاول مرة أخرى.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="app-page ticket-page">
       <BackHeader onHome={onHome} />
       {saved && <Toast message="تم حفظ بيانات المتابعة لهذه التذكرة." />}
       <main className="ticket-main page-shell page-enter">
-        <StatusPill tone="success">
-          <CheckCircle size={20} weight="fill" /> تم استلام طلبك
-        </StatusPill>
-        <h1>تم إنشاء تذكرتك</h1>
-        <button className="ticket-code" onClick={() => navigator.clipboard?.writeText('BR-1042')}>
-          <Copy size={23} />
-          <b dir="ltr">#BR-1042</b>
-        </button>
-        <p className="hero-copy">احتفظ برقم التذكرة للرجوع إلى طلبك.</p>
-        <section className="ticket-grid">
-          <article className="ticket-card">
-            <span className="icon-disc">
-              <FileText size={30} />
-            </span>
-            <h2>تفاصيل الطلب</h2>
-            <StatusPill tone="success">نسخة النص ١</StatusPill>
-            <p>
-              <CalendarBlank size={19} /> ٢ أكتوبر ٢٠٢٦ — ١٠:٢٤ ص
-            </p>
-            <button className="button button--outline">
-              <Eye size={20} /> عرض النص المرسل
-            </button>
-            <button className="button button--ghost">
-              <DownloadSimple size={20} /> تنزيل ملف المراجعة
-            </button>
-            <hr />
-            <h3>الملفات المرفقة في طلب المراجعة</h3>
-            <ul>
-              <li>
-                <FileText /> النص والعبارات المؤكدة
-              </li>
-              <li>
-                <FileText /> المراجع والمقاطع المتاحة
-              </li>
-              <li>
-                <FileText /> أسباب عدم الحسم
-              </li>
-            </ul>
-          </article>
-          <article className="ticket-card follow-card">
-            <span className="icon-disc">
-              <UsersThree size={30} />
-            </span>
-            <h2>هل ترغب في متابعة النتيجة؟</h2>
-            <p>أضف بياناتك اختياريًا لنرسل لك تحديثًا عند اكتمال المراجعة.</p>
-            <label>
-              الاسم (اختياري)
-              <input value={name} onChange={(event) => setName(event.target.value)} />
-            </label>
-            <label>
-              البريد الإلكتروني
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </label>
+        {loading && <p role="status">جار إنشاء تذكرة مرتبطة بتقريرك…</p>}
+        {!reviewId && (
+          <div className="analysis-error" role="alert">
+            افتح التذكرة من زر «أحتاج مراجعة بشرية» داخل تقرير محفوظ.
+          </div>
+        )}
+        {error && (
+          <div className="analysis-error" role="alert">
+            {error}
+          </div>
+        )}
+        {receipt && (
+          <>
+            <StatusPill tone="success">
+              <CheckCircle size={20} weight="fill" /> تم استلام طلبك
+            </StatusPill>
+            <h1>تم إنشاء تذكرتك</h1>
             <button
-              className="button button--primary"
-              disabled={!email}
-              onClick={() => setSaved(true)}
+              className="ticket-code"
+              onClick={() => navigator.clipboard?.writeText(receipt.ticketCode)}
             >
-              حفظ وإرسال التحديثات
+              <Copy size={23} />
+              <b dir="ltr">#{receipt.ticketCode}</b>
             </button>
-            <button className="text-action" onClick={onHome}>
-              متابعة بدون بيانات
-            </button>
-            <small>
-              <Lock size={17} /> تستخدم بياناتك لمتابعة هذه التذكرة فقط.
-            </small>
-          </article>
-        </section>
+            <p className="hero-copy">احتفظ برقم التذكرة للرجوع إلى طلبك.</p>
+          </>
+        )}
+        {receipt && (
+          <section className="ticket-grid">
+            <article className="ticket-card">
+              <span className="icon-disc">
+                <FileText size={30} />
+              </span>
+              <h2>تفاصيل الطلب</h2>
+              <StatusPill tone="success">نسخة النص ١</StatusPill>
+              <p>
+                <CalendarBlank size={19} /> {new Date(receipt.createdAt).toLocaleString('ar-SA')}
+              </p>
+              <button className="button button--outline">
+                <Eye size={20} /> عرض النص المرسل
+              </button>
+              <button className="button button--ghost">
+                <DownloadSimple size={20} /> تنزيل ملف المراجعة
+              </button>
+              <hr />
+              <h3>الملفات المرفقة في طلب المراجعة</h3>
+              <ul>
+                <li>
+                  <FileText /> النص والعبارات المؤكدة
+                </li>
+                <li>
+                  <FileText /> المراجع والمقاطع المتاحة
+                </li>
+                <li>
+                  <FileText /> أسباب عدم الحسم
+                </li>
+              </ul>
+            </article>
+            <article className="ticket-card follow-card">
+              <span className="icon-disc">
+                <UsersThree size={30} />
+              </span>
+              <h2>هل ترغب في متابعة النتيجة؟</h2>
+              <p>أضف بياناتك اختياريًا لنرسل لك تحديثًا عند اكتمال المراجعة.</p>
+              <label>
+                الاسم (اختياري)
+                <input value={name} onChange={(event) => setName(event.target.value)} />
+              </label>
+              <label>
+                البريد الإلكتروني
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+              </label>
+              <button
+                className="button button--primary"
+                disabled={!email || saving}
+                onClick={() => void saveContact()}
+              >
+                {saving ? 'جار الحفظ…' : 'حفظ وإرسال التحديثات'}
+              </button>
+              <button className="text-action" onClick={onHome}>
+                متابعة بدون بيانات
+              </button>
+              <small>
+                <Lock size={17} /> تستخدم بياناتك لمتابعة هذه التذكرة فقط.
+              </small>
+            </article>
+          </section>
+        )}
         <div className="ticket-footer">
           <p>يمكنك العودة إلى بصيرة ومراجعة نص جديد في أي وقت.</p>
           <button className="button button--outline" onClick={onHome}>
@@ -1709,6 +1805,80 @@ function TicketScreen({ onHome }: { onHome: () => void }) {
             <House size={20} /> العودة إلى الصفحة الرئيسية
           </button>
         </div>
+      </main>
+    </div>
+  );
+}
+
+function FollowUpScreen({ onHome }: { onHome: () => void }) {
+  const [code, setCode] = useState('');
+  const [email, setEmail] = useState('');
+  const [result, setResult] = useState<TicketLookup | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!code || !email || loading) return;
+    setLoading(true);
+    setError('');
+    setResult(null);
+    try {
+      const found = await lookupReviewTicket(code.trim().toUpperCase(), email);
+      if (!found.found) setError('تعذر العثور على تذكرة مطابقة لهذه البيانات.');
+      else setResult(found);
+    } catch {
+      setError('تعذر استعادة التذكرة الآن. حاول مرة أخرى لاحقًا.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <div className="app-page ticket-page">
+      <BackHeader onHome={onHome} />
+      <main className="ticket-main page-shell page-enter">
+        <StatusPill tone="neutral">
+          <Lock size={18} /> متابعة آمنة
+        </StatusPill>
+        <h1>متابعة تذكرة المراجعة</h1>
+        <p className="hero-copy">أدخل رقم التذكرة والبريد نفسه الذي استخدمته عند الطلب.</p>
+        <form className="ticket-card follow-card ticket-followup-form" onSubmit={submit}>
+          <label>
+            رقم التذكرة
+            <input
+              dir="ltr"
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              placeholder="BR-XXXXXXXXXXXX"
+            />
+          </label>
+          <label>
+            البريد الإلكتروني
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+          </label>
+          <button className="button button--primary" disabled={!code || !email || loading}>
+            {loading ? 'جار التحقق…' : 'عرض نتيجة التذكرة'}
+          </button>
+        </form>
+        {error && (
+          <div className="analysis-error" role="alert">
+            {error}
+          </div>
+        )}
+        {result?.found && (
+          <section className="ticket-followup-result">
+            <h2 dir="ltr">{result.ticketCode}</h2>
+            <StatusPill tone={result.status === 'published' ? 'success' : 'warning'}>
+              {result.status === 'published' ? 'اكتملت المراجعة' : 'قيد المراجعة البشرية'}
+            </StatusPill>
+            {result.report && <FoundationReportContent report={result.report} />}
+            {result.response && (
+              <article className="reviewer-panel">
+                <h2>رد المراجع</h2>
+                <p>{result.response.text}</p>
+              </article>
+            )}
+          </section>
+        )}
       </main>
     </div>
   );
@@ -1727,11 +1897,13 @@ const reviewerNavigation: Array<{
 export function ReviewerShell({
   route,
   navigate,
+  selectedTicketCode = null,
   profile,
   onSignOut,
 }: {
   route: ReviewerRoute;
-  navigate: (route: Route) => void;
+  navigate: (route: Route, reference?: string) => void;
+  selectedTicketCode?: string | null;
   profile?: ReactNode;
   onSignOut: () => Promise<void>;
 }) {
@@ -1809,12 +1981,12 @@ export function ReviewerShell({
                 : route === 'queue'
                   ? 'طلبات المراجعة'
                   : route === 'detail'
-                    ? 'مراجعة الطلب BR-1042'
+                    ? `مراجعة الطلب ${selectedTicketCode ?? ''}`
                     : 'المصادر المعتمدة'}
             </h1>
           </div>
           <div className="topbar-actions">
-            <span className="demo-badge">بيانات تجريبية</span>
+            <span className="demo-badge">بيانات التذاكر المحمية</span>
             <button className="icon-button" aria-label="الإشعارات">
               <Bell size={23} />
               <i />
@@ -1823,20 +1995,45 @@ export function ReviewerShell({
         </header>
         {route === 'dashboard' && <ReviewerDashboard navigate={navigate} />}
         {route === 'queue' && <ReviewerQueue navigate={navigate} />}
-        {route === 'detail' && <ReviewerDetail navigate={navigate} />}
+        {route === 'detail' && (
+          <ReviewerDetail navigate={navigate} ticketCode={selectedTicketCode} />
+        )}
         {route === 'sources' && <ReviewerSources />}
       </section>
     </div>
   );
 }
 
-function ReviewerDashboard({ navigate }: { navigate: (route: Route) => void }) {
+function ReviewerDashboard({ navigate }: { navigate: (route: Route, reference?: string) => void }) {
+  const [tickets, setTickets] = useState<ReviewerTicketSummary[]>([]);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    void listReviewerTickets()
+      .then(setTickets)
+      .catch(() => setError(true));
+  }, []);
+  const pending = tickets.filter((ticket) => ticket.status === 'pending').length;
+  const inReview = tickets.filter((ticket) => ticket.status === 'in_review').length;
+  const published = tickets.filter((ticket) => ticket.status === 'published').length;
+  const items: CaseListItem[] = tickets.slice(0, 3).map((ticket) => ({
+    id: ticket.ticketCode,
+    title: 'طلب مراجعة بشرية مرتبط بتقرير محفوظ',
+    submitter: ticket.notifyOptIn ? 'متابعة بالبريد مفعّلة' : 'زائر',
+    submittedAt: new Date(ticket.createdAt).toLocaleString('ar-SA'),
+    status:
+      ticket.status === 'published'
+        ? 'مكتمل'
+        : ticket.status === 'in_review'
+          ? 'قيد المراجعة'
+          : 'جديد',
+    priority: 'متوسط',
+  }));
   return (
     <main className="reviewer-main page-enter">
       <div className="welcome-row">
         <div>
-          <h2>مرحبًا صالح</h2>
-          <p>لديك طلبان جديدان يحتاجان إلى مراجعة اليوم.</p>
+          <h2>مساحة المراجعة</h2>
+          <p>لديك {pending} طلبات جديدة تحتاج إلى مراجعة.</p>
         </div>
         <button className="button button--primary" onClick={() => navigate('reviewer-queue')}>
           <Tray size={20} /> فتح قائمة المراجعة
@@ -1848,7 +2045,7 @@ function ReviewerDashboard({ navigate }: { navigate: (route: Route) => void }) {
             <Tray size={23} />
           </span>
           <p>طلبات جديدة</p>
-          <strong>2</strong>
+          <strong>{pending}</strong>
           <small>بانتظار البدء</small>
         </article>
         <article>
@@ -1856,7 +2053,7 @@ function ReviewerDashboard({ navigate }: { navigate: (route: Route) => void }) {
             <Clock size={23} />
           </span>
           <p>قيد المراجعة</p>
-          <strong>1</strong>
+          <strong>{inReview}</strong>
           <small>تحتاج إلى قرار</small>
         </article>
         <article>
@@ -1864,16 +2061,16 @@ function ReviewerDashboard({ navigate }: { navigate: (route: Route) => void }) {
             <CheckCircle size={23} />
           </span>
           <p>مكتملة هذا الأسبوع</p>
-          <strong>8</strong>
-          <small>متوسط 18 دقيقة</small>
+          <strong>{published}</strong>
+          <small>ردود منشورة</small>
         </article>
         <article>
           <span>
             <Archive size={23} />
           </span>
           <p>إجمالي الحالات</p>
-          <strong>31</strong>
-          <small>منذ بدء التجربة</small>
+          <strong>{tickets.length}</strong>
+          <small>طلبات مفتوحة ومحفوظة</small>
         </article>
       </section>
       <section className="dashboard-grid">
@@ -1887,7 +2084,11 @@ function ReviewerDashboard({ navigate }: { navigate: (route: Route) => void }) {
               عرض الكل <CaretLeft size={16} />
             </button>
           </div>
-          <CaseList compact onOpen={() => navigate('reviewer-detail')} />
+          {error ? (
+            <ErrorState onRetry={() => window.location.reload()} />
+          ) : (
+            <CaseList compact items={items} onOpen={(code) => navigate('reviewer-detail', code)} />
+          )}
         </article>
         <article className="reviewer-panel activity-panel">
           <div className="panel-heading">
@@ -1926,14 +2127,14 @@ function CaseList({
   items = SAMPLE_CASES,
 }: {
   compact?: boolean;
-  onOpen: () => void;
-  items?: typeof SAMPLE_CASES;
+  onOpen: (code: string) => void;
+  items?: CaseListItem[];
 }) {
   if (items.length === 0) return <EmptyState />;
   return (
     <div className={`case-list ${compact ? 'case-list--compact' : ''}`}>
       {items.map((item) => (
-        <button className="case-row" onClick={onOpen} key={item.id}>
+        <button className="case-row" onClick={() => onOpen(item.id)} key={item.id}>
           <span className="case-id" dir="ltr">
             {item.id}
           </span>
@@ -1970,25 +2171,47 @@ function EmptyState() {
   );
 }
 
-function ReviewerQueue({ navigate }: { navigate: (route: Route) => void }) {
+function ReviewerQueue({ navigate }: { navigate: (route: Route, reference?: string) => void }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('الكل');
-  const [loading, setLoading] = useState(false);
-  const forceError = window.location.hash.includes('state=error');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [tickets, setTickets] = useState<ReviewerTicketSummary[]>([]);
+  const refresh = useCallback(() => {
+    setLoading(true);
+    setLoadError(false);
+    void listReviewerTickets()
+      .then(setTickets)
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(refresh, [refresh]);
+  const items = useMemo<CaseListItem[]>(
+    () =>
+      tickets.map((ticket) => ({
+        id: ticket.ticketCode,
+        title: 'طلب مراجعة بشرية مرتبط بتقرير محفوظ',
+        submitter: ticket.notifyOptIn ? 'متابعة بالبريد مفعّلة' : 'زائر دون إشعار',
+        submittedAt: new Date(ticket.createdAt).toLocaleString('ar-SA'),
+        status:
+          ticket.status === 'published'
+            ? 'مكتمل'
+            : ticket.status === 'in_review'
+              ? 'قيد المراجعة'
+              : 'جديد',
+        priority: 'متوسط',
+      })),
+    [tickets],
+  );
   const filtered = useMemo(
     () =>
-      SAMPLE_CASES.filter(
+      items.filter(
         (item) =>
           (filter === 'الكل' || item.status === filter) &&
           `${item.id} ${item.title}`.toLowerCase().includes(query.toLowerCase()),
       ),
-    [filter, query],
+    [filter, items, query],
   );
-
-  const refresh = () => {
-    setLoading(true);
-    window.setTimeout(() => setLoading(false), 700);
-  };
 
   return (
     <main className="reviewer-main page-enter">
@@ -2024,12 +2247,12 @@ function ReviewerQueue({ navigate }: { navigate: (route: Route) => void }) {
             <p>{filtered.length} طلبات ضمن العرض الحالي</p>
           </div>
         </div>
-        {forceError ? (
-          <ErrorState onRetry={() => navigate('reviewer-queue')} />
-        ) : loading ? (
+        {loadError ? (
+          <ErrorState onRetry={refresh} />
+        ) : loading && tickets.length > 0 ? (
           <LoadingState />
         ) : (
-          <CaseList items={filtered} onOpen={() => navigate('reviewer-detail')} />
+          <CaseList items={filtered} onOpen={(code) => navigate('reviewer-detail', code)} />
         )}
       </section>
     </main>
@@ -2061,135 +2284,149 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function ReviewerDetail({ navigate }: { navigate: (route: Route) => void }) {
-  const [decision, setDecision] = useState<'needs-context' | 'bounded' | 'return'>('needs-context');
+function ReviewerDetail({
+  navigate,
+  ticketCode,
+}: {
+  navigate: (route: Route, reference?: string) => void;
+  ticketCode: string | null;
+}) {
+  const [ticket, setTicket] = useState<ReviewerTicket | null>(null);
+  const [decision, setDecision] = useState<'needs_context' | 'bounded_revision' | 'returned'>(
+    'needs_context',
+  );
   const [note, setNote] = useState('');
-  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(Boolean(ticketCode));
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const load = useCallback(() => {
+    if (!ticketCode) return;
+    setLoading(true);
+    setError('');
+    void getReviewerTicket(ticketCode)
+      .then((value) => {
+        setTicket(value);
+        const latest = value.responses.at(-1);
+        if (latest && !latest.published) {
+          setDecision(latest.decision);
+          setNote(latest.text);
+        }
+      })
+      .catch(() => setError('تعذر تحميل التذكرة المحمية.'))
+      .finally(() => setLoading(false));
+  }, [ticketCode]);
+  useEffect(load, [load]);
+
+  const save = async (publish: boolean) => {
+    if (!ticketCode || !note.trim() || saving) return;
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      await saveReviewerResponse(ticketCode, { decision, text: note, publish });
+      setMessage(
+        publish
+          ? 'تم نشر رد المراجع وإدراج الإشعار في طابور الإرسال.'
+          : 'تم حفظ نسخة جديدة من المسودة.',
+      );
+      load();
+    } catch {
+      setError('تعذر حفظ القرار. لم يُنشر أي رد ولم يُرسل أي إشعار.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <main className="reviewer-main detail-main page-enter">
-      {saved && <Toast message="تم حفظ القرار التجريبي دون إرسال خارجي." />}
+      {message && <Toast message={message} />}
+      {error && <Toast message={error} tone="error" />}
       <button className="back-link" onClick={() => navigate('reviewer-queue')}>
         <ArrowLeft size={18} /> العودة إلى الطلبات
       </button>
-      <div className="detail-layout">
-        <section className="detail-stack">
-          <article className="reviewer-panel">
+      {!ticketCode && <ErrorState onRetry={() => navigate('reviewer-queue')} />}
+      {loading && <LoadingState />}
+      {ticket && !loading && (
+        <div className="detail-layout">
+          <section className="detail-stack">
+            <article className="reviewer-panel">
+              <div className="panel-heading">
+                <div>
+                  <StatusPill tone={ticket.status === 'published' ? 'success' : 'warning'}>
+                    {ticket.status === 'published' ? 'منشور' : 'قيد المراجعة'}
+                  </StatusPill>
+                  <h2>النص والتقرير المرتبطان بالتذكرة</h2>
+                  <p dir="ltr">{ticket.ticketCode}</p>
+                </div>
+              </div>
+              <div className="submitted-copy">
+                <span>النص المرسل</span>
+                <p>{ticket.report.intake.originalText}</p>
+              </div>
+            </article>
+            <FoundationReportContent report={ticket.report} />
+          </section>
+          <aside className="decision-panel reviewer-panel">
             <div className="panel-heading">
               <div>
-                <StatusPill tone="warning">جديد</StatusPill>
-                <h2>إخفاء الصدقة في جميع الحالات</h2>
-                <p dir="ltr">BR-1042</p>
+                <h2>رد المراجع</h2>
+                <p>احفظ مسودات مستقلة، ثم انشر الرد النهائي مرة واحدة.</p>
               </div>
-              <span>نسخة النص ١</span>
+              <ListChecks size={24} />
             </div>
-            <div className="submitted-copy">
-              <span>النص المرسل</span>
-              <p>{DEMO_TEXT}</p>
+            <div className="decision-options">
+              {(
+                [
+                  ['needs_context', 'يحتاج سياقًا إضافيًا', 'الأدلة الحالية لا تكفي للحسم.'],
+                  ['bounded_revision', 'اعتماد صياغة مقيّدة', 'اعتماد التعديل ضمن حدود المصدر.'],
+                  ['returned', 'إعادة للمحرر', 'يتطلب تعديلًا قبل إعادة المراجعة.'],
+                ] as const
+              ).map(([value, label, description]) => (
+                <label className={decision === value ? 'selected' : ''} key={value}>
+                  <input
+                    type="radio"
+                    name="decision"
+                    checked={decision === value}
+                    onChange={() => setDecision(value)}
+                  />
+                  <span>
+                    <strong>{label}</strong>
+                    <small>{description}</small>
+                  </span>
+                </label>
+              ))}
             </div>
-          </article>
-          <article className="reviewer-panel">
-            <div className="panel-heading">
-              <div>
-                <h2>ملخص بصيرة</h2>
-                <p>ملاحظات آلية للمساعدة وليست قرار المراجع.</p>
-              </div>
-              <Sparkle size={24} />
-            </div>
-            <div className="review-summary">
-              <p>
-                <WarningCircle size={21} /> يوجد حذف داخل الاقتباس مقارنة بالنص المعتمد.
-              </p>
-              <p>
-                <WarningCircle size={21} /> الاستنتاج أوسع من دلالة الآية المعروضة.
-              </p>
-            </div>
-          </article>
-          <article className="reviewer-panel">
-            <div className="panel-heading">
-              <div>
-                <h2>الأدلة المرفقة</h2>
-                <p>المقاطع التي استخدمها التحليل لهذه النسخة.</p>
-              </div>
-              <BookOpen size={24} />
-            </div>
-            <div className="evidence-card">
-              <div>
-                <strong>القرآن الكريم — سورة البقرة، الآية ٢٧١</strong>
-                <small dir="ltr">Tanzil Uthmani v1.1</small>
-              </div>
-              <blockquote>
-                وَإِن تُخْفُوهَا وَتُؤْتُوهَا الْفُقَرَاءَ فَهُوَ خَيْرٌ لَكُمْ
-              </blockquote>
-              <button className="text-action">
-                فتح المصدر <ArrowLeft size={16} />
-              </button>
-            </div>
-          </article>
-        </section>
-        <aside className="decision-panel reviewer-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>قرار المراجع</h2>
-              <p>اختر الإجراء المناسب وسجّل سببه.</p>
-            </div>
-            <ListChecks size={24} />
-          </div>
-          <div className="decision-options">
-            <label className={decision === 'needs-context' ? 'selected' : ''}>
-              <input
-                type="radio"
-                name="decision"
-                checked={decision === 'needs-context'}
-                onChange={() => setDecision('needs-context')}
+            <label className="note-field">
+              ملاحظة المراجع
+              <textarea
+                rows={9}
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="اكتب القرار وحدوده والتصحيح المقترح…"
               />
-              <span>
-                <strong>يحتاج سياقًا إضافيًا</strong>
-                <small>الأدلة الحالية لا تكفي للحسم.</small>
-              </span>
             </label>
-            <label className={decision === 'bounded' ? 'selected' : ''}>
-              <input
-                type="radio"
-                name="decision"
-                checked={decision === 'bounded'}
-                onChange={() => setDecision('bounded')}
-              />
-              <span>
-                <strong>اعتماد صياغة مقيّدة</strong>
-                <small>اعتماد التعديل ضمن حدود المصدر.</small>
-              </span>
-            </label>
-            <label className={decision === 'return' ? 'selected' : ''}>
-              <input
-                type="radio"
-                name="decision"
-                checked={decision === 'return'}
-                onChange={() => setDecision('return')}
-              />
-              <span>
-                <strong>إعادة للمحرر</strong>
-                <small>يتطلب تعديلًا قبل إعادة المراجعة.</small>
-              </span>
-            </label>
-          </div>
-          <label className="note-field">
-            ملاحظة المراجع
-            <textarea
-              rows={6}
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="اكتب سبب القرار وحدوده…"
-            />
-          </label>
-          <button className="button button--primary" onClick={() => setSaved(true)}>
-            <Check size={20} /> حفظ القرار
-          </button>
-          <button className="button button--ghost">حفظ كمسودة</button>
-          <p className="decision-note">
-            <Lock size={17} /> لن يُنشر القرار تلقائيًا أو يغيّر المصدر.
-          </p>
-        </aside>
-      </div>
+            <button
+              className="button button--ghost"
+              disabled={!note.trim() || saving || ticket.status === 'published'}
+              onClick={() => void save(false)}
+            >
+              حفظ كمسودة
+            </button>
+            <button
+              className="button button--primary"
+              disabled={!note.trim() || saving || ticket.status === 'published'}
+              onClick={() => void save(true)}
+            >
+              <Check size={20} /> نشر الرد النهائي
+            </button>
+            <p className="decision-note">
+              <Lock size={17} /> النشر يُشعر المستخدم إن اختار البريد، لكنه لا يعتمد الرد تلقائيًا
+              كمصدر RAG.
+            </p>
+          </aside>
+        </div>
+      )}
     </main>
   );
 }
@@ -2258,6 +2495,9 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
   const [reviewText, setReviewText] = useState('');
   const [foundationReport, setFoundationReport] = useState<FoundationReport | null>(null);
   const reviewId = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('reviewId');
+  const selectedTicketCode = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get(
+    'ticketCode',
+  );
 
   const startReview = useCallback(
     (text: string) => {
@@ -2293,6 +2533,7 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
           <ReviewerShell
             route={route.replace('reviewer-', '') as ReviewerRoute}
             navigate={navigate}
+            selectedTicketCode={selectedTicketCode}
             profile={profile}
             onSignOut={onSignOut}
           />
@@ -2317,6 +2558,7 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
           reviewId={reviewId}
           initialReport={foundationReport?.reviewId === reviewId ? foundationReport : null}
           onHome={startNewReview}
+          onTicket={() => navigate('ticket', reviewId)}
         />
       );
   if (route === 'result')
@@ -2330,12 +2572,14 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
     );
   if (route === 'unresolved')
     return <UnresolvedScreen onHome={startNewReview} onTicket={() => navigate('ticket')} />;
-  if (route === 'ticket') return <TicketScreen onHome={startNewReview} />;
+  if (route === 'ticket') return <TicketScreen onHome={startNewReview} reviewId={reviewId} />;
+  if (route === 'follow-up') return <FollowUpScreen onHome={startNewReview} />;
   return (
     <HomeScreen
       initialText={reviewText}
       onReview={startReview}
       onReviewer={() => navigate('reviewer-dashboard')}
+      onFollowUp={() => navigate('follow-up')}
     />
   );
 }

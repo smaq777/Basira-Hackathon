@@ -345,8 +345,8 @@ describe('bounded semantic assessment', () => {
     expect(prompt).not.toMatch(/scholar_explanation|book_excerpt/u);
     expect(result.scholarlyApproval).toBe(false);
     expect(result.trace).toMatchObject({
-      pipelineVersion: 'provisional-semantic-v1.7',
-      promptVersion: 'evidence-support-v1.7',
+      pipelineVersion: 'provisional-semantic-v1.8',
+      promptVersion: 'evidence-support-v1.8',
     });
     expect(intake).toEqual(before);
   });
@@ -454,7 +454,7 @@ describe('bounded semantic assessment', () => {
       errorCode: 'no_claims_extracted',
       assessments: [],
     });
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it('uses exact original passage previews preserving UTF16 and full small-source context', async () => {
