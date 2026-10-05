@@ -35,10 +35,14 @@ export function assertContentViewDatabaseBinding(readerRaw: string, writerRaw: s
 /** Insert-only public sidecars. No original updates, acquisition or embeddings. */
 export function createSourceContentStore(options: {
   readerPool: Pool;
+  statementTimeoutMs?: number;
   writerPool?: Pool;
   policy: LoadedSourcePolicy;
 }) {
   const policy = structuredClone(options.policy);
+  const statementTimeoutMs = options.statementTimeoutMs ?? 5000;
+  if (!Number.isInteger(statementTimeoutMs) || statementTimeoutMs < 1 || statementTimeoutMs > 10000)
+    throw Error('CACHE_SQL_BUDGET_INVALID');
   async function tx<T>(write: boolean, fn: (c: PoolClient) => Promise<T>, signal?: AbortSignal) {
     signal?.throwIfAborted();
     const pool = write ? options.writerPool : options.readerPool;
@@ -49,7 +53,7 @@ export function createSourceContentStore(options: {
       await c.query(
         'set local role ' + (write ? 'basirah_cache_writer' : 'basirah_research_runtime'),
       );
-      await c.query("set local statement_timeout='5000ms'");
+      await c.query("set local statement_timeout='" + statementTimeoutMs + "ms'");
       signal?.throwIfAborted();
       const result = await fn(c);
       signal?.throwIfAborted();

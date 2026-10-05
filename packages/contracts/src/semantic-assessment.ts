@@ -8,6 +8,60 @@ export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.8';
 const EvidenceKeys = z.array(z.string().min(1).max(160)).max(20);
 const Details = z.array(z.string().min(1).max(500)).max(6);
 
+const CacheStage = z.enum(['disabled', 'success', 'timeout', 'unavailable', 'invalid']);
+export const CacheSearchDiagnosticsSchema = z
+  .object({
+    outcome: z.enum(['success', 'partial', 'timeout', 'unavailable']),
+    elapsedMs: z.number().int().nonnegative().max(240000),
+    budgetMs: z.number().int().positive().max(30000).optional(),
+    parentCandidateCount: z.number().int().nonnegative().max(8),
+    selectedParentCount: z.number().int().nonnegative().max(2).optional(),
+    deduplicatedParentCount: z.number().int().nonnegative().max(8).optional(),
+    stages: z
+      .object({
+        embedding: CacheStage,
+        pages: CacheStage,
+        passages: CacheStage,
+        content: CacheStage,
+      })
+      .strict()
+      .optional(),
+    failureCodes: z
+      .array(
+        z.enum([
+          'cache_timeout',
+          'cache_unavailable',
+          'embedding_timeout',
+          'embedding_unavailable',
+          'embedding_invalid',
+          'pages_unavailable',
+          'passages_unavailable',
+          'content_unavailable',
+        ]),
+      )
+      .max(8),
+  })
+  .strict()
+  .refine(
+    (value) => value.outcome !== 'success' || value.failureCodes.length === 0,
+    'Successful cache retrieval cannot include failure codes',
+  )
+  .refine(
+    (value) => (value.selectedParentCount ?? 0) <= value.parentCandidateCount,
+    'Selected cache parents must be candidates',
+  );
+export type CacheSearchDiagnostics = z.infer<typeof CacheSearchDiagnosticsSchema>;
+export const CacheRestoreDiagnosticsSchema = z
+  .object({
+    outcome: z.enum(['success', 'timeout', 'unavailable']),
+    elapsedMs: z.number().int().nonnegative().max(240000),
+    budgetMs: z.number().int().positive().max(30000),
+    restoredParentCount: z.number().int().nonnegative().max(100),
+    failureCodes: z.array(z.enum(['cache_timeout', 'cache_unavailable'])).max(2),
+  })
+  .strict();
+export type CacheRestoreDiagnostics = z.infer<typeof CacheRestoreDiagnosticsSchema>;
+
 export const ExtractedClaimProposalSchema = z
   .object({
     segmentId: z.string().min(1).max(160),
@@ -280,6 +334,16 @@ export const SemanticAssessmentReportSchema = z
           })
           .strict()
           .optional(),
+        retrievalBudget: z
+          .object({
+            outcome: z.enum(['completed', 'budget_skipped', 'timeout', 'unavailable']),
+            configuredMs: z.number().int().positive().max(90000),
+            appliedMs: z.number().int().nonnegative().max(90000),
+            assessmentReserveMs: z.number().int().nonnegative().max(90000),
+            elapsedMs: z.number().int().nonnegative().max(240000),
+          })
+          .strict()
+          .optional(),
         assessmentInputSha256: z
           .string()
           .regex(/^[a-f0-9]{64}$/u)
@@ -297,6 +361,7 @@ export const SemanticAssessmentReportSchema = z
             corpusVersion: z.string().min(1).max(120),
             mode: z.enum(['approved', 'local_research']),
             passagePreferences: z.array(CachePassagePreferenceSchema).max(40).optional(),
+            cacheRestore: CacheRestoreDiagnosticsSchema.optional(),
             queries: z
               .array(
                 z
@@ -305,8 +370,16 @@ export const SemanticAssessmentReportSchema = z
                     querySha256: z.string().regex(/^[a-f0-9]{64}$/u),
                     modes: z.array(z.enum(['exact', 'lexical', 'semantic'])).max(3),
                     candidateKeys: z.array(z.string().min(1).max(160)).max(12),
+                    selectedCandidateKeys: EvidenceKeys.optional(),
+                    cache: CacheSearchDiagnosticsSchema.optional(),
                   })
-                  .strict(),
+                  .strict()
+                  .refine(
+                    (value) =>
+                      !value.selectedCandidateKeys ||
+                      value.selectedCandidateKeys.every((key) => value.candidateKeys.includes(key)),
+                    'Selected keys must be query candidates',
+                  ),
               )
               .max(15),
           })

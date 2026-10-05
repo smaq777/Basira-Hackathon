@@ -222,5 +222,6 @@ describe('deployment migration ordering', () => {
     expect(files).toContain('0014_direct_review_ticket_intake.sql');
     expect(files).toContain('0015_source_content_views.sql');
     expect(files).not.toContain('0013_source_content_views.sql');
+    expect(files).not.toContain('0014_source_content_views.sql');
   });
 });
