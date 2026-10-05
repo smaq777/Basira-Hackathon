@@ -10,6 +10,23 @@ bypass selection. A second empty result stays partial with unselected coverage;
 no inventory candidate becomes a claim automatically. See
 [diagnostic and limits](evidence/2026-10-05-claim-selection-recovery.md).
 
+**Active local research testing (#8):** The integrated app now uses the 86-passage
+Neon snapshot, verified in a newly completed durable UI report. Eleven additional
+approved-domain public originals were classified and added to the separate
+pending research cache (5 to 16 visible rows). A reviewer-navigation-only Dorar
+extraction was quarantined; a shared provider/cache guard now rejects that known
+article-missing pattern. See [activation and source-quality evidence](evidence/2026-10-05-source-cache-quality.md).
+This supersedes earlier inactive/62-passage local status below. Source approval,
+the planned 170-passage expansion, owner acceptance and shared staging deployment
+remain separate.
+
+**Optional citation/layout candidate (#38):** A default-off local research action
+now creates a separate candidate from the owned persisted report, preserves every
+original character, and adds only validated paragraph breaks and recorded
+citations. Copy reloads ownership/report/attempt binding and revalidates
+insertions. Storage is explicitly session-bound memory; source approval and
+substantive prose changes remain gated. See [evidence](evidence/2026-10-05-citation-layout-candidate.md).
+
 **Claim and passage follow-up (#11):** Semantic v1.7 binds model selections to a
 deterministic inventory of original author spans and sends bounded exact source
 passages with immutable hashes and UTF16 offsets, including late-page context.
@@ -25,6 +42,11 @@ support before copy. The UI shows changed wording and limited coverage. Copy
 reloads ownership/report/attempt binding and revalidates the candidate and stored
 verification hash. The shared deadline is 90 seconds; storage remains
 session-bound memory. See [evidence](evidence/2026-10-05-substantive-rewrite.md).
+An actual UI modality false acceptance prompted verifier schema version 2 and
+explicit obligation/not-required preservation checks. The known candidate was
+rejected in two paid repeats while equivalent explicit wording passed;
+this selected diagnostic does not establish general reliable preservation.
+See [follow-up evidence](evidence/2026-10-05-rewrite-modality.md).
 
 Draft PR #59 now connects the current UI to persisted review reports, local quotation lookup, live Tafsir context, OpenRouter claim assessment, and a persistent isolated Neon hybrid-retrieval corpus. Optional gap-triggered Firecrawl acquisition is controlled by `config/source-policy.json`; UI follow-up is assigned to Saleh in [#68](https://github.com/smaq777/Basira-Hackathon/issues/68). Features remain research-only/default-off and are not deployed or owner-accepted merely because local checks pass.
 

@@ -32,6 +32,7 @@ export const SubstantiveRewriteOperationsSchema = RewriteOperationsSchema.extend
 });
 export const RewriteVerificationSchema = z
   .object({
+    schemaVersion: z.literal(2),
     checks: z
       .array(
         z
@@ -43,6 +44,7 @@ export const RewriteVerificationSchema = z
             negationsPreserved: z.boolean(),
             exceptionsPreserved: z.boolean(),
             scopePreserved: z.boolean(),
+            modalityPreserved: z.boolean(),
             citations: z
               .array(
                 z

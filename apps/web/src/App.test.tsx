@@ -426,7 +426,7 @@ describe('Basirah web flow', () => {
 
     expect(screen.getByRole('navigation', { name: 'مساحة المراجع' })).not.toBeNull();
     expect(screen.getByRole('button', { name: /طلبات المراجعة/ })).not.toBeNull();
-    expect(screen.getByText('بيانات تجريبية')).not.toBeNull();
+    expect(screen.getByText('بيانات التذاكر المحمية')).not.toBeNull();
   });
 
   it('keeps public navigation separate from terminating the Clerk session', async () => {
@@ -452,22 +452,20 @@ describe('Basirah web flow', () => {
     expect(location.reload).toHaveBeenCalledOnce();
   });
 
-  it('shows a useful empty state when a reviewer search has no matches', async () => {
-    const user = userEvent.setup();
+  it('shows a useful empty state while the reviewer queue has no rows', () => {
     window.location.hash = '#/reviewer/queue';
     render(<ReviewerShell route="queue" navigate={vi.fn()} onSignOut={vi.fn()} />);
-
-    await user.type(screen.getByPlaceholderText('ابحث برقم الطلب أو موضوعه'), 'لا توجد نتيجة');
 
     expect(screen.getByText('لا توجد طلبات هنا')).not.toBeNull();
     expect(screen.getByText('جرّب تغيير التصفية أو البحث بكلمات أخرى.')).not.toBeNull();
   });
 
-  it('shows a recoverable reviewer error state', () => {
-    window.location.hash = '#/reviewer/queue?state=error';
+  it('shows a recoverable reviewer error state', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
+    window.location.hash = '#/reviewer/queue';
     render(<ReviewerShell route="queue" navigate={vi.fn()} onSignOut={vi.fn()} />);
 
-    expect(screen.getByRole('alert').textContent).toContain('تعذر تحميل الطلبات');
+    expect((await screen.findByRole('alert')).textContent).toContain('تعذر تحميل الطلبات');
     expect(screen.getByRole('button', { name: 'إعادة المحاولة' })).not.toBeNull();
   });
 
