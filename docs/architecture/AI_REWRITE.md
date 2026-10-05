@@ -16,7 +16,12 @@ or overwrite the original revision. Changes must alter wording beyond punctuatio
 After deterministic identity, range, source, quotation and length checks, a
 separate pinned model request verifies mutual meaning preservation and support of
 every revised material clause from the same immutable evidence. Conditions,
-negations, exceptions and scope each have an independent required check. Exact
+negations, exceptions, scope and modality each have an independent required check.
+The `supported-author-wording-v2` prompt and verifier schema version 2 distinguish
+obligation, prohibition, permission, possibility and absence of obligation.
+Source support cannot authorize changing author modality; ambiguous colloquial
+wording requires abstention. These remain model judgments, not deterministic
+proof of preservation. Exact
 passage citations are required. A false, missing, malformed, unavailable or
 ambiguous check rejects the whole candidate. This is provisional model validation;
 it is not independent scholarly adjudication or a calibrated semantic guarantee.
@@ -35,6 +40,9 @@ coverage. It explicitly says only displayed supported spans were improved and
 all remaining text was preserved. Ten-minute session-bound memory, ownership,
 idempotency, cancellation, default-off production controls and manual acceptance
 remain as described below. See [new evidence](../evidence/2026-10-05-substantive-rewrite.md).
+The [modality follow-up](../evidence/2026-10-05-rewrite-modality.md) retains a real
+UI false acceptance and its bounded diagnostic; earlier success did not establish
+reliable preservation across author wording.
 
 ## Historical citation/layout first slice
 
