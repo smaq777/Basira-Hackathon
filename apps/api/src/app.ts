@@ -150,7 +150,10 @@ type AppOptions = {
     store: TicketStore;
     dataKey: string;
     lookupPepper: string;
-    notifications?: { notify(): void };
+    notifications?: {
+      notify(): void;
+      sendReceipt?(input: { email: string; name?: string; ticketCode: string }): Promise<void>;
+    };
   };
   clerkFrontendApiOrigin?: string;
   rateLimits?: {
@@ -593,6 +596,20 @@ export function createApp(options: AppOptions = {}) {
           contact.notify,
         );
         if (!receipt) return res.status(404).json({ code: 'TICKET_NOT_FOUND' });
+        if (contact.notify && options.tickets.notifications?.sendReceipt) {
+          try {
+            await options.tickets.notifications.sendReceipt({
+              email: contact.email,
+              name: contact.name,
+              ticketCode: receipt.ticketCode,
+            });
+          } catch {
+            return res.status(502).json({
+              code: 'TICKET_CONTACT_SAVED_EMAIL_FAILED',
+              ticketCode: receipt.ticketCode,
+            });
+          }
+        }
         return res.json(receipt);
       } catch (error) {
         return next(error);
