@@ -4,6 +4,7 @@ import { createResearchPageCache } from '../apps/api/src/research-page-cache.js'
 import { parseSourcePolicy } from '../apps/api/src/source-policy.js';
 import { sha256 } from '../apps/api/src/foundation.js';
 import type { SourceEvidence } from '../packages/contracts/src/foundation.js';
+import { selectSourceContent, sourceBlocks } from '../apps/api/src/source-content-view.js';
 const policy = parseSourcePolicy({
   schemaVersion: 1,
   policyVersion: 'v1',
@@ -98,6 +99,61 @@ function fixture() {
   return { cache, rows, query, classify, readerPool };
 }
 describe('public research page cache', () => {
+  it.each(['original_retained_invalid_labels', 'original_retained_no_removal'] as const)(
+    'records %s while retaining exact topic-only parent metadata',
+    async (status) => {
+      const f = fixture(),
+        source = evidence(),
+        base = await f.classify();
+      const selection =
+        status === 'original_retained_no_removal'
+          ? selectSourceContent(
+              { ...source, sourceUrl: source.sourceUrl! },
+              sourceBlocks(source).map((b) => ({ blockId: b.blockId, label: 'article' })),
+              base,
+            ).selection
+          : undefined;
+      const store = vi.fn(async () => undefined);
+      const cache = createResearchPageCache({
+        readerPool: f.readerPool,
+        writerPool: f.readerPool,
+        policy,
+        classify: async () => ({
+          ...base,
+          contentViewStatus: status,
+          ...(selection ? { contentSelection: selection } : {}),
+        }),
+        contentViews: { store, enrich: async (sources) => [...sources] },
+      });
+      const result = await cache.store([source]);
+      expect(result.storedKeys).toHaveLength(1);
+      expect(result.failureCodes).toEqual(['cache_content_view_' + status]);
+      const parent = [...f.rows.values()][0]!.evidence;
+      expect(parent.originalText).toBe(source.originalText);
+      expect(parent.provenance.topicClassification).not.toHaveProperty('contentSelection');
+      expect(parent.provenance.topicClassification).not.toHaveProperty('contentViewStatus');
+      expect(parent.provenance).not.toHaveProperty('sourceContentSelection');
+      expect(store).toHaveBeenCalledTimes(selection ? 1 : 0);
+    },
+  );
+  it('retains legacy evidence with a fixed outcome when view lookup changes ranks or fails', async () => {
+    const f = fixture(),
+      sources = [evidence('Owned first parent'), evidence('Owned second parent')];
+    for (const e of sources) f.rows.set(e.snapshotKey, { evidence: e });
+    const cache = createResearchPageCache({
+      readerPool: f.readerPool,
+      writerPool: f.readerPool,
+      policy,
+      classify: f.classify,
+      contentViews: { store: async () => undefined, enrich: async (rows) => [...rows].reverse() },
+    });
+    const found = await cache.search('family');
+    expect(found.map((e) => e.snapshotKey)).toEqual(sources.map((e) => e.snapshotKey));
+    expect(
+      found.every((e) => e.provenance.sourceContentViewStatus === 'unavailable_original_fallback'),
+    ).toBe(true);
+    expect(sources.every((e) => e.provenance.sourceContentViewStatus === undefined)).toBe(true);
+  });
   it('preserves all eight legacy ranks and top-two unindexed title hits while enriching indexed parents', async () => {
     const f = fixture();
     const legacy = Array.from({ length: 8 }, (_, i) =>
@@ -165,6 +221,8 @@ describe('public research page cache', () => {
     'cachePassageHitsByQuery',
     'passageIndexCoverage',
     'passageIndexStatus',
+    'sourceContentSelection',
+    'sourceContentViewStatus',
   ])('rejects transient %s before shared admission without changing provenance', async (key) => {
     const f = fixture(),
       e = evidence();
@@ -361,5 +419,70 @@ describe('public research page cache', () => {
     abort.abort();
     await rejected;
     expect(f.query).not.toHaveBeenCalled();
+  });
+});
+
+it('surfaces embedding, passage and content failures even with zero matching parents', async () => {
+  const f = fixture();
+  const embed = vi.fn(async () => {
+    throw new Error('private provider payload');
+  });
+  const cache = createResearchPageCache({
+    readerPool: f.readerPool,
+    writerPool: f.readerPool,
+    policy,
+    classify: f.classify,
+    embeddingSpace: { modelId: 'pinned', embed },
+    passageIndex: {
+      search: async () => {
+        throw new Error('private SQL detail');
+      },
+    },
+    contentViews: {
+      store: async () => {},
+      enrich: async () => {
+        throw new Error('private content detail');
+      },
+    },
+  });
+  const result = await cache.searchWithDiagnostics!('family duties');
+  expect(result.evidence).toEqual([]);
+  expect(result.diagnostics).toMatchObject({
+    outcome: 'partial',
+    parentCandidateCount: 0,
+    failureCodes: ['embedding_unavailable', 'passages_unavailable', 'content_unavailable'],
+  });
+  expect(JSON.stringify(result.diagnostics)).not.toContain('private');
+  expect(embed).toHaveBeenCalledTimes(1);
+});
+it('bounds an uncooperative embedding and retains eligible lexical parents', async () => {
+  const f = fixture();
+  await f.cache.store([evidence()]);
+  const cache = createResearchPageCache({
+    readerPool: f.readerPool,
+    writerPool: f.readerPool,
+    policy,
+    classify: f.classify,
+    queryEmbeddingTimeoutMs: 10,
+    embeddingSpace: { modelId: 'pinned', embed: async () => new Promise(() => {}) },
+  });
+  const result = await cache.searchWithDiagnostics!('family duties');
+  expect(result.evidence).toHaveLength(1);
+  expect(result.diagnostics).toMatchObject({
+    outcome: 'partial',
+    failureCodes: ['embedding_timeout'],
+    stages: { embedding: 'timeout', pages: 'success' },
+  });
+});
+it('treats expired cached parents as successful empty retrieval rather than an outage', async () => {
+  const f = fixture();
+  await f.cache.store([evidence()]);
+  for (const row of f.rows.values()) row.expired = true;
+  const result = await f.cache.searchWithDiagnostics!('family duties');
+  expect(result.evidence).toEqual([]);
+  expect(result.diagnostics).toMatchObject({
+    outcome: 'success',
+    parentCandidateCount: 0,
+    failureCodes: [],
   });
 });

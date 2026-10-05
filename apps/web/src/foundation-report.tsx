@@ -20,6 +20,7 @@ import {
   comparisonHighlights,
   editorialNotes,
   interpretationPresentation,
+  retrievalLimitation,
   reportFindings,
   sourceCollections,
   sourceComparisonText,
@@ -254,6 +255,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
     : selected?.source;
   const comparisonIsBound = !!selected && source?.snapshotKey === selected.finding.evidenceKey;
   const interpretation = interpretationPresentation(report);
+  const retrievalNotice = retrievalLimitation(report);
   const collections = sourceCollections(report);
   const notes = editorialNotes(report);
   const comparisonText = source ? sourceComparisonText(source, selected?.finding) : null;
@@ -325,6 +327,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
         </h2>
         <strong>{interpretation.label}</strong>
         <p>{interpretation.explanation}</p>
+        {retrievalNotice && <p role="note">{retrievalNotice}</p>}
         {report.semanticAssessment?.claims.map((claim) => {
           const finding = report.semanticAssessment!.assessments.find(
             (row) => row.claimId === claim.id,

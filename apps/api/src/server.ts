@@ -19,6 +19,10 @@ import { createWebGapDiscovery } from './web-gap-discovery.js';
 import { createResearchPageCache } from './research-page-cache.js';
 import { createResearchPagePassageIndex } from './research-page-passage-index.js';
 import { createPageTopicClassifier } from './page-topic-classifier.js';
+import {
+  createSourceContentStore,
+  assertContentViewDatabaseBinding,
+} from './source-content-store.js';
 import { withResearchPageCache } from './cached-gap-discovery.js';
 import { withResearchPageCorpus } from './cached-corpus.js';
 import { createTinyfishGapDiscovery } from './tinyfish-discovery.js';
@@ -78,13 +82,13 @@ if (reviewerAuth.configured !== Boolean(clerkFrontendApiOrigin))
 async function initializeFoundation() {
   const runtimeMode = foundationRuntimeMode(process.env, host);
   if (runtimeMode === 'disabled') return undefined;
-  const researchPreview = runtimeMode === 'local_research';
+  const researchPreview = ['local_research', 'hosted_research'].includes(runtimeMode);
   const hostedDemo = runtimeMode === 'hosted_demo';
   const researchEvidence = researchPreview || hostedDemo;
   // This opt-in uses only numeric verse references and the pinned Tafsir adapter.
-  // Hosted activation needs separate source-edition and deployment validation.
+  // Both research profiles retain provisional source/edition status.
   if (process.env.FOUNDATION_TAFSIR_LIVE === 'true' && !researchPreview)
-    throw new Error('LIVE_SOURCE_ACQUISITION_REQUIRES_LOCAL_RESEARCH_PREVIEW');
+    throw new Error('LIVE_SOURCE_ACQUISITION_REQUIRES_RESEARCH_PREVIEW');
   const semanticEnabled = process.env.FOUNDATION_SEMANTIC_ENABLED === 'true';
   const semanticBudget = semanticBudgetConfiguration(process.env, researchEvidence);
   if (semanticEnabled && !researchEvidence)
@@ -93,7 +97,14 @@ async function initializeFoundation() {
   const webDiscoveryEnabled = process.env.FOUNDATION_WEB_DISCOVERY_ENABLED === 'true';
   const webCacheEnabled = process.env.FOUNDATION_WEB_CACHE_ENABLED === 'true';
   const cachePassageEnabled = process.env.FOUNDATION_WEB_CACHE_PASSAGES_ENABLED === 'true';
+  const contentViewsEnabled = process.env.FOUNDATION_WEB_CACHE_CONTENT_VIEWS_ENABLED === 'true';
   if (cachePassageEnabled && !webCacheEnabled) throw Error('CACHE_PASSAGES_REQUIRE_WEB_CACHE');
+  if (contentViewsEnabled && !webCacheEnabled) throw Error('CONTENT_VIEWS_REQUIRE_WEB_CACHE');
+  if (
+    contentViewsEnabled &&
+    (process.env.FOUNDATION_CORPUS_TLS_MODE || 'verify-full') !== 'verify-full'
+  )
+    throw Error('CONTENT_VIEWS_REQUIRE_VERIFIED_TLS');
   const webProvider = process.env.FOUNDATION_WEB_PROVIDER ?? 'firecrawl';
   if (!['firecrawl', 'tinyfish_first'].includes(webProvider))
     throw new Error('WEB_DISCOVERY_PROVIDER_INVALID');
@@ -154,8 +165,8 @@ async function initializeFoundation() {
       corpusPool = new Pool({
         connectionString: corpusUrl.toString(),
         ssl: databaseTls(process.env.FOUNDATION_CORPUS_TLS_MODE || 'verify-full'),
-        max: 3,
-        connectionTimeoutMillis: 5_000,
+        max: semanticBudget.corpusPoolMax,
+        connectionTimeoutMillis: semanticBudget.corpusConnectionTimeoutMs,
         idleTimeoutMillis: 30_000,
       });
       const corpus = createHostedCorpus({
@@ -214,6 +225,11 @@ async function initializeFoundation() {
         if (semanticBudget.gapDiscoveryTimeoutMs < 65_000)
           throw new Error('WEB_CACHE_REQUIRES_EXTENDED_DISCOVERY_BUDGET');
         const cacheUrl = new URL(process.env.FOUNDATION_WEB_CACHE_DATABASE_URL);
+        if (contentViewsEnabled)
+          assertContentViewDatabaseBinding(
+            process.env.FOUNDATION_CORPUS_DATABASE_URL!,
+            process.env.FOUNDATION_WEB_CACHE_DATABASE_URL,
+          );
         if (!['postgres:', 'postgresql:'].includes(cacheUrl.protocol))
           throw new Error('WEB_CACHE_URL_INVALID');
         cacheUrl.searchParams.delete('sslmode');
@@ -229,10 +245,26 @@ async function initializeFoundation() {
           readerPool: corpusPool,
           writerPool: webCachePool,
           policy: sourcePolicy,
-          classify: createPageTopicClassifier({ apiKey: process.env.OPENROUTER_API_KEY }),
+          queryEmbeddingTimeoutMs: semanticBudget.cacheEmbeddingTimeoutMs,
+          statementTimeoutMs: semanticBudget.cacheSqlTimeoutMs,
+          classify: createPageTopicClassifier({
+            apiKey: process.env.OPENROUTER_API_KEY,
+            contentViews: contentViewsEnabled,
+          }),
+          ...(contentViewsEnabled
+            ? {
+                contentViews: createSourceContentStore({
+                  statementTimeoutMs: semanticBudget.contentSqlTimeoutMs,
+                  readerPool: corpusPool,
+                  writerPool: webCachePool,
+                  policy: sourcePolicy,
+                }),
+              }
+            : {}),
           ...(cachePassageEnabled
             ? {
                 passageIndex: createResearchPagePassageIndex({
+                  statementTimeoutMs: semanticBudget.passageSqlTimeoutMs,
                   readerPool: corpusPool,
                   policy: sourcePolicy,
                 }),
@@ -247,7 +279,9 @@ async function initializeFoundation() {
           timeoutMs: semanticBudget.gapDiscoveryTimeoutMs,
         });
         claimRetrieval = createClaimRetrievalAdapter({
-          corpus: withResearchPageCorpus(baseCorpus!, cache),
+          corpus: withResearchPageCorpus(baseCorpus!, cache, {
+            timeoutMs: semanticBudget.cacheTimeoutMs,
+          }),
           corpusVersion: selectedCorpusVersion!,
           researchPreview: researchEvidence,
           reserveDiscoveryKeys: true,
@@ -279,6 +313,7 @@ async function initializeFoundation() {
     return {
       worker,
       reports,
+      runtimeMode,
       researchPreview,
       hostedDemo,
       liveTafsir: process.env.FOUNDATION_TAFSIR_LIVE === 'true',
@@ -303,10 +338,9 @@ const rewriteEnabled = process.env.FOUNDATION_REWRITE_ENABLED === 'true';
 if (
   rewriteEnabled &&
   (!foundation?.researchPreview ||
-    process.env.NODE_ENV === 'production' ||
-    !['127.0.0.1', '::1'].includes(host))
+    !['local_research', 'hosted_research'].includes(foundation.runtimeMode))
 )
-  throw new Error('REWRITE_REQUIRES_LOCAL_RESEARCH_PREVIEW');
+  throw new Error('REWRITE_REQUIRES_RESEARCH_PREVIEW');
 const rewrite = rewriteEnabled
   ? createRewriteService(createAuthorRewriteGenerator(process.env.OPENROUTER_API_KEY ?? ''), {
       verifier: createAuthorRewriteVerifier(process.env.OPENROUTER_API_KEY ?? ''),

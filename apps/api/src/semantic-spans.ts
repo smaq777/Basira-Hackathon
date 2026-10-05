@@ -40,6 +40,36 @@ export function claimInventory(intake: FoundationIntake): ClaimInventory {
   const quotes = [
     ...intake.originalText.matchAll(/«[^«»]*»|﴿[^﴿﴾]*﴾|“[^“”]*”|"[^"\n]*"|\{[^{}]*\}/gu),
   ].map((match) => ({ start: match.index, end: match.index + match[0].length }));
+  // Recognized bracketed references are bibliographic framing, not assertions.
+  // Do not remove arbitrary brackets or parenthesized author qualifications.
+  const referenceKey = (text: string) =>
+    text
+      .replace(/[\u064b-\u065f\u0670ـ\s]/gu, '')
+      .replace(/[٠-٩]/gu, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
+  const references = new Set(intake.evidence.map((row) => referenceKey(row.reference)));
+  const namedQuranReferences = new Set(
+    intake.evidence
+      .filter((row) => row.sourceRole === 'quran_text')
+      .flatMap((row) =>
+        ['surah_name', 'surah_name_original'].flatMap((field) => {
+          const name = row.provenance[field];
+          return typeof name === 'string' && name.trim()
+            ? [referenceKey(`${name}:${row.reference}`)]
+            : [];
+        }),
+      ),
+  );
+  const citationRanges = [...intake.originalText.matchAll(/\[([^\[\]\n]{1,120})\]/gu)]
+    .filter((match) => {
+      // An inline reference must not cut a compound assertion before its qualifiers.
+      // Only a standalone/trailing bibliography at an explicit sentence boundary is removed.
+      const after = intake.originalText.slice(match.index + match[0].length);
+      if (!/^\s*(?:$|[.؛!?؟\n])/u.test(after)) return false;
+      const key = referenceKey(match[1]!);
+      return references.has(key) || namedQuranReferences.has(key);
+    })
+    .map((match) => ({ start: match.index, end: match.index + match[0].length }));
+  quotes.push(...citationRanges);
   // Parentheses are quotations only when introduced as reported source speech.
   // Parenthesized author conditions remain part of their assertion.
   const stack: number[] = [];
@@ -85,7 +115,9 @@ export function claimInventory(intake: FoundationIntake): ClaimInventory {
         excluded.push({
           startOffset: Math.max(sentenceStart, quote.start),
           endOffset: Math.min(sentenceEnd, quote.end),
-          reason: 'quotation',
+          reason: citationRanges.some((row) => row.start === quote.start && row.end === quote.end)
+            ? 'framing'
+            : 'quotation',
         });
         cursor = Math.max(cursor, quote.end);
       }

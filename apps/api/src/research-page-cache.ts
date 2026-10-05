@@ -1,14 +1,19 @@
+import {
+  CacheSearchDiagnosticsSchema,
+  type CacheSearchDiagnostics,
+} from '../../../packages/contracts/src/semantic-assessment.js';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import {
   SourceEvidenceSchema,
   type SourceEvidence,
 } from '../../../packages/contracts/src/foundation.js';
-import { sha256 } from './foundation.js';
+import { sha256, canonical } from './foundation.js';
 import { normalizeCorpusSearch } from './hosted-corpus.js';
 import type { LoadedSourcePolicy } from './source-policy.js';
 import { allowedWebUrl } from './web-discovery.js';
 import { sourceExtractionFailure } from './source-extraction-quality.js';
+import { SourceContentSelectionSchema } from '../../../packages/contracts/src/source-content.js';
 
 export const ResearchTopicSchema = z.enum([
   'aqidah',
@@ -28,8 +33,29 @@ export const PageClassificationSchema = z
     promptVersion: z.string().min(1).max(120),
     requestSha256: z.string().regex(/^[a-f0-9]{64}$/u),
     responseSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    contentSelection: SourceContentSelectionSchema.optional(),
+    contentViewStatus: z
+      .enum(['selected', 'original_retained_no_removal', 'original_retained_invalid_labels'])
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine((row) => {
+    const view = row.contentSelection;
+    if (!view)
+      return (
+        row.contentViewStatus === undefined ||
+        row.contentViewStatus === 'original_retained_invalid_labels'
+      );
+    return (
+      (row.contentViewStatus === 'selected' ||
+        row.contentViewStatus === 'original_retained_no_removal') &&
+      (row.contentViewStatus === 'selected') === view.removedBlocks.length > 0 &&
+      view.modelId === row.modelId &&
+      view.promptVersion === row.promptVersion &&
+      view.requestSha256 === row.requestSha256 &&
+      view.responseSha256 === row.responseSha256
+    );
+  });
 export type PageClassification = z.infer<typeof PageClassificationSchema>;
 export type ResearchPageCache = {
   store(
@@ -37,6 +63,10 @@ export type ResearchPageCache = {
     signal?: AbortSignal,
   ): Promise<{ storedKeys: string[]; failureCodes: string[] }>;
   search(query: string, signal?: AbortSignal): Promise<SourceEvidence[]>;
+  searchWithDiagnostics?(
+    query: string,
+    signal?: AbortSignal,
+  ): Promise<{ evidence: SourceEvidence[]; diagnostics: CacheSearchDiagnostics }>;
   restore(keys: readonly string[], signal?: AbortSignal): Promise<SourceEvidence[]>;
 };
 export function eligibleResearchPage(e: SourceEvidence, policy: LoadedSourcePolicy) {
@@ -68,11 +98,36 @@ export function createResearchPageCache(options: {
   passageIndex?: {
     search(query: string, vector: number[] | null, signal?: AbortSignal): Promise<SourceEvidence[]>;
   };
+  contentViews?: {
+    store(
+      source: SourceEvidence,
+      selection: z.infer<typeof SourceContentSelectionSchema>,
+      signal?: AbortSignal,
+    ): Promise<unknown>;
+    enrich(
+      sources: readonly SourceEvidence[],
+      query: string,
+      signal?: AbortSignal,
+    ): Promise<SourceEvidence[]>;
+  };
+  queryEmbeddingTimeoutMs?: number;
+  statementTimeoutMs?: number;
   ttlMs?: number;
   now?: () => number;
 }): ResearchPageCache {
   const policy = structuredClone(options.policy),
     now = options.now ?? Date.now;
+  const embeddingTimeoutMs = options.queryEmbeddingTimeoutMs ?? 1500;
+  const statementTimeoutMs = options.statementTimeoutMs ?? 5000;
+  if (
+    !Number.isInteger(embeddingTimeoutMs) ||
+    embeddingTimeoutMs < 1 ||
+    embeddingTimeoutMs > 8000 ||
+    !Number.isInteger(statementTimeoutMs) ||
+    statementTimeoutMs < 1 ||
+    statementTimeoutMs > 10000
+  )
+    throw Error('CACHE_SEARCH_BUDGET_INVALID');
   const ttl = options.ttlMs ?? 30 * 24 * 60 * 60 * 1000;
   if (!Number.isFinite(ttl) || ttl < 60000 || ttl > 30 * 24 * 60 * 60 * 1000)
     throw Error('CACHE_TTL_INVALID');
@@ -97,7 +152,7 @@ export function createResearchPageCache(options: {
       signal?.throwIfAborted();
       await client.query(readOnly ? 'begin read only' : 'begin');
       await client.query('set local role ' + role);
-      await client.query("set local statement_timeout='5000ms'");
+      await client.query("set local statement_timeout='" + statementTimeoutMs + "ms'");
       const value = await fn(client);
       signal?.throwIfAborted();
       await client.query('commit');
@@ -109,9 +164,222 @@ export function createResearchPageCache(options: {
       client.release();
     }
   }
+  async function searchDetailed(
+    query: string,
+    signal?: AbortSignal,
+  ): Promise<{
+    evidence: SourceEvidence[];
+    diagnostics: CacheSearchDiagnostics;
+    unavailableError?: unknown;
+  }> {
+    const started = Date.now();
+    const diagnostics: CacheSearchDiagnostics = {
+      outcome: 'success',
+      elapsedMs: 0,
+      parentCandidateCount: 0,
+      stages: {
+        embedding: 'disabled',
+        pages: 'disabled',
+        passages: 'disabled',
+        content: 'disabled',
+      },
+      failureCodes: [],
+    };
+    const done = (evidence: SourceEvidence[], unavailable = false, unavailableError?: unknown) => ({
+      evidence,
+      ...(unavailable ? { unavailableError } : {}),
+      diagnostics: CacheSearchDiagnosticsSchema.parse({
+        ...diagnostics,
+        outcome: unavailable
+          ? 'unavailable'
+          : diagnostics.failureCodes.length
+            ? 'partial'
+            : 'success',
+        elapsedMs: Math.min(240000, Math.max(0, Date.now() - started)),
+        parentCandidateCount: evidence.length,
+      }),
+    });
+    signal?.throwIfAborted();
+    const text = normalizeCorpusSearch(query);
+    if (!text) return done([]);
+    let vector: number[] | null = null;
+    if (options.embeddingSpace) {
+      // This per-call embedding ceiling leaves the remaining cache budget for SQL.
+      const budget = new AbortController();
+      const embeddingSignal = AbortSignal.any([budget.signal, ...(signal ? [signal] : [])]);
+      let embeddingTimedOut = false;
+      const timer = setTimeout(() => {
+        embeddingTimedOut = true;
+        budget.abort();
+      }, embeddingTimeoutMs);
+      let abort: (() => void) | undefined;
+      try {
+        vector = await new Promise<number[]>((resolve, reject) => {
+          abort = () => reject(new Error('CACHE_QUERY_EMBEDDING_TIMEOUT_OR_CANCELLED'));
+          embeddingSignal.addEventListener('abort', abort, { once: true });
+          if (embeddingSignal.aborted) {
+            abort();
+            return;
+          }
+          // Both handlers remain attached if an uncooperative provider settles late.
+          Promise.resolve()
+            .then(() => options.embeddingSpace!.embed(query.slice(0, 3000), embeddingSignal))
+            .then(resolve, reject);
+        });
+        diagnostics.stages!.embedding = 'success';
+      } catch {
+        signal?.throwIfAborted();
+        diagnostics.stages!.embedding = embeddingTimedOut ? 'timeout' : 'unavailable';
+        diagnostics.failureCodes.push(
+          embeddingTimedOut ? 'embedding_timeout' : 'embedding_unavailable',
+        );
+      } finally {
+        clearTimeout(timer);
+        if (abort) embeddingSignal.removeEventListener('abort', abort);
+      }
+    }
+    if (
+      vector &&
+      (vector.length !== 1536 ||
+        vector.some((v) => !Number.isFinite(v)) ||
+        vector.every((v) => v === 0))
+    ) {
+      vector = null;
+      diagnostics.stages!.embedding = 'invalid';
+      diagnostics.failureCodes.push('embedding_invalid');
+    }
+    const [pages, passages] = await Promise.allSettled([
+      tx(
+        options.readerPool,
+        'basirah_research_runtime',
+        true,
+        async (c) => {
+          const rows = (
+            await c.query(
+              `select evidence,word_similarity($2,search_text)>0.05 lexical_hit,($3::vector is not null and embedding_model=$4 and embedding is not null and 1-(embedding<=>$3::vector)>0.2) semantic_hit from basirah.research_page_cache where policy_sha256=$1 and expires_at>clock_timestamp() and revoked_at is null and (word_similarity($2,search_text)>0.05 or ($3::vector is not null and embedding_model=$4 and embedding is not null and 1-(embedding<=>$3::vector)>0.2)) order by greatest(word_similarity($2,search_text),case when embedding_model=$4 then 1-(embedding<=>$3::vector) else 0 end) desc,snapshot_key limit 8`,
+              [
+                policy.sha256,
+                text,
+                vector ? '[' + vector.join(',') + ']' : null,
+                options.embeddingSpace?.modelId ?? null,
+              ],
+            )
+          ).rows;
+          return rows
+            .map((r) => ({ e: decode(r), r }))
+            .filter(({ e }) => eligible(e))
+            .map(({ e, r }) => ({
+              ...e,
+              delivery: 'snapshot' as const,
+              retrievalModes: [
+                ...(r.lexical_hit ? ['lexical' as const] : []),
+                ...(r.semantic_hit ? ['semantic' as const] : []),
+              ],
+            }));
+        },
+        signal,
+      ),
+      options.passageIndex
+        ? options.passageIndex.search(query, vector, signal)
+        : Promise.resolve([]),
+    ]);
+    signal?.throwIfAborted();
+    diagnostics.stages!.pages = pages.status === 'fulfilled' ? 'success' : 'unavailable';
+    diagnostics.stages!.passages = options.passageIndex
+      ? passages.status === 'fulfilled'
+        ? 'success'
+        : 'unavailable'
+      : 'disabled';
+    if (passages.status === 'rejected') diagnostics.failureCodes.push('passages_unavailable');
+    if (pages.status === 'rejected') {
+      diagnostics.failureCodes.push('pages_unavailable');
+      return done([], true, pages.reason);
+    }
+    const rows = passages.status === 'fulfilled' ? passages.value : [];
+    const merged = new Map<string, SourceEvidence>();
+    // A partially populated passage index enriches context, but cannot displace
+    // the established parent ranking. Passage-only parents fill vacancies only.
+    for (const row of [...pages.value, ...rows]) {
+      const prior = merged.get(row.snapshotKey);
+      if (!prior) {
+        if (merged.size < 8) merged.set(row.snapshotKey, row);
+      } else if (
+        prior.originalSha256 === row.originalSha256 &&
+        prior.originalText === row.originalText &&
+        prior.sourceUrl === row.sourceUrl &&
+        prior.sourceId === row.sourceId &&
+        prior.sourceVersion === row.sourceVersion
+      )
+        merged.set(row.snapshotKey, {
+          ...prior,
+          retrievalModes: [...new Set([...prior.retrievalModes, ...row.retrievalModes])],
+          provenance: {
+            ...prior.provenance,
+            ...Object.fromEntries(
+              Object.entries(row.provenance).filter(([key]) =>
+                ['cachePassageHits', 'cachePassageQuerySha256', 'passageIndexCoverage'].includes(
+                  key,
+                ),
+              ),
+            ),
+          },
+        });
+    }
+    const results = [...merged.values()].slice(0, 8).map((row) =>
+      passages.status === 'rejected'
+        ? {
+            ...row,
+            provenance: {
+              ...row.provenance,
+              passageIndexStatus: 'unavailable_legacy_fallback',
+            },
+          }
+        : row,
+    );
+    if (!options.contentViews) return done(results);
+    try {
+      const enriched = await options.contentViews.enrich(results, query, signal);
+      if (
+        enriched.length !== results.length ||
+        enriched.some(
+          (e, i) =>
+            e.snapshotKey !== results[i]!.snapshotKey ||
+            e.originalSha256 !== results[i]!.originalSha256 ||
+            e.originalText !== results[i]!.originalText ||
+            e.sourceUrl !== results[i]!.sourceUrl ||
+            canonical(
+              Object.fromEntries(Object.entries(e).filter(([key]) => key !== 'provenance')),
+            ) !==
+              canonical(
+                Object.fromEntries(
+                  Object.entries(results[i]!).filter(([key]) => key !== 'provenance'),
+                ),
+              ),
+        )
+      )
+        throw Error('SOURCE_CONTENT_PARENT_RANK_CHANGED');
+      diagnostics.stages!.content = 'success';
+      return done(enriched);
+    } catch {
+      signal?.throwIfAborted();
+      diagnostics.stages!.content = 'unavailable';
+      diagnostics.failureCodes.push('content_unavailable');
+      return done(
+        results.map((row) => ({
+          ...row,
+          provenance: {
+            ...row.provenance,
+            sourceContentViewStatus: 'unavailable_original_fallback',
+          },
+        })),
+      );
+    }
+  }
+
   return {
     async store(inputs, signal) {
       const storedKeys: string[] = [];
+      const failureCodes: string[] = [];
       for (const input of inputs) {
         signal?.throwIfAborted();
         const e = SourceEvidenceSchema.parse(input);
@@ -122,6 +390,8 @@ export function createResearchPageCache(options: {
             'cachePassageHitsByQuery',
             'passageIndexCoverage',
             'passageIndexStatus',
+            'sourceContentSelection',
+            'sourceContentViewStatus',
           ].some((k) => Object.hasOwn(e.provenance, k))
         )
           throw Error('CACHE_TRANSIENT_PROVENANCE_FORBIDDEN');
@@ -222,6 +492,7 @@ export function createResearchPageCache(options: {
           'originMetadataStatus',
         ])
           if (e.provenance[name] !== undefined) provenance[name] = e.provenance[name];
+        const { contentSelection, contentViewStatus, ...topicClassification } = classification;
         const frozen = SourceEvidenceSchema.parse({
           snapshotKey: key,
           sourceId: e.sourceId,
@@ -243,7 +514,7 @@ export function createResearchPageCache(options: {
             ...provenance,
             cacheKind: 'public_research_page',
             topics: classification.topics,
-            topicClassification: classification,
+            topicClassification,
             machineLabelsOnly: true,
             scholarlyApproval: false,
             embeddingStatus,
@@ -275,7 +546,7 @@ export function createResearchPageCache(options: {
                 policy.sha256,
                 JSON.stringify(frozen),
                 classification.topics,
-                JSON.stringify(classification),
+                JSON.stringify(topicClassification),
                 normalizeCorpusSearch(e.originalText),
                 vector ? '[' + vector.join(',') + ']' : null,
                 vector ? options.embeddingSpace!.modelId : null,
@@ -296,120 +567,28 @@ export function createResearchPageCache(options: {
           signal,
         );
         storedKeys.push(key);
-      }
-      return { storedKeys, failureCodes: [] };
-    },
-    async search(query, signal) {
-      signal?.throwIfAborted();
-      const text = normalizeCorpusSearch(query);
-      if (!text) return [];
-      let vector: number[] | null = null;
-      if (options.embeddingSpace) {
-        // Leave time for lexical SQL inside the caller's three-second cache window.
-        const budget = new AbortController();
-        const embeddingSignal = AbortSignal.any([budget.signal, ...(signal ? [signal] : [])]);
-        const timer = setTimeout(() => budget.abort(), 1500);
-        let abort: (() => void) | undefined;
-        try {
-          vector = await new Promise<number[]>((resolve, reject) => {
-            abort = () => reject(new Error('CACHE_QUERY_EMBEDDING_TIMEOUT_OR_CANCELLED'));
-            embeddingSignal.addEventListener('abort', abort, { once: true });
-            if (embeddingSignal.aborted) {
-              abort();
-              return;
-            }
-            // Both handlers remain attached if an uncooperative provider settles late.
-            Promise.resolve()
-              .then(() => options.embeddingSpace!.embed(query.slice(0, 3000), embeddingSignal))
-              .then(resolve, reject);
-          });
-        } catch {
-          signal?.throwIfAborted();
-        } finally {
-          clearTimeout(timer);
-          if (abort) embeddingSignal.removeEventListener('abort', abort);
+        if (options.contentViews && contentViewStatus && contentViewStatus !== 'selected')
+          failureCodes.push('cache_content_view_' + contentViewStatus);
+        if (options.contentViews && contentSelection) {
+          try {
+            await options.contentViews.store(frozen, contentSelection, signal);
+          } catch {
+            signal?.throwIfAborted();
+            failureCodes.push('cache_content_view_unavailable');
+          }
         }
       }
-      if (vector && (vector.length !== 1536 || vector.some((v) => !Number.isFinite(v))))
-        throw Error('CACHE_EMBEDDING_INVALID');
-      const [pages, passages] = await Promise.allSettled([
-        tx(
-          options.readerPool,
-          'basirah_research_runtime',
-          true,
-          async (c) => {
-            const rows = (
-              await c.query(
-                `select evidence,word_similarity($2,search_text)>0.05 lexical_hit,($3::vector is not null and embedding_model=$4 and embedding is not null and 1-(embedding<=>$3::vector)>0.2) semantic_hit from basirah.research_page_cache where policy_sha256=$1 and expires_at>clock_timestamp() and revoked_at is null and (word_similarity($2,search_text)>0.05 or ($3::vector is not null and embedding_model=$4 and embedding is not null and 1-(embedding<=>$3::vector)>0.2)) order by greatest(word_similarity($2,search_text),case when embedding_model=$4 then 1-(embedding<=>$3::vector) else 0 end) desc,snapshot_key limit 8`,
-                [
-                  policy.sha256,
-                  text,
-                  vector ? '[' + vector.join(',') + ']' : null,
-                  options.embeddingSpace?.modelId ?? null,
-                ],
-              )
-            ).rows;
-            return rows
-              .map((r) => ({ e: decode(r), r }))
-              .filter(({ e }) => eligible(e))
-              .map(({ e, r }) => ({
-                ...e,
-                delivery: 'snapshot' as const,
-                retrievalModes: [
-                  ...(r.lexical_hit ? ['lexical' as const] : []),
-                  ...(r.semantic_hit ? ['semantic' as const] : []),
-                ],
-              }));
-          },
-          signal,
-        ),
-        options.passageIndex
-          ? options.passageIndex.search(query, vector, signal)
-          : Promise.resolve([]),
-      ]);
-      signal?.throwIfAborted();
-      if (pages.status === 'rejected') throw pages.reason;
-      const rows = passages.status === 'fulfilled' ? passages.value : [];
-      const merged = new Map<string, SourceEvidence>();
-      // A partially populated passage index enriches context, but cannot displace
-      // the established parent ranking. Passage-only parents fill vacancies only.
-      for (const row of [...pages.value, ...rows]) {
-        const prior = merged.get(row.snapshotKey);
-        if (!prior) {
-          if (merged.size < 8) merged.set(row.snapshotKey, row);
-        } else if (
-          prior.originalSha256 === row.originalSha256 &&
-          prior.originalText === row.originalText &&
-          prior.sourceUrl === row.sourceUrl &&
-          prior.sourceId === row.sourceId &&
-          prior.sourceVersion === row.sourceVersion
-        )
-          merged.set(row.snapshotKey, {
-            ...prior,
-            retrievalModes: [...new Set([...prior.retrievalModes, ...row.retrievalModes])],
-            provenance: {
-              ...prior.provenance,
-              ...Object.fromEntries(
-                Object.entries(row.provenance).filter(([key]) =>
-                  ['cachePassageHits', 'cachePassageQuerySha256', 'passageIndexCoverage'].includes(
-                    key,
-                  ),
-                ),
-              ),
-            },
-          });
-      }
-      return [...merged.values()].slice(0, 8).map((row) =>
-        passages.status === 'rejected'
-          ? {
-              ...row,
-              provenance: {
-                ...row.provenance,
-                passageIndexStatus: 'unavailable_legacy_fallback',
-              },
-            }
-          : row,
-      );
+      return { storedKeys, failureCodes };
+    },
+    async searchWithDiagnostics(query, signal) {
+      const { evidence, diagnostics } = await searchDetailed(query, signal);
+      return { evidence, diagnostics };
+    },
+    async search(query, signal) {
+      const result = await searchDetailed(query, signal);
+      if (result.diagnostics.outcome === 'unavailable')
+        throw result.unavailableError ?? Error('CACHE_SEARCH_UNAVAILABLE');
+      return result.evidence;
     },
     async restore(keys, signal) {
       signal?.throwIfAborted();

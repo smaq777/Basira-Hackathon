@@ -1,10 +1,66 @@
 import { z } from 'zod';
+import { SourceContentSelectionSchema } from './source-content.js';
+const CacheChunkerVersion = z.enum(['cache-sentence-context-v1', 'exact-content-block-context-v1']);
 
-export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.8';
-export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.8';
+export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.9';
+export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.9';
 
 const EvidenceKeys = z.array(z.string().min(1).max(160)).max(20);
 const Details = z.array(z.string().min(1).max(500)).max(6);
+
+const CacheStage = z.enum(['disabled', 'success', 'timeout', 'unavailable', 'invalid']);
+export const CacheSearchDiagnosticsSchema = z
+  .object({
+    outcome: z.enum(['success', 'partial', 'timeout', 'unavailable']),
+    elapsedMs: z.number().int().nonnegative().max(240000),
+    budgetMs: z.number().int().positive().max(30000).optional(),
+    parentCandidateCount: z.number().int().nonnegative().max(8),
+    selectedParentCount: z.number().int().nonnegative().max(2).optional(),
+    deduplicatedParentCount: z.number().int().nonnegative().max(8).optional(),
+    stages: z
+      .object({
+        embedding: CacheStage,
+        pages: CacheStage,
+        passages: CacheStage,
+        content: CacheStage,
+      })
+      .strict()
+      .optional(),
+    failureCodes: z
+      .array(
+        z.enum([
+          'cache_timeout',
+          'cache_unavailable',
+          'embedding_timeout',
+          'embedding_unavailable',
+          'embedding_invalid',
+          'pages_unavailable',
+          'passages_unavailable',
+          'content_unavailable',
+        ]),
+      )
+      .max(8),
+  })
+  .strict()
+  .refine(
+    (value) => value.outcome !== 'success' || value.failureCodes.length === 0,
+    'Successful cache retrieval cannot include failure codes',
+  )
+  .refine(
+    (value) => (value.selectedParentCount ?? 0) <= value.parentCandidateCount,
+    'Selected cache parents must be candidates',
+  );
+export type CacheSearchDiagnostics = z.infer<typeof CacheSearchDiagnosticsSchema>;
+export const CacheRestoreDiagnosticsSchema = z
+  .object({
+    outcome: z.enum(['success', 'timeout', 'unavailable']),
+    elapsedMs: z.number().int().nonnegative().max(240000),
+    budgetMs: z.number().int().positive().max(30000),
+    restoredParentCount: z.number().int().nonnegative().max(100),
+    failureCodes: z.array(z.enum(['cache_timeout', 'cache_unavailable'])).max(2),
+  })
+  .strict();
+export type CacheRestoreDiagnostics = z.infer<typeof CacheRestoreDiagnosticsSchema>;
 
 export const ExtractedClaimProposalSchema = z
   .object({
@@ -18,6 +74,46 @@ export const ClaimExtractionOutputSchema = z
     claims: z.array(ExtractedClaimProposalSchema).max(5),
   })
   .strict();
+
+/** v1.9 wire aliases are translated only through the request-owned canonical map. */
+export const AliasedClaimSelectionOutputSchema = z
+  .object({
+    claims: z
+      .array(
+        z
+          .object({
+            candidateId: z.string().regex(/^C[1-9][0-9]{0,3}$/u),
+            evidenceKeys: z.array(z.string().regex(/^E[1-9][0-9]{0,3}$/u)).max(20),
+          })
+          .strict(),
+      )
+      .max(5),
+  })
+  .strict();
+export const SelectionBindingDiagnosticsSchema = z
+  .object({
+    protocol: z.literal('exact-selection-alias-v1'),
+    attempt: z.enum(['initial', 'empty_reconsideration']),
+    aliasMapSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    payloadSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    proposalCount: z.number().int().nonnegative().max(5),
+    acceptedCount: z.number().int().nonnegative().max(5),
+    rejectedCount: z.number().int().nonnegative().max(5),
+    rejectionCounts: z
+      .object({
+        unknown_candidate_alias: z.number().int().nonnegative().max(5),
+        unknown_evidence_alias: z.number().int().nonnegative().max(5),
+        duplicate_candidate_alias: z.number().int().nonnegative().max(5),
+        duplicate_evidence_alias: z.number().int().nonnegative().max(5),
+      })
+      .strict(),
+  })
+  .strict()
+  .refine(
+    (row) => row.acceptedCount + row.rejectedCount === row.proposalCount,
+    'Selection counts must cover all proposals',
+  );
+export type SelectionBindingDiagnostics = z.infer<typeof SelectionBindingDiagnosticsSchema>;
 
 /** v1.7 selects server-owned spans; the legacy proposal schema remains readable. */
 export const ClaimSelectionOutputSchema = z
@@ -59,7 +155,8 @@ export const CachePassagePreferenceSchema = z
     evidenceKey: z.string().min(1).max(160),
     originalSha256: z.string().regex(/^[a-f0-9]{64}$/u),
     querySha256: z.string().regex(/^[a-f0-9]{64}$/u),
-    chunkerVersion: z.literal('cache-sentence-context-v1'),
+    chunkerVersion: CacheChunkerVersion,
+    contentSelection: SourceContentSelectionSchema.optional(),
     hits: z
       .array(
         z
@@ -67,7 +164,7 @@ export const CachePassagePreferenceSchema = z
             passageId: z.string().regex(/^cache-passage:[a-f0-9]{48}$/u),
             originalSha256: z.string().regex(/^[a-f0-9]{64}$/u),
             passageSha256: z.string().regex(/^[a-f0-9]{64}$/u),
-            chunkerVersion: z.literal('cache-sentence-context-v1'),
+            chunkerVersion: CacheChunkerVersion,
             startOffset: z.number().int().nonnegative(),
             endOffset: z.number().int().positive(),
           })
@@ -77,7 +174,7 @@ export const CachePassagePreferenceSchema = z
       .max(3),
     coverage: z
       .object({
-        chunkerVersion: z.literal('cache-sentence-context-v1'),
+        chunkerVersion: CacheChunkerVersion,
         passageCount: z.number().int().positive().max(32),
         coveredUtf16Units: z.number().int().positive().max(30000),
         totalUtf16Units: z.number().int().positive().max(30000),
@@ -203,6 +300,7 @@ export const SemanticAssessmentReportSchema = z
           'provisional-semantic-v1.5',
           'provisional-semantic-v1.6',
           'provisional-semantic-v1.7',
+          'provisional-semantic-v1.8',
           SEMANTIC_PIPELINE_VERSION,
         ]),
         promptVersion: z.enum([
@@ -213,6 +311,7 @@ export const SemanticAssessmentReportSchema = z
           'evidence-support-v1.5',
           'evidence-support-v1.6',
           'evidence-support-v1.7',
+          'evidence-support-v1.8',
           SEMANTIC_PROMPT_VERSION,
         ]),
         inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),
@@ -270,10 +369,21 @@ export const SemanticAssessmentReportSchema = z
           .string()
           .regex(/^[a-f0-9]{64}$/u)
           .nullable(),
+        selectionBinding: z.array(SelectionBindingDiagnosticsSchema).max(2).optional(),
         selectionRecovery: z
           .object({
             outcome: z.enum(['recovered', 'still_empty', 'budget_skipped', 'failed']),
             candidateCount: z.number().int().positive().max(1500),
+          })
+          .strict()
+          .optional(),
+        retrievalBudget: z
+          .object({
+            outcome: z.enum(['completed', 'budget_skipped', 'timeout', 'unavailable']),
+            configuredMs: z.number().int().positive().max(90000),
+            appliedMs: z.number().int().nonnegative().max(90000),
+            assessmentReserveMs: z.number().int().nonnegative().max(90000),
+            elapsedMs: z.number().int().nonnegative().max(240000),
           })
           .strict()
           .optional(),
@@ -294,6 +404,7 @@ export const SemanticAssessmentReportSchema = z
             corpusVersion: z.string().min(1).max(120),
             mode: z.enum(['approved', 'local_research']),
             passagePreferences: z.array(CachePassagePreferenceSchema).max(40).optional(),
+            cacheRestore: CacheRestoreDiagnosticsSchema.optional(),
             queries: z
               .array(
                 z
@@ -302,8 +413,16 @@ export const SemanticAssessmentReportSchema = z
                     querySha256: z.string().regex(/^[a-f0-9]{64}$/u),
                     modes: z.array(z.enum(['exact', 'lexical', 'semantic'])).max(3),
                     candidateKeys: z.array(z.string().min(1).max(160)).max(12),
+                    selectedCandidateKeys: EvidenceKeys.optional(),
+                    cache: CacheSearchDiagnosticsSchema.optional(),
                   })
-                  .strict(),
+                  .strict()
+                  .refine(
+                    (value) =>
+                      !value.selectedCandidateKeys ||
+                      value.selectedCandidateKeys.every((key) => value.candidateKeys.includes(key)),
+                    'Selected keys must be query candidates',
+                  ),
               )
               .max(15),
           })

@@ -2,6 +2,13 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 describe('isolated Vercel staging routing', () => {
+  it('restricts every staging workflow job to development, including manual dispatch', () => {
+    const workflow = readFileSync('.github/workflows/deploy-staging.yml', 'utf8');
+    const conditions = [...workflow.matchAll(/^    if: (.+)$/gmu)].map((row) => row[1]);
+    expect(conditions).toHaveLength(3);
+    for (const condition of conditions)
+      expect(condition).toContain("github.ref == 'refs/heads/development'");
+  });
   it('proxies only API paths to the fixed staging service without a frontend fallback', () => {
     const config = JSON.parse(readFileSync('vercel.staging.json', 'utf8'));
     expect(config.rewrites).toEqual([
