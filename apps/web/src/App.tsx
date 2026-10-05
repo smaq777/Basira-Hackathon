@@ -30,7 +30,6 @@ import { MagnifyingGlass } from '@phosphor-icons/react/MagnifyingGlass';
 import { Microphone } from '@phosphor-icons/react/Microphone';
 import { PaperPlaneTilt } from '@phosphor-icons/react/PaperPlaneTilt';
 import { PencilSimple } from '@phosphor-icons/react/PencilSimple';
-import { Quotes } from '@phosphor-icons/react/Quotes';
 import { ShieldCheck } from '@phosphor-icons/react/ShieldCheck';
 import { SignOut } from '@phosphor-icons/react/SignOut';
 import { Sparkle } from '@phosphor-icons/react/Sparkle';
@@ -688,54 +687,37 @@ function HomeScreen({
 
         <section className="section-block" id="how" aria-labelledby="benefits-heading">
           <div className="section-intro">
-            <p className="eyebrow">لماذا بصيرة؟</p>
-            <h2 id="benefits-heading">مراجعة واضحة بالدليل وحدوده</h2>
-            <p>ست إشارات مركزة تساعد الكاتب والمراجع على اتخاذ قرار واعٍ قبل النشر.</p>
+            <p className="eyebrow">كيف تعمل بصيرة؟</p>
+            <h2 id="benefits-heading">ثلاث خطوات لمراجعة أوضح</h2>
+            <p>أضف النص، راجع الدليل، ثم حسّن الصياغة قبل النشر.</p>
           </div>
-          <div className="capabilities" aria-label="ما الذي تراجعه بصيرة">
-            <article>
-              <span className="icon-disc">
-                <Quotes size={30} />
-              </span>
-              <h2>دقة الاقتباس</h2>
-              <p>مطابقة النص ونسبته</p>
-            </article>
+          <div className="review-steps" aria-label="خطوات المراجعة في بصيرة">
             <article>
               <span className="icon-disc">
                 <FileText size={30} />
               </span>
-              <h2>دعم الاستنتاج</h2>
-              <p>هل يدعم الدليل النتيجة؟</p>
+              <h3>أضف النص</h3>
+              <p>ألصق المنشور أو جزءًا منه.</p>
             </article>
             <article>
               <span className="icon-disc">
-                <BookOpen size={30} />
+                <MagnifyingGlass size={30} />
               </span>
-              <h2>مصادر قابلة للتتبع</h2>
-              <p>عرض المرجع بوضوح</p>
-            </article>
-            <article>
-              <span className="icon-disc">
-                <Sparkle size={30} />
-              </span>
-              <h2>رصد أولي مباشر</h2>
-              <p>تحديد مواضع تحتاج انتباهك</p>
+              <h3>راجع الدليل</h3>
+              <p>تعرّف على مصدر الاقتباس ومدى دعم الأدلة للاستنتاج.</p>
             </article>
             <article>
               <span className="icon-disc">
                 <PencilSimple size={30} />
               </span>
-              <h2>صياغة قابلة للتحرير</h2>
-              <p>اقتراح لا يُعتمد تلقائيًا</p>
-            </article>
-            <article>
-              <span className="icon-disc">
-                <UsersThree size={30} />
-              </span>
-              <h2>مراجعة بشرية عند الحاجة</h2>
-              <p>تصعيد اختياري عندما لا تكفي النتيجة</p>
+              <h3>حسّن الصياغة</h3>
+              <p>احصل على ملاحظات عملية لتقوية النص قبل النشر.</p>
             </article>
           </div>
+          <p className="review-steps-note">
+            <Info size={18} aria-hidden="true" /> أداة مساعدة للمراجعة، وليست فتوى أو اعتمادًا
+            للنشر.
+          </p>
         </section>
 
         <section className="faq-section" id="faq">
@@ -858,7 +840,7 @@ function PartnerLogoGroup({ duplicate = false }: { duplicate?: boolean }) {
           src={partner.src}
           alt={duplicate ? '' : partner.alt}
           className={partner.className}
-          loading="lazy"
+          loading="eager"
           decoding="async"
         />
       ))}

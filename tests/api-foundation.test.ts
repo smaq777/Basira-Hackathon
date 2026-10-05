@@ -161,6 +161,9 @@ it('preserves script-like text as data and rejects malformed text before storage
   const response = await post(base, '/api/v1/documents', { text: literal });
   expect(response.status).toBe(201);
   expect(response.headers.get('content-security-policy')).toContain("object-src 'none'");
+  expect(response.headers.get('content-security-policy')).toContain(
+    "img-src 'self' data: https://islamicaich.org",
+  );
   expect(response.headers.get('x-content-type-options')).toBe('nosniff');
   expect(database.createDocument).toHaveBeenLastCalledWith(sessionId, secret, literal);
   database.createDocument.mockClear();
