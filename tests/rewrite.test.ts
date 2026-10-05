@@ -20,6 +20,18 @@ export function rewriteFixture() {
 }
 const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
 
+it('does not warn about unavailable claim assessment when the report identifies quotation-only writing', async () => {
+  const report = rewriteFixture();
+  report.interpretation.status = 'not_applicable';
+  report.interpretation.applicability = { status: 'not_applicable', reason: 'quotation_only' };
+  const context = { report, attempt: 1 };
+  const service = createRewriteService(async () => ({ paragraphBreaks: [], citations: [] }));
+  const candidate = service.create('owner', 'quote-only', context, async () => context);
+  await settle();
+  expect(service.get('owner', candidate.id, context).unresolved).toEqual([]);
+  service.close();
+});
+
 it('preserves all original letters, quotes, qualifiers, literal markup and emoji while adding an actual pending reference', () => {
   const report = rewriteFixture();
   const citation = rewriteInput(report).allowedCitations[0]!;
