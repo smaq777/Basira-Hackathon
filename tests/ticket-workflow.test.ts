@@ -179,6 +179,26 @@ it('creates a direct human-review ticket for an owned revision without an automa
   );
 });
 
+it('updates ticket contact through the refined contact schema', async () => {
+  const store = storeFixture();
+  const { base } = await serve(store);
+  const response = await fetch(`${base}/api/v1/tickets/${code}/contact`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ email: 'OWNER@Example.com', name: 'صالح', notify: true }),
+  });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ ticketCode: code, hasEmail: true });
+  expect(store.updateContact).toHaveBeenCalledWith(
+    sessionId,
+    secret,
+    code,
+    expect.any(Buffer),
+    expect.any(Buffer),
+    true,
+  );
+});
+
 it('keeps wrong ticket-email pairs indistinguishable and rate-limits enumeration', async () => {
   const store = storeFixture();
   const { base } = await serve(store);
