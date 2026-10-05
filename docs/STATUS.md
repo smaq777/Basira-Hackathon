@@ -24,6 +24,14 @@ Source approval, broader scholarly evaluation, production activation and
 AI-ReWrite remain gated. Historical baseline entries below describe their dated
 verification rather than the current development implementation.
 
+**Staging connection diagnostic, 5 October:** [Issue #69 evidence](evidence/2026-10-05-staging-api-routing.md)
+verified that the reported Vercel frontend returns 404 for API routes while the
+Railway staging API is reachable at migration 0005 and does not advertise
+`foundationReview`. A separately selected staging proxy configuration and clearer
+client readiness/errors are implemented for review. Deployment and PR #59's
+connected source-report readiness remain separate gates; follow the
+[staging runbook](operations/STAGING_CONNECTION.md).
+
 Baseline date: **3 October 2026**. See live issues and PR checks for subsequent progress.
 
 **Local implementation update, 4 October:** Issue #14 adds a default-off source-review

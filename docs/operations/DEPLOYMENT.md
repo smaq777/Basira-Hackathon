@@ -47,6 +47,15 @@ Create an isolated non-production environment. Verify pgvector and pg_trgm suppo
 
 ## Optional Vercel split frontend
 
+Issue #69 adds a separately selected staging configuration with a fixed
+same-origin API proxy. See the [staging connection runbook](STAGING_CONNECTION.md)
+and [read-only diagnostic](../evidence/2026-10-05-staging-api-routing.md).
+`vercel.staging.json` is selected explicitly by the gated staging workflow or
+Preview CLI commands; root `vercel.json` and production remain a static shell.
+The proxy repairs baseline API routing, not foundation-worker readiness or
+deployment of draft PR #59. Direct cross-origin frontend/API hosting still
+requires the additional controls described below.
+
 `vercel.json` builds the frontend shell into `apps/web/dist`. The workflows use `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID`; the preferred Vercel bot path is the verified GitHub integration. A real split deployment needs an implemented `VITE_API_BASE_URL`, allowed origins, secure cookie policy and CSRF assessment. These are not present in the foundation template. Check the selected Vercel plan's collaboration restrictions before inviting a second developer; do not assume account “Pro” on GitHub covers Vercel.
 
 The repository contains the Vercel configuration and workflow integration points, but provider-side GitHub access has not yet been verified for this repository. Configure `main` as the production source and `development` or pull requests as preview sources only after the provider connection is read back. `VITE_SESSION_VOICE_ENABLED=true` is intended for Preview-only public configuration; Production should have no value. Copilot review and the Vercel deployment bot are separate checks; neither replaces the owner or scholarly review.
