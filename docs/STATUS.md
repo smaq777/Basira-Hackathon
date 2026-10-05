@@ -17,6 +17,11 @@ support before copy. The UI shows changed wording and limited coverage. Copy
 reloads ownership/report/attempt binding and revalidates the candidate and stored
 verification hash. The shared deadline is 90 seconds; storage remains
 session-bound memory. See [evidence](evidence/2026-10-05-substantive-rewrite.md).
+An actual UI modality false acceptance prompted verifier schema version 2 and
+explicit obligation/not-required preservation checks. The known candidate was
+rejected in two paid repeats while equivalent explicit wording passed;
+this selected diagnostic does not establish general reliable preservation.
+See [follow-up evidence](evidence/2026-10-05-rewrite-modality.md).
 
 Draft PR #59 now connects the current UI to persisted review reports, local quotation lookup, live Tafsir context, OpenRouter claim assessment, and a persistent isolated Neon hybrid-retrieval corpus. Optional gap-triggered Firecrawl acquisition is controlled by `config/source-policy.json`; UI follow-up is assigned to Saleh in [#68](https://github.com/smaq777/Basira-Hackathon/issues/68). Features remain research-only/default-off and are not deployed or owner-accepted merely because local checks pass.
 

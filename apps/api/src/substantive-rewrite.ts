@@ -168,7 +168,8 @@ export function validateAuthorVerification(
       !check.conditionsPreserved ||
       !check.negationsPreserved ||
       !check.exceptionsPreserved ||
-      !check.scopePreserved
+      !check.scopePreserved ||
+      !check.modalityPreserved
     )
       throw new RewriteError('REWRITE_INVALID_CANDIDATE');
     const seenCitations = new Set<string>();
