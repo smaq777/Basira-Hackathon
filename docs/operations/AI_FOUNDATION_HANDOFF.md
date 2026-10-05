@@ -79,8 +79,8 @@ copied roles, rewrite migration history or run production migrations to bypass i
 
 ## Cleaning implementation and isolated validation
 
-Cleaning is a separate, default-off implementation at frozen commit
-`0c04dcfd116c93ab73d76e75f4a5a9d9aa8272be`, with 50 test files / 640 tests and
+Cleaning is a separate, default-off implementation in PR #85 at reviewed commit
+`ae11c0dabd69b4a3f67931c2467c0b625b7b5d1b`, with 51 test files / 654 tests and
 type, documentation, policy, formatting and build checks passing. The same Luna
 request returns topics and exact block labels. Only model agreement plus a
 structural navigation/audio check permits removal; article prose, citations,
@@ -101,11 +101,30 @@ synthetic records were rolled back. No classifier calls or durable cleaned-page
 records were produced. Preserve this failure; passing unit tests did not establish
 database operation.
 
-Current development already contains `0013_secure_review_tickets.sql`. The
-cleaning integration must use the next unique migration number and repair the SQL
-ambiguity. Do not rewrite the applied experimental migration or deploy the frozen
-cleaning branch as-is. Repeat the reviewed role/integrity checks on a separate
-child before the declared four-page, two-repeat classifier test.
+Current development already contains `0013_secure_review_tickets.sql`.
+Corrected cleaning uses `0014_source_content_views.sql`; it preserves the accepted
+ticket migration and keeps the earlier experiment in immutable Git history.
+
+A fresh child `br-little-pond-b2y5usie`, direct endpoint
+`ep-long-frost-b2ebbc7n.c-6.eu-central-1.aws.neon.tech`, database
+`basirah_research`, was copied from the passage-validation parent. It expires on
+12 October 2026. Ordered ticket 0013/cleaning 0014 migrations and all 14 actual-role
+integrity checks passed there. Synthetic records were rolled back. The failed
+child remains unchanged and is not the repaired test target.
+
+Eight real joint Luna calls on four exact public originals returned valid results.
+Pages 8880/8881 each removed 11 player/audio/unrelated footer blocks; repeats chose
+the same removed IDs. The corrective footnote on 11647 and conditional discussion
+on 19992 were retained whole. Topic labels varied on 8880, so this is selected
+engineering evidence, not general semantic accuracy or scholarly approval.
+
+Only first-repeat selections were admitted: four immutable views and eight exact
+windows on the fresh child. All 16 original cache records and eight older windows
+and vectors were read back unchanged. The real reader/enrichment adapter returned
+six validated hints for 8880/8881 and left both no-removal controls identical.
+This does not establish whole-UI delivery. No active app, parent, production or
+owning environment was changed. Cleaning stays off until #17 delivery budgets and
+an integrated UI test pass. Existing vectors have not been relabelled or regenerated.
 
 Use the database's checked-in migration metadata and the existing verification
 script. To inspect the selected corpus without writing:
