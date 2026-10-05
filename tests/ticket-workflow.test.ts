@@ -81,7 +81,7 @@ function storeFixture() {
 }
 
 async function serve(store: TicketStore, reviewerAuth?: ReviewerAuthGateway) {
-  const notification = { notify: vi.fn() };
+  const notification = { notify: vi.fn(), sendReceipt: vi.fn().mockResolvedValue(undefined) };
   const server = createApp({
     database,
     reviewerAuth,
@@ -181,7 +181,7 @@ it('creates a direct human-review ticket for an owned revision without an automa
 
 it('updates ticket contact through the refined contact schema', async () => {
   const store = storeFixture();
-  const { base } = await serve(store);
+  const { base, notification } = await serve(store);
   const response = await fetch(`${base}/api/v1/tickets/${code}/contact`, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json', cookie },
@@ -197,6 +197,28 @@ it('updates ticket contact through the refined contact schema', async () => {
     expect.any(Buffer),
     true,
   );
+  expect(notification.sendReceipt).toHaveBeenCalledWith({
+    email: 'owner@example.com',
+    name: 'صالح',
+    ticketCode: code,
+  });
+});
+
+it('reports a recoverable error when contact is saved but receipt email delivery fails', async () => {
+  const store = storeFixture();
+  const { base, notification } = await serve(store);
+  notification.sendReceipt.mockRejectedValueOnce(new Error('BREVO_HTTP_503'));
+  const response = await fetch(`${base}/api/v1/tickets/${code}/contact`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ email: 'owner@example.com', notify: true }),
+  });
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({
+    code: 'TICKET_CONTACT_SAVED_EMAIL_FAILED',
+    ticketCode: code,
+  });
+  expect(store.updateContact).toHaveBeenCalledTimes(1);
 });
 
 it('keeps wrong ticket-email pairs indistinguishable and rate-limits enumeration', async () => {
@@ -305,4 +327,21 @@ it('sends Brevo mail without reflecting unescaped contact HTML', async () => {
   expect(body.htmlContent).toContain('&lt;img src=x&gt;');
   expect(body.htmlContent).not.toContain('<img src=x>');
   expect(body.textContent).toContain(code);
+
+  await mailer.sendReceipt({
+    email: 'user@example.com',
+    name: '<img src=x>',
+    ticketCode: code,
+  });
+  const receiptBody = JSON.parse(String(request.mock.calls[1]?.[1]?.body)) as {
+    htmlContent: string;
+    subject: string;
+    tags: string[];
+    textContent: string;
+  };
+  expect(receiptBody.subject).toContain(code);
+  expect(receiptBody.htmlContent).toContain('&lt;img src=x&gt;');
+  expect(receiptBody.htmlContent).not.toContain('<img src=x>');
+  expect(receiptBody.textContent).toContain('/#/follow-up');
+  expect(receiptBody.tags).toEqual(['basirah-ticket-receipt']);
 });
