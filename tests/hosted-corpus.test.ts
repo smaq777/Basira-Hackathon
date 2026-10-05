@@ -55,6 +55,26 @@ describe('hosted evidence boundaries', () => {
     expect(results[0]?.sourceId).toBe('original:source');
     expect(results[0]?.author).toBeNull();
     expect(results[0]?.edition).toBeNull();
+    expect(
+      f.query.mock.calls.some(([sql]) =>
+        String(sql).includes("case p.source_role when 'quran_text' then 0"),
+      ),
+    ).toBe(true);
+  });
+  it('drops an orphaned explicit child instead of failing report persistence', async () => {
+    const parent = row('quran-anchor');
+    const orphan = {
+      ...row('tafsir-orphan', 'tafsir_commentary'),
+      parent_snapshot_key: 'missing-quran-anchor',
+    };
+    const f = fixture([parent, orphan]);
+    const corpus = createHostedCorpus({
+      pool: f.pool,
+      corpusVersion: 'synthetic-v1',
+      researchPreview: true,
+    });
+    const results = await corpus.search('Quoted text', ['31:15']);
+    expect(results.map((result) => result.snapshotKey)).toEqual(['quran-anchor']);
   });
   it('rejects corrupted stored originals and always rolls back/releases', async () => {
     const f = fixture([], [{ ...row('tampered'), original_text: 'changed' }]);

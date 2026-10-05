@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { createPythonAdapter, type FoundationAdapter } from './foundation.js';
 import { createHostedDraftAdapter, foundationRuntimeMode } from './hosted-foundation.js';
+import { withLiveTafsirMcp } from './tafsir-mcp.js';
 import { createReviewStore } from './review-store.js';
 import { createFoundationWorker } from './review-worker.js';
 import { createSemanticAssessmentAdapter } from './semantic-assessment.js';
@@ -84,14 +85,16 @@ async function initializeFoundation() {
   if (runtimeMode === 'disabled') return undefined;
   const researchPreview = ['local_research', 'hosted_research'].includes(runtimeMode);
   const hostedDemo = runtimeMode === 'hosted_demo';
-  const researchEvidence = researchPreview || hostedDemo;
+  const hostedProduction = runtimeMode === 'hosted_production';
+  const hostedRuntime = hostedDemo || hostedProduction;
+  const researchEvidence = researchPreview || hostedRuntime;
   // This opt-in uses only numeric verse references and the pinned Tafsir adapter.
   // Both research profiles retain provisional source/edition status.
-  if (process.env.FOUNDATION_TAFSIR_LIVE === 'true' && !researchPreview)
+  if (process.env.FOUNDATION_TAFSIR_LIVE === 'true' && !researchPreview && !hostedProduction)
     throw new Error('LIVE_SOURCE_ACQUISITION_REQUIRES_RESEARCH_PREVIEW');
   const semanticEnabled = process.env.FOUNDATION_SEMANTIC_ENABLED === 'true';
   const semanticBudget = semanticBudgetConfiguration(process.env, researchEvidence);
-  if (semanticEnabled && !researchEvidence)
+  if (semanticEnabled && !researchEvidence && !hostedProduction)
     throw new Error('SEMANTIC_PILOT_REQUIRES_RESEARCH_PROFILE');
   const retrievalEnabled = process.env.FOUNDATION_CLAIM_RETRIEVAL_ENABLED === 'true';
   const webDiscoveryEnabled = process.env.FOUNDATION_WEB_DISCOVERY_ENABLED === 'true';
@@ -121,7 +124,7 @@ async function initializeFoundation() {
     !connectionString ||
     !workerUrl ||
     (researchPreview && (!python || !sourceDatabase)) ||
-    (hostedDemo && !hostedCorpusVersion)
+    (hostedRuntime && !hostedCorpusVersion)
   )
     throw new Error('FOUNDATION_CONFIGURATION_INCOMPLETE');
   const readiness = await database.readiness();
@@ -166,10 +169,13 @@ async function initializeFoundation() {
         },
       });
       if (!(await corpus.readiness()).ready) throw new Error('HOSTED_CORPUS_NOT_READY');
-      baseCorpus = corpus;
+      baseCorpus =
+        hostedRuntime && process.env.FOUNDATION_TAFSIR_LIVE === 'true'
+          ? withLiveTafsirMcp(corpus)
+          : corpus;
       selectedCorpusVersion = corpusVersion;
       claimRetrieval = createClaimRetrievalAdapter({
-        corpus,
+        corpus: baseCorpus,
         corpusVersion,
         researchPreview: researchEvidence,
         reserveDiscoveryKeys: webDiscoveryEnabled,
@@ -272,8 +278,8 @@ async function initializeFoundation() {
         });
       }
     }
-    adapter = hostedDemo
-      ? createHostedDraftAdapter(hostedCorpusVersion!, baseCorpus)
+    adapter = hostedRuntime
+      ? createHostedDraftAdapter(hostedCorpusVersion!, baseCorpus, !hostedProduction)
       : createPythonAdapter({
           python: python!,
           script: resolve('apps/foundation_worker/intake_bridge.py'),
@@ -317,6 +323,7 @@ async function initializeFoundation() {
       runtimeMode,
       researchPreview,
       hostedDemo,
+      hostedProduction,
       liveTafsir: process.env.FOUNDATION_TAFSIR_LIVE === 'true',
       semanticPilot: semanticEnabled,
       webDiscovery: webDiscoveryEnabled,

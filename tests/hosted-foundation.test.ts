@@ -26,6 +26,24 @@ const hostedDemoEnvironment = {
   FOUNDATION_CORPUS_TLS_MODE: 'verify-full',
 } satisfies NodeJS.ProcessEnv;
 
+const hostedProductionEnvironment = {
+  FOUNDATION_ENABLED: 'true',
+  FOUNDATION_HOSTED_PRODUCTION: 'true',
+  FOUNDATION_SEMANTIC_ENABLED: 'true',
+  FOUNDATION_CLAIM_RETRIEVAL_ENABLED: 'true',
+  NODE_ENV: 'production',
+  RAILWAY_ENVIRONMENT_NAME: 'production',
+  BASIRAH_DEPLOYMENT_ENVIRONMENT: 'production',
+  FOUNDATION_PRODUCTION_SERVICE_ID: '4d15a8f1-0028-42d6-adfa-cef07e55a9bc',
+  RAILWAY_SERVICE_ID: '4d15a8f1-0028-42d6-adfa-cef07e55a9bc',
+  BASIRAH_DEPLOYMENT_REF: 'refs/heads/main',
+  BASIRAH_DEPLOYMENT_SHA: '2'.repeat(40),
+  RAILWAY_GIT_BRANCH: 'main',
+  RAILWAY_GIT_COMMIT_SHA: '2'.repeat(40),
+  DATABASE_TLS_MODE: 'verify-full',
+  FOUNDATION_CORPUS_TLS_MODE: 'verify-full',
+} satisfies NodeJS.ProcessEnv;
+
 it.each([
   ['[لقمان: 15]', ['31:15']],
   ['[لقمان: 31:15]', ['31:15']],
@@ -44,6 +62,7 @@ it('keeps the local research preview and hosted demo mutually exclusive', () => 
     ),
   ).toBe('local_research');
   expect(foundationRuntimeMode(hostedDemoEnvironment)).toBe('hosted_demo');
+  expect(foundationRuntimeMode(hostedProductionEnvironment)).toBe('hosted_production');
   expect(() =>
     foundationRuntimeMode({
       FOUNDATION_ENABLED: 'true',
@@ -59,7 +78,7 @@ it.each([
   'FOUNDATION_WEB_CACHE_ENABLED',
   'FOUNDATION_WEB_CACHE_PASSAGES_ENABLED',
   'FOUNDATION_REWRITE_ENABLED',
-] as const)('keeps %s disabled in the hosted read-only demo', (key) => {
+] as const)('keeps %s disabled in the hosted staging demo', (key) => {
   expect(() =>
     foundationRuntimeMode({
       FOUNDATION_ENABLED: 'true',
@@ -69,6 +88,27 @@ it.each([
       [key]: 'true',
     }),
   ).toThrow('HOSTED_DEMO_REQUIRES_READ_ONLY_RETRIEVAL');
+});
+
+it('allows read-only MCP and web discovery in hosted production', () => {
+  expect(
+    foundationRuntimeMode({
+      ...hostedProductionEnvironment,
+      FOUNDATION_TAFSIR_LIVE: 'true',
+      FOUNDATION_WEB_DISCOVERY_ENABLED: 'true',
+    }),
+  ).toBe('hosted_production');
+});
+
+it.each([
+  'FOUNDATION_WEB_CACHE_ENABLED',
+  'FOUNDATION_WEB_CACHE_PASSAGES_ENABLED',
+  'FOUNDATION_WEB_CACHE_CONTENT_VIEWS_ENABLED',
+  'FOUNDATION_REWRITE_ENABLED',
+] as const)('keeps production mutation path %s disabled', (key) => {
+  expect(() => foundationRuntimeMode({ ...hostedProductionEnvironment, [key]: 'true' })).toThrow(
+    'HOSTED_PRODUCTION_REQUIRES_READ_ONLY_ACQUISITION',
+  );
 });
 
 it('requires semantic claim retrieval in the hosted demo', () => {
@@ -86,6 +126,30 @@ it('binds the hosted demo to the accepted staging service, source and verified c
     { ...hostedDemoEnvironment, DATABASE_TLS_MODE: 'disable' },
   ])
     expect(() => foundationRuntimeMode(environment)).toThrow('HOSTED_DEMO_ENVIRONMENT_MISMATCH');
+});
+
+it('binds hosted production to main, Railway production and verified TLS', () => {
+  for (const environment of [
+    { ...hostedProductionEnvironment, BASIRAH_DEPLOYMENT_ENVIRONMENT: 'staging' },
+    { ...hostedProductionEnvironment, RAILWAY_ENVIRONMENT_NAME: 'staging' },
+    { ...hostedProductionEnvironment, RAILWAY_SERVICE_ID: '00000000-0000-0000-0000-000000000000' },
+    { ...hostedProductionEnvironment, RAILWAY_GIT_BRANCH: 'development' },
+    { ...hostedProductionEnvironment, BASIRAH_DEPLOYMENT_REF: 'refs/heads/development' },
+    { ...hostedProductionEnvironment, FOUNDATION_CORPUS_TLS_MODE: 'require' },
+    { ...hostedProductionEnvironment, DATABASE_TLS_MODE: 'require' },
+  ])
+    expect(() => foundationRuntimeMode(environment)).toThrow(
+      'HOSTED_PRODUCTION_ENVIRONMENT_MISMATCH',
+    );
+});
+
+it('keeps hosted production mutually exclusive with the staging demo', () => {
+  expect(() =>
+    foundationRuntimeMode({
+      ...hostedProductionEnvironment,
+      FOUNDATION_HOSTED_DEMO: 'true',
+    }),
+  ).toThrow('FOUNDATION_RUNTIME_MODE_CONFLICT');
 });
 
 it('creates a bound research-only draft intake without inventing source matches', async () => {
@@ -114,6 +178,51 @@ it('creates a bound research-only draft intake without inventing source matches'
   });
   await adapter.close();
   await expect(adapter.analyze(text, revisionId)).rejects.toThrow('FOUNDATION_ABORTED');
+});
+
+it('creates a production intake from approved evidence', async () => {
+  const approved: SourceEvidence = {
+    snapshotKey: 'quran:31:15',
+    sourceId: 'tanzil-uthmani-v1.1',
+    sourceVersion: 'v1',
+    sourceRole: 'quran_text',
+    reference: '31:15',
+    originalText: 'وَصَاحِبْهُمَا فِي الدُّنْيَا مَعْرُوفًا',
+    originalSha256: '',
+    work: 'القرآن الكريم',
+    author: null,
+    edition: 'Tanzil Uthmani 1.1',
+    sourceUrl: null,
+    approvalStatus: 'approved',
+    researchOnly: false,
+    parentSnapshotKey: null,
+    delivery: 'snapshot',
+    retrievalModes: ['exact'],
+    provenance: { surah_name: 'لقمان' },
+    contextBefore: null,
+    contextAfter: null,
+    footnotes: [],
+    relations: [],
+  };
+  approved.originalSha256 = sha256(approved.originalText);
+  const adapter = createHostedDraftAdapter(
+    'approved-v1',
+    {
+      async search() {
+        return [approved];
+      },
+      async restore() {
+        return [];
+      },
+    },
+    false,
+  );
+  const intake = await adapter.analyze(
+    'قال تعالى: ﴿وَصَاحِبْهُمَا فِي الدُّنْيَا مَعْرُوفًا﴾ [لقمان: 15].',
+    revisionId,
+  );
+  expect(intake.researchOnly).toBe(false);
+  expect(intake.evidence).toEqual([approved]);
 });
 
 it('compares an explicitly cited Quran quotation against the pinned hosted original', async () => {
