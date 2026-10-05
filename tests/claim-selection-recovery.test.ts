@@ -157,7 +157,7 @@ it('rejects fabricated recovery IDs rather than selecting the original automatic
   const fetcher = vi.fn(async (_url: any, init: any) =>
     response(
       {
-        claims: ++calls === 1 ? [] : [{ candidateId: `claim-${'0'.repeat(24)}`, evidenceKeys: [] }],
+        claims: ++calls === 1 ? [] : [{ candidateId: 'C9999', evidenceKeys: [] }],
       },
       JSON.parse(init.body).model,
     ),
