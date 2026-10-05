@@ -90,7 +90,7 @@ async function initializeFoundation() {
   const researchEvidence = researchPreview || hostedRuntime;
   // This opt-in uses only numeric verse references and the pinned Tafsir adapter.
   // Both research profiles retain provisional source/edition status.
-  if (process.env.FOUNDATION_TAFSIR_LIVE === 'true' && !researchPreview && !hostedProduction)
+  if (process.env.FOUNDATION_TAFSIR_LIVE === 'true' && !researchPreview && !hostedRuntime)
     throw new Error('LIVE_SOURCE_ACQUISITION_REQUIRES_RESEARCH_PREVIEW');
   const semanticEnabled = process.env.FOUNDATION_SEMANTIC_ENABLED === 'true';
   const semanticBudget = semanticBudgetConfiguration(process.env, researchEvidence);

@@ -73,7 +73,6 @@ it('keeps the local research preview and hosted demo mutually exclusive', () => 
 });
 
 it.each([
-  'FOUNDATION_TAFSIR_LIVE',
   'FOUNDATION_WEB_DISCOVERY_ENABLED',
   'FOUNDATION_WEB_CACHE_ENABLED',
   'FOUNDATION_WEB_CACHE_PASSAGES_ENABLED',
@@ -98,6 +97,15 @@ it('allows read-only MCP and web discovery in hosted production', () => {
       FOUNDATION_WEB_DISCOVERY_ENABLED: 'true',
     }),
   ).toBe('hosted_production');
+});
+
+it('allows read-only Tafsir MCP in the hosted staging demo', () => {
+  expect(
+    foundationRuntimeMode({
+      ...hostedDemoEnvironment,
+      FOUNDATION_TAFSIR_LIVE: 'true',
+    }),
+  ).toBe('hosted_demo');
 });
 
 it.each([

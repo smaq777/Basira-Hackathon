@@ -80,7 +80,6 @@ export function foundationRuntimeMode(
   if (
     hostedDemo &&
     [
-      environment.FOUNDATION_TAFSIR_LIVE,
       environment.FOUNDATION_WEB_DISCOVERY_ENABLED,
       environment.FOUNDATION_WEB_CACHE_ENABLED,
       environment.FOUNDATION_WEB_CACHE_PASSAGES_ENABLED,
