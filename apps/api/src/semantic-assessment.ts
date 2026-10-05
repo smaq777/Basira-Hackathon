@@ -18,8 +18,10 @@ import {
   type EvidenceSupportFinding,
   type SemanticErrorCode,
   type SemanticRequestTrace,
+  type CachePassagePreference,
 } from '../../../packages/contracts/src/semantic-assessment.js';
 import { canonical, sha256, validateIntake } from './foundation.js';
+import { validateCachePassagePreferences } from './research-page-passages.js';
 import {
   assessorEvidence,
   claimInventory,
@@ -132,6 +134,7 @@ function validateFinding(
   finding: EvidenceSupportFinding,
   claim: SemanticClaim,
   evidence: SourceEvidence[],
+  preferences?: readonly CachePassagePreference[],
 ): void {
   if (finding.claimId !== claim.id) throw new PhaseError('invalid_citations');
   const keys = new Map(evidence.map((row) => [row.snapshotKey, row]));
@@ -141,7 +144,7 @@ function validateFinding(
     const identity = canonical(citation);
     if (
       !source ||
-      !evidencePassages(source, claim.originalText).some((passage) =>
+      !evidencePassages(source, claim.originalText, preferences).some((passage) =>
         passage.originalText.includes(citation.excerpt),
       ) ||
       seen.has(identity)
@@ -160,7 +163,7 @@ function validateFinding(
     (finding.status === 'supported' || finding.status === 'contradicted') &&
     !finding.citations.some((citation) => {
       const source = keys.get(citation.evidenceKey)!;
-      return evidencePassages(source, claim.originalText).some(
+      return evidencePassages(source, claim.originalText, preferences).some(
         (passage) => !passage.boundaryTruncated && passage.originalText.includes(citation.excerpt),
       );
     })
@@ -679,6 +682,12 @@ export function createSemanticAssessmentAdapter(
             intake = structuredClone(next);
             finalIntake = intake;
             claims = retrieved.claims.map((row) => SemanticClaimSchema.parse(row));
+            if (retrieved.trace.passagePreferences)
+              validateCachePassagePreferences(
+                retrieved.trace.passagePreferences,
+                claims,
+                intake.evidence,
+              );
             retrievalTrace = retrieved.trace;
           } catch (error) {
             const code =
@@ -702,7 +711,9 @@ export function createSemanticAssessmentAdapter(
         passageViews.push(
           ...packets.map(({ claim, evidence }) => ({
             claimId: claim.id,
-            passages: evidence.flatMap((source) => passageTrace(source, claim.originalText)),
+            passages: evidence.flatMap((source) =>
+              passageTrace(source, claim.originalText, retrievalTrace?.passagePreferences),
+            ),
           })),
         );
         const assessmentData = {
@@ -728,7 +739,9 @@ export function createSemanticAssessmentAdapter(
                 originalText: segment.originalText,
                 sourceKeys: segment.sourceKeys,
               })),
-            evidence: evidence.map((source) => assessorEvidence(source, claim.originalText)),
+            evidence: evidence.map((source) =>
+              assessorEvidence(source, claim.originalText, retrievalTrace?.passagePreferences),
+            ),
             contextCoverage: intake.contextCoverage.filter((row) =>
               evidence.some((source) => source.reference === row.reference),
             ),
@@ -767,7 +780,12 @@ export function createSemanticAssessmentAdapter(
             if (!packet || duplicateIds.has(finding.claimId) || seen.has(finding.claimId))
               throw new PhaseError('invalid_citations');
             seen.add(finding.claimId);
-            validateFinding(finding, packet.claim, packet.evidence);
+            validateFinding(
+              finding,
+              packet.claim,
+              packet.evidence,
+              retrievalTrace?.passagePreferences,
+            );
             assessments.push(finding);
           } catch {
             invalid = true;
@@ -914,7 +932,11 @@ export function createSemanticAssessmentAdapter(
                 passageViews.push({
                   claimId: updatedClaim.id,
                   passages: evidenceForClaim(intake, updatedClaim).flatMap((source) =>
-                    passageTrace(source, updatedClaim.originalText),
+                    passageTrace(
+                      source,
+                      updatedClaim.originalText,
+                      retrievalTrace?.passagePreferences,
+                    ),
                   ),
                 });
                 const gapData = {
@@ -926,7 +948,11 @@ export function createSemanticAssessmentAdapter(
                       ...oldPacket,
                       claim: updatedClaim,
                       evidence: evidenceForClaim(intake, updatedClaim).map((source) =>
-                        assessorEvidence(source, updatedClaim.originalText),
+                        assessorEvidence(
+                          source,
+                          updatedClaim.originalText,
+                          retrievalTrace?.passagePreferences,
+                        ),
                       ),
                     },
                   ],
@@ -945,7 +971,12 @@ export function createSemanticAssessmentAdapter(
                 );
                 if (reassessed.assessments.length !== 1) throw new PhaseError('invalid_citations');
                 const finding = reassessed.assessments[0]!;
-                validateFinding(finding, updatedClaim, evidenceForClaim(intake, updatedClaim));
+                validateFinding(
+                  finding,
+                  updatedClaim,
+                  evidenceForClaim(intake, updatedClaim),
+                  retrievalTrace?.passagePreferences,
+                );
                 assessments.splice(
                   assessments.findIndex((row) => row.claimId === claim.id),
                   1,

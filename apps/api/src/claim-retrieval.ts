@@ -2,14 +2,24 @@ import type {
   FoundationIntake,
   SourceEvidence,
 } from '../../../packages/contracts/src/foundation.js';
-import type { SemanticClaim } from '../../../packages/contracts/src/semantic-assessment.js';
+import type {
+  SemanticClaim,
+  CachePassagePreference,
+} from '../../../packages/contracts/src/semantic-assessment.js';
 import { SourceEvidenceSchema } from '../../../packages/contracts/src/foundation.js';
 import { canonical, sha256 } from './foundation.js';
 import { evidencePacketFits } from './evidence-budget.js';
+import {
+  bindCachePassageHits,
+  mergeCachePassageHits,
+  cachePassagePreference,
+  stripCachePassageProvenance,
+} from './research-page-passages.js';
 
 export interface ClaimRetrievalTrace {
   corpusVersion: string;
   mode: 'approved' | 'local_research';
+  passagePreferences?: CachePassagePreference[];
   queries: Array<{
     claimId: string;
     querySha256: string;
@@ -135,10 +145,14 @@ export function createClaimRetrievalAdapter(options: {
         searchPlans.forEach((plan, index) => {
           if (plan.claim.id !== claim.id) return;
           const accepted: SourceEvidence[] = [];
-          for (const row of searchRows[index]!) {
+          for (const raw of searchRows[index]!) {
+            const row = bindCachePassageHits(raw, claim.originalText, plan.query);
             if (!candidates.has(row.snapshotKey) && candidates.size >= max) continue;
             if (eligible(row)) {
-              candidates.set(row.snapshotKey, row);
+              const prior = candidates.get(row.snapshotKey);
+              if (prior && identity(prior) !== identity(row))
+                throw Error('RETRIEVAL_IDENTITY_COLLISION');
+              candidates.set(row.snapshotKey, prior ? mergeCachePassageHits(prior, row) : row);
               accepted.push(row);
             }
           }
@@ -162,6 +176,7 @@ export function createClaimRetrievalAdapter(options: {
       const restored = await options.corpus.restore(restoreKeys, signal);
       signal?.throwIfAborted();
       const boundClaims: SemanticClaim[] = [];
+      const preferences: CachePassagePreference[] = [];
       for (const [index, claim] of claims.entries()) {
         const keys = new Set(claim.evidenceKeys);
         const candidates = candidateSets[index]!;
@@ -171,7 +186,10 @@ export function createClaimRetrievalAdapter(options: {
             const previous = available.get(row.snapshotKey);
             if (previous && identity(previous) !== identity(row))
               throw new Error('RETRIEVAL_IDENTITY_COLLISION');
-            if (!previous) available.set(row.snapshotKey, row);
+            available.set(
+              row.snapshotKey,
+              previous ? mergeCachePassageHits(previous, row, true) : row,
+            );
           }
         const familyFor = (key: string) => {
           const family = new Set([key]);
@@ -228,11 +246,21 @@ export function createClaimRetrievalAdapter(options: {
 
           for (const row of family) {
             keys.add(row.snapshotKey);
-            if (!evidence.has(row.snapshotKey)) evidence.set(row.snapshotKey, row);
+            if (!evidence.has(row.snapshotKey))
+              evidence.set(row.snapshotKey, stripCachePassageProvenance(row));
           }
         }
-        boundClaims.push({ ...claim, evidenceKeys: [...keys] });
+        const boundClaim = { ...claim, evidenceKeys: [...keys] };
+        for (const key of keys) {
+          const row = available.get(key);
+          if (row) {
+            const p = cachePassagePreference(row, boundClaim);
+            if (p) preferences.push(p);
+          }
+        }
+        boundClaims.push(boundClaim);
       }
+      if (preferences.length) trace.passagePreferences = preferences;
       return { claims: boundClaims, evidence: [...evidence.values()], trace };
     },
   };

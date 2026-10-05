@@ -6,9 +6,11 @@ import {
   ClaimSelectionOutputSchema,
   type EvidencePassageView,
   type SemanticClaim,
+  type CachePassagePreference,
 } from '../../../packages/contracts/src/semantic-assessment.js';
 import { canonical, sha256 } from './foundation.js';
 import { assessClaimApplicability } from '../../../packages/contracts/src/claim-applicability.js';
+import { preferredCachePassages } from './research-page-passages.js';
 
 export interface ClaimCandidate extends Omit<SemanticClaim, 'evidenceKeys'> {
   candidateId: string;
@@ -231,10 +233,15 @@ function terms(text: string): string[] {
 }
 
 /** Exact contiguous windows ranked by relevance, never agreement/support. */
-export function evidencePassages(source: SourceEvidence, query: string): EvidencePassageView[] {
+export function evidencePassages(
+  source: SourceEvidence,
+  query: string,
+  preferences?: readonly CachePassagePreference[],
+): EvidencePassageView[] {
   if (sha256(source.originalText) !== source.originalSha256)
     throw new Error('PASSAGE_HASH_MISMATCH');
   const text = source.originalText;
+  const preferred = preferredCachePassages(source, query, preferences);
   const queryTerms = terms(query);
   const sentences = [...text.matchAll(/[^.؛؟?!\n]+[.؛؟?!\n]*/gu)].map((match) => ({
     start: match.index,
@@ -293,7 +300,7 @@ export function evidencePassages(source: SourceEvidence, query: string): Evidenc
         boundaryTruncated,
       });
     }
-  return windows.map((row) => ({
+  const lexical: EvidencePassageView[] = windows.map((row) => ({
     passageId: `passage-${sha256(canonical([source.snapshotKey, source.originalSha256, row.start, row.end])).slice(0, 24)}`,
     evidenceKey: source.snapshotKey,
     originalSha256: source.originalSha256,
@@ -305,9 +312,19 @@ export function evidencePassages(source: SourceEvidence, query: string): Evidenc
     boundaryTruncated: row.boundaryTruncated,
     relevance: row.relevance,
   }));
+  return [
+    ...preferred,
+    ...lexical.filter(
+      (p) => !preferred.some((h) => h.startOffset < p.endOffset && h.endOffset > p.startOffset),
+    ),
+  ].slice(0, 3);
 }
 
-export function assessorEvidence(source: SourceEvidence, query: string) {
+export function assessorEvidence(
+  source: SourceEvidence,
+  query: string,
+  preferences?: readonly CachePassagePreference[],
+) {
   const {
     originalText: _originalText,
     provenance: _provenance,
@@ -315,7 +332,7 @@ export function assessorEvidence(source: SourceEvidence, query: string) {
     retrievalModes: _retrievalModes,
     ...identity
   } = source;
-  const passages = evidencePassages(source, query);
+  const passages = evidencePassages(source, query, preferences);
   return {
     ...identity,
     evidenceKey: source.snapshotKey,
@@ -324,8 +341,12 @@ export function assessorEvidence(source: SourceEvidence, query: string) {
 }
 
 /** Durable trace keeps restorable offsets/hashes, without copying passage text. */
-export function passageTrace(source: SourceEvidence, query: string) {
-  return evidencePassages(source, query).map(({ originalText, ...row }) => ({
+export function passageTrace(
+  source: SourceEvidence,
+  query: string,
+  preferences?: readonly CachePassagePreference[],
+) {
+  return evidencePassages(source, query, preferences).map(({ originalText, ...row }) => ({
     ...row,
     excerptSha256: sha256(originalText),
   }));

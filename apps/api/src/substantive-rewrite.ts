@@ -56,7 +56,9 @@ export function authorRewriteInput(report: FoundationReport) {
         claim,
         supportedFinding: finding,
         evidenceKeys: keys,
-        evidence: evidence.map((e) => assessorEvidence(e, claim.originalText)),
+        evidence: evidence.map((e) =>
+          assessorEvidence(e, claim.originalText, semantic.trace.retrieval?.passagePreferences),
+        ),
       },
     ];
   });
