@@ -343,11 +343,23 @@ describe('bounded semantic assessment', () => {
     expect(prompt).toContain('Missing evidence does not establish contradiction');
     expect(prompt).toContain('naming the missing qualifier or antecedent and why it matters');
     expect(prompt).toContain('packet has no evidence');
+    expect(prompt).toContain('Prompt evidence-support-v1.10.');
+    expect(prompt).toContain('Each scope item must be a self-contained Arabic statement');
+    expect(prompt).toContain(
+      'affirmation or negation and any material condition, exception or modality',
+    );
+    expect(prompt).toContain(
+      'scope, conditions, negations, exceptions and explanation mutually consistent',
+    );
+    expect(prompt).toContain('identify the author proposition as contradicted or not established');
+    expect(prompt).toContain('without supplying an inferred religious conclusion');
+    expect(prompt).toContain('does not change relation meanings or citation obligations');
+    expect(prompt).toContain('does not require support');
     expect(prompt).not.toMatch(/scholar_explanation|book_excerpt/u);
     expect(result.scholarlyApproval).toBe(false);
     expect(result.trace).toMatchObject({
-      pipelineVersion: 'provisional-semantic-v1.9',
-      promptVersion: 'evidence-support-v1.9',
+      pipelineVersion: 'provisional-semantic-v1.10',
+      promptVersion: 'evidence-support-v1.10',
     });
     expect(intake).toEqual(before);
   });
@@ -430,7 +442,17 @@ describe('bounded semantic assessment', () => {
       fixture(),
     );
     const historical = structuredClone(report);
-    for (const version of ['v1.1', 'v1.2', 'v1.3'] as const) {
+    for (const version of [
+      'v1.1',
+      'v1.2',
+      'v1.3',
+      'v1.4',
+      'v1.5',
+      'v1.6',
+      'v1.7',
+      'v1.8',
+      'v1.9',
+    ] as const) {
       historical.trace.pipelineVersion = `provisional-semantic-${version}`;
       historical.trace.promptVersion = `evidence-support-${version}`;
       expect(SemanticAssessmentReportSchema.safeParse(historical).success).toBe(true);
