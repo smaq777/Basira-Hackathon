@@ -44,9 +44,8 @@ coverage continue to use canonical IDs, exact spans and evidence keys.
 
 Focused software controls cover exact mapping, Unicode/qualified author spans,
 source-parent aliases, unknown/duplicate rejection, mutation isolation, empty
-reconsideration and canonical assessor delivery. Changed-packet paid comparison
-remains pending a new freeze and lead technical review; no improvement claim is
-made from these offline tests. Rollback is an application-code rollback to the
+reconsideration and canonical assessor delivery. Changed-packet paid comparison is recorded below; offline tests alone do not
+establish model reliability. Rollback is an application-code rollback to the
 previous selector; no database migration or source-record mutation is required.
 
 ## Separate citation-inventory correction
@@ -71,3 +70,48 @@ production build. The focused alias/inventory/assessment suite passed 107 tests;
 full-flow cache passage and empty-recovery fixtures also use the new strict wire
 aliases while assessor citations remain canonical. No provider calls or database
 writes were made by these checks. The existing build chunk-size warning remains.
+
+## Frozen changed-packet comparison
+
+At frozen source `8fab08f`, a reviewed V2 protocol made exactly twelve Luna/OpenAI
+low extraction-only calls over the same six original intakes, twice each. All
+first responses were retained: eight valid selections, four valid empty
+selections, zero binding rejections and zero provider/schema/transport failures.
+Recorded response cost was $0.001410035; unknown failed-call billing was empty.
+Both final JSON and canonical selected spans/evidence keys were repeat-identical
+for all six controls. The previously rejected mixed-writing claim selected its
+exact canonical span in both repeats. The explicit modal reference control
+selected only its complete author assertion; its separately corrected inventory
+no longer offers the bibliographic fragment. Quote-only and question/greeting
+controls remained empty. No recovery, assessment, web, embedding or SQL stage ran.
+
+Independent `LEAD_ALIAS_AUDIT_V2.json` recomputed all twelve final payload hashes,
+canonical original-span identity and repeat consistency. Frozen protocol
+`ALIAS_COMPARISON_PROTOCOL_V2.json` binds sixty repository and eleven external
+hashes; its SHA-256 is
+`6936452b4ab7f530f6b9d01a36a7e0a0ac33ea6df05665658f5e22b52b39a7b4`.
+`ALIAS_COMPARISON_RESULTS_V2.json`, twelve `ALIAS_CELL_*_V2.json` receipts and
+`ALIAS_COMPARISON_ANALYSIS_V2.json` retain the outcomes. The earlier alias V1
+freeze was offline-only and remains preserved, superseded after the reviewed
+name/inline-span refinements. Baseline source `a84ec9c` and changed source
+`8fab08f` remain separate frozen checkouts; no historical receipt was rewritten.
+
+The selected binding failures decreased from two to zero. This combined
+prompt/schema alias and citation-inventory correction does not isolate each
+change's causal effect or demonstrate unseen accuracy, complete extraction,
+source relevance, religious support or general reliability. Historical missing
+response content is still unknown. UI integration is a subsequent experiment,
+not established by extraction-only success.
+
+## Owner-preserving integration
+
+A separate integration worktree preserve-merges current development `f130560`
+(owner hosted-demo PR #97) with frozen `8fab08f`. The owner adapter remains
+unchanged: hosted demos have read-only corpus retrieval, unavailable literal
+quotation checking, no Python/MCP/web/cache/rewrite activation, and explicit UI
+capability limits. Saved-result/human-ticket fallback, fixed-capacity handling,
+canonical citation validation and local cache/content preferences are preserved.
+Integrated required checks pass 53 files / 710 tests plus typecheck, docs, policy,
+format and build. No shared runtime, environment file or source original was
+changed. A new two-case loopback UI protocol remains pending technical review;
+these checks do not establish hosted staging readiness or fresh UI success.
