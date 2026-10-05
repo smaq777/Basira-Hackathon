@@ -231,6 +231,51 @@ describe('relevance passages from immutable originals', () => {
 });
 
 describe('v1.7 assessment wire and coverage', () => {
+  it('returns not_applicable for a segmented Quran quotation while empty model selection of author prose stays partial', async () => {
+    const text = 'قال تعالى: ﴿وما خلقت الجن والإنس إلا ليعبدون﴾.';
+    const row = intake(text);
+    const template = row.segments[0]!;
+    row.segments = [
+      [0, 12, 'author_text'],
+      [12, 44, 'ayah'],
+      [44, 46, 'author_text'],
+    ].map(([start, end, role], index) => ({
+      ...template,
+      id: `span-${index}`,
+      startOffset: Number(start),
+      endOffset: Number(end),
+      codePointStart: Number(start),
+      codePointEnd: Number(end),
+      originalText: text.slice(Number(start), Number(end)),
+      role: role as typeof template.role,
+    }));
+    expect(claimInventory(row).candidates).toEqual([]);
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      modelResponse({ claims: [] }, 'owned/extractor'),
+    );
+    const adapter = createSemanticAssessmentAdapter({
+      enabled: true,
+      apiKey: 'owned',
+      extractor: { modelId: 'owned/extractor', providerId: 'owned' },
+      assessor: { modelId: 'owned/assessor', providerId: 'owned' },
+      allowedModels: ['owned/extractor', 'owned/assessor'],
+      allowedProviders: ['owned'],
+      fetch,
+    });
+    expect(await adapter.assess(row)).toMatchObject({
+      status: 'not_applicable',
+      errorCode: null,
+      claims: [],
+      assessments: [],
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(await adapter.assess(intake('الكتابة عن الحقوق.'))).toMatchObject({
+      status: 'partial',
+      errorCode: 'no_claims_extracted',
+      claims: [],
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
   it('repeats stable IDs/order while separately recording provisional model selection and unreviewed coverage', async () => {
     const original = intake(
       'يجب حفظ الحقوق. يجب حفظ السجل. يجب حفظ المال. يجب حفظ العهد. يجب حفظ الأمانة. يجب حفظ الكتاب.',
