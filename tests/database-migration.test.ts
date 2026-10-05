@@ -18,6 +18,10 @@ const expiredGuestCleanupMigration = readFileSync(
   'utf8',
 );
 const secureTicketMigration = readFileSync('migrations/0013_secure_review_tickets.sql', 'utf8');
+const directTicketMigration = readFileSync(
+  'migrations/0014_direct_review_ticket_intake.sql',
+  'utf8',
+);
 const tables = [
   'guest_session',
   'document',
@@ -191,5 +195,20 @@ describe('secure human-review ticket migration', () => {
     expect(secureTicketMigration).toContain('reviewer_knowledge_candidate');
     expect(secureTicketMigration).toContain('approve_review_response_for_retrieval');
     expect(secureTicketMigration).toContain("'0013_secure_review_tickets'");
+  });
+});
+
+describe('direct human-review ticket intake migration', () => {
+  it('binds every ticket to an owned immutable revision without requiring a report', () => {
+    expect(directTicketMigration).toContain('alter column revision_id set not null');
+    expect(directTicketMigration).toContain('alter column run_id drop not null');
+    expect(directTicketMigration).toContain('create_revision_review_ticket');
+    expect(directTicketMigration).toContain('d.current_revision_id = dr.id');
+  });
+
+  it('preserves constant-shape lookup and returns the original submission', () => {
+    expect(directTicketMigration).toContain('\'{"found": false}\'::jsonb');
+    expect(directTicketMigration).toContain("'submission', jsonb_build_object");
+    expect(directTicketMigration).toContain("'0014_direct_review_ticket_intake'");
   });
 });

@@ -208,6 +208,52 @@ describe('Basirah web flow', () => {
     expect(screen.queryByRole('combobox')).toBeNull();
   });
 
+  it('offers a direct human-review ticket when automated analysis is unavailable', async () => {
+    const json = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = String(input);
+      if (path === '/api/v1/capabilities')
+        return json({ foundationReview: false, guestDocuments: true });
+      if (path === '/api/v1/documents')
+        return json(
+          { documentId: '11111111-1111-4111-8111-111111111111', revisionId: REVISION_ID },
+          201,
+        );
+      if (path === `/api/v1/revisions/${REVISION_ID}/extractions`)
+        return json({ extraction: { candidates: [], warnings: [] } });
+      if (path === `/api/v1/revisions/${REVISION_ID}/tickets`)
+        return json(
+          {
+            ticketCode: 'BR-A1B2C3D4E5F6',
+            status: 'pending',
+            hasEmail: false,
+            notifyOptIn: false,
+            createdAt: '2026-10-05T12:00:00.000Z',
+          },
+          201,
+        );
+      return json({ mode: 'local_demo', annotations: [], findings: [], warnings: [] });
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'النص المراد مراجعته' }), {
+      target: { value: ORIGINAL_TEXT },
+    });
+    await user.click(screen.getByRole('button', { name: 'ابدأ المراجعة' }));
+    await user.click(await screen.findByRole('button', { name: /أحتاج مراجعة بشرية/ }));
+
+    expect(await screen.findByRole('heading', { name: 'تم إنشاء تذكرتك' })).not.toBeNull();
+    expect(window.location.hash).toBe(`#/ticket?revisionId=${REVISION_ID}`);
+    expect(
+      fetchMock.mock.calls.some(([path]) => path === `/api/v1/revisions/${REVISION_ID}/tickets`),
+    ).toBe(true);
+  });
+
   it('keeps one analysis request alive across a parent rerender and opens the result', async () => {
     const json = (body: unknown, status = 200) =>
       new Response(JSON.stringify(body), {
@@ -256,9 +302,9 @@ describe('Basirah web flow', () => {
     expect(JSON.parse(String(draft[1]?.body)).text).toBe(ORIGINAL_TEXT);
     expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
       '/api/v1/capabilities',
-      '/api/v1/capabilities',
       '/api/v1/documents',
       `/api/v1/revisions/${REVISION_ID}/extractions`,
+      '/api/v1/capabilities',
       '/api/v1/reviews',
       `/api/v1/reviews/${REVIEW_ID}/report`,
       '/api/v1/capabilities',
@@ -297,7 +343,6 @@ describe('Basirah web flow', () => {
 
     expect(request.signal?.aborted).toBe(true);
     expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
-      '/api/v1/capabilities',
       '/api/v1/capabilities',
       '/api/v1/documents',
     ]);

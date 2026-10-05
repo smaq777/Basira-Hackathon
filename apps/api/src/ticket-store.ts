@@ -43,6 +43,15 @@ export interface TicketStore {
     contactCiphertext: Buffer | null,
     notify: boolean,
   ): Promise<TicketReceipt | null>;
+  createForRevision(
+    sessionId: string,
+    secret: string,
+    revisionId: string,
+    ticketCode: string,
+    emailHash: Buffer | null,
+    contactCiphertext: Buffer | null,
+    notify: boolean,
+  ): Promise<TicketReceipt | null>;
   updateContact(
     sessionId: string,
     secret: string,
@@ -74,6 +83,9 @@ export interface TicketStore {
 
 export const unavailableTicketStore: TicketStore = {
   async create() {
+    throw new Error('TICKET_STORE_UNAVAILABLE');
+  },
+  async createForRevision() {
     throw new Error('TICKET_STORE_UNAVAILABLE');
   },
   async updateContact() {
@@ -125,6 +137,14 @@ export function createTicketStore(connectionString: string): TicketStore {
       const result = await pool.query<{ value: unknown }>(
         'select basirah_api.create_review_ticket($1::uuid,$2,$3::uuid,$4,$5,$6,$7) as value',
         [sessionId, secret, reviewId, code, hash, ciphertext, notify],
+      );
+      const value = result.rows[0]?.value;
+      return value == null ? null : TicketReceiptSchema.parse(value);
+    },
+    async createForRevision(sessionId, secret, revisionId, code, hash, ciphertext, notify) {
+      const result = await pool.query<{ value: unknown }>(
+        'select basirah_api.create_revision_review_ticket($1::uuid,$2,$3::uuid,$4,$5,$6,$7) as value',
+        [sessionId, secret, revisionId, code, hash, ciphertext, notify],
       );
       const value = result.rows[0]?.value;
       return value == null ? null : TicketReceiptSchema.parse(value);
