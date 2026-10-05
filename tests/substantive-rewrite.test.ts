@@ -98,6 +98,7 @@ function fixture() {
     citations: [{ offset: claim.endOffset, evidenceKey: 'source' }],
   };
   const verification = {
+    schemaVersion: 2 as const,
     checks: [
       {
         claimId: claim.id,
@@ -107,6 +108,7 @@ function fixture() {
         negationsPreserved: true,
         exceptionsPreserved: true,
         scopePreserved: true,
+        modalityPreserved: true,
         citations: [{ evidenceKey: 'source', excerpt: 'يجب حفظ الحقوق إلا إذا تعذر ذلك.' }],
         explanation: 'تحسين الصياغة مع حفظ الاستثناء.',
       },
@@ -177,6 +179,7 @@ it.each([
   'negationsPreserved',
   'exceptionsPreserved',
   'scopePreserved',
+  'modalityPreserved',
 ] as const)(
   'rejects a negative independent %s check without offering candidate text',
   async (field) => {
@@ -226,6 +229,16 @@ it('rejects unknown claims, source changes, quote changes, overlaps, punctuation
   report.semanticAssessment!.assessments[0]!.status = 'contradicted';
   expect(authorRewriteInput(report).authorClaims).toEqual([]);
   expect(() => validateAuthorRewrite(report, operations)).toThrow('REWRITE_INVALID_CANDIDATE');
+});
+it('requires a separate modality verdict even when prior preservation checks are positive', () => {
+  const { report, operations, verification } = fixture();
+  const { modalityPreserved: _omitted, ...legacyCheck } = verification.checks[0]!;
+  expect(() =>
+    validateAuthorVerification(authorRewriteInput(report), operations, {
+      schemaVersion: 2,
+      checks: [legacyCheck],
+    }),
+  ).toThrow('REWRITE_INVALID_CANDIDATE');
 });
 it('refuses stale or cancelled verification and verifier outages; unsupported meaning is never silently corrected', async () => {
   const { report, operations, verification } = fixture(),
@@ -285,5 +298,13 @@ it('requests generator and independent verifier as separate strict pinned calls 
   expect(bodies[0].response_format.json_schema.name).toBe('author_rewrite');
   expect(bodies[1].response_format.json_schema.name).toBe('author_preservation');
   expect(bodies[1].messages[0].content).toContain('BOTH original entails replacement');
+  expect(bodies[0].messages[0].content).toContain('not required');
+  expect(bodies[0].messages[0].content).toContain('ambiguous');
+  expect(bodies[1].messages[0].content).toContain('modalityPreserved');
+  expect(bodies[1].messages[0].content).toContain('ما لازم نطيعهم');
+  expect(bodies[1].response_format.json_schema.schema.properties.schemaVersion.const).toBe(2);
+  expect(bodies[1].response_format.json_schema.schema.properties.checks.items.required).toContain(
+    'modalityPreserved',
+  );
   expect(bodies[1].messages[1].content).toContain('passages');
 });
