@@ -27,6 +27,8 @@ function mockReviewApi(
     pendingReport?: boolean;
     ownershipExpired?: boolean;
     capability?: boolean;
+    capacityResource?: string;
+    burstLimited?: boolean;
   } = {},
 ) {
   let reportRequests = 0;
@@ -34,12 +36,19 @@ function mockReviewApi(
     const path = String(input);
     if (path === '/api/v1/capabilities')
       return json({ guestDocuments: true, foundationReview: options.capability !== false });
-    if (path === '/api/v1/documents')
+    if (path === '/api/v1/documents') {
+      if (options.capacityResource && options.capacityResource !== 'reviews')
+        return json({ code: 'RESOURCE_LIMIT_REACHED', resource: options.capacityResource }, 429);
+      if (options.burstLimited) return json({ code: 'RATE_LIMITED' }, 429);
       return json({ documentId: 'doc', revisionId: REVISION_ID }, 201);
+    }
     if (path.endsWith('/extractions'))
       return json({ extraction: { candidates: [], warnings: [] } });
-    if (path === '/api/v1/reviews')
+    if (path === '/api/v1/reviews') {
+      if (options.capacityResource === 'reviews')
+        return json({ code: 'RESOURCE_LIMIT_REACHED', resource: 'reviews' }, 429);
       return json(ownedReviewFixture(options.queued ? 'queued' : 'partial'), 202);
+    }
     if (path === `/api/v1/reviews/${REVIEW_ID}`) {
       if (options.ownershipExpired) return json({ code: 'INVALID_OR_EXPIRED_SESSION' }, 401);
       return json(
@@ -81,6 +90,48 @@ describe('owned foundation review web flow', () => {
     vi.restoreAllMocks();
   });
 
+  it.each(['documents', 'revisions', 'reviews', 'unknown-private-value'])(
+    'explains %s capacity without retry or silent resubmission and restores the exact draft',
+    async (resource) => {
+      const fetchMock = mockReviewApi({ capacityResource: resource });
+      const text = '  ' + ORIGINAL_TEXT + '\n';
+      render(<App />);
+      fireEvent.change(screen.getByRole('textbox', { name: 'النص المراد مراجعته' }), {
+        target: { value: text },
+      });
+      await userEvent.click(screen.getByRole('button', { name: 'ابدأ المراجعة' }));
+      await screen.findByText('بلغت حد السعة');
+      expect(screen.queryByRole('button', { name: 'إعادة المحاولة' })).toBeNull();
+      expect(screen.queryByText(/unknown-private-value/)).toBeNull();
+      expect(screen.queryByRole('heading', { name: 'راجع النقل وحدود الاستدلال' })).toBeNull();
+      expect(fetchMock.mock.calls.filter(([path]) => path === '/api/v1/documents')).toHaveLength(1);
+      expect(fetchMock.mock.calls.filter(([path]) => path === '/api/v1/reviews')).toHaveLength(
+        resource === 'reviews' ? 1 : 0,
+      );
+      expect(fetchMock.mock.calls.some(([path]) => path === '/api/v1/sessions')).toBe(false);
+      await userEvent.click(screen.getByRole('button', { name: 'العودة للنص' }));
+      expect(
+        (
+          (await screen.findByRole('textbox', {
+            name: 'النص المراد مراجعته',
+          })) as HTMLTextAreaElement
+        ).value,
+      ).toBe(text);
+      expect(fetchMock.mock.calls.filter(([path]) => path === '/api/v1/documents')).toHaveLength(1);
+    },
+  );
+  it('retains explicit retry for a transient burst limit without silently resubmitting', async () => {
+    const fetchMock = mockReviewApi({ burstLimited: true });
+    render(<App />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'النص المراد مراجعته' }), {
+      target: { value: ORIGINAL_TEXT },
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'ابدأ المراجعة' }));
+    await screen.findByText(/أرسلت طلبات متقاربة/);
+    expect(screen.getByRole('button', { name: 'إعادة المحاولة' })).not.toBeNull();
+    expect(screen.queryByText('بلغت حد السعة')).toBeNull();
+    expect(fetchMock.mock.calls.filter(([path]) => path === '/api/v1/documents')).toHaveLength(1);
+  });
   it('shows a compact loading excerpt while sending and retaining the complete raw draft', async () => {
     const fetchMock = mockReviewApi({ queued: true, keepQueued: true });
     const text = `  قَالَ الكاتب 😀 <img id="loading-injection" src=x>\n${'نص عربي محفوظ\n'.repeat(100)}`;
