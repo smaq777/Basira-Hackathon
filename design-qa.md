@@ -46,3 +46,18 @@ Targeted checks:
 - `npm run test -- apps/web/src/App.test.tsx tests/api-foundation.test.ts` — 51 tests passed.
 - `npm run format:check` — passed.
 - `npm run typecheck` — passed.
+
+## Issue #145 — navigable result evidence workspace
+
+**Final result: PASSED**
+
+- Reference: `/var/folders/f2/8c_vrn9j3b3g22m4jc85br6m0000gn/T/codex-clipboard-059e9eb5-41cd-46a9-b9a1-01ea0b545fc2.png`.
+- In-app Browser verification confirmed the selected desktop hierarchy: section navigator, comparison counts, draft/reference cards, difference analysis, original text and compact disclosures.
+- A 480-CSS-pixel responsive check stacked the draft/reference cards and reported no horizontal document overflow.
+- Clicking a navigation item opens collapsed content, scrolls it into view, updates `aria-current` and applies a short destination highlight.
+- Existing source roles, filters, comparison fidelity, excerpt limits, semantic assessment, rewrite and human-review actions remain driven by the persisted report data.
+
+Verification:
+
+- `npm run test -- apps/web/src/foundation-report.test.tsx apps/web/src/rewrite.test.tsx --reporter=dot` — 67 tests passed.
+- `npm run check` — 815 tests, documentation, policy, formatting and production build passed.
