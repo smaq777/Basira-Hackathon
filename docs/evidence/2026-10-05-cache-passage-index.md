@@ -94,9 +94,13 @@ there was no automatic retry.
 The original passage-first composition caused a blocking regression: all four
 unindexed-riba controls moved the legacy rank-1 source to rank 5 and lost it from the
 composed top two. It must not be activated. The correction preserves legacy ranks
-and enriches verified windows; retained-vector replay is pending. Warm selected
-obedience cells delivered the full qualified middle paragraph that legacy delivery
-missed. Travel already delivered its corrective footnote under the baseline, so no
+and enriches verified windows. The frozen zero-provider replay at `589de58`
+retained all 12 cells and the unavailable repeat-2 weak-hadith vector. All 24
+legacy/composed ranking pairs matched; all four unindexed-riba controls retained
+rank 1 and top-two selection. The full obedience paragraph reached corrected
+assessor packets in four of four arms, versus zero of four baseline arms. The
+replay verified 1,204 delivered passage bindings without mismatch. No replay arm
+was empty, but this warm replay does not resolve the historical delivery failures. Travel already delivered its corrective footnote under the baseline, so no
 benefit is claimed there. Conservative ranking forfeits the observed weak-hadith
 lexical parent-selection gain; unified comparable parent relevance remains future work.
 
@@ -106,6 +110,12 @@ that the full app lacked other corpus sources. These remain delivery failures in
 the denominator. Their timings are consistent with exhaustion of the existing
 3-second cache budget, which silently drops cache failures; surfaced
 outcomes and a configurable bounded budget are separate [issue #17](https://github.com/smaq777/Basira-Hackathon/issues/17).
+`REPLAY_RESULTS_V2.json`, `REPLAY_ANALYSIS_V2.json` and
+`POST_REPLAY_FINAL_UNIVERSE_V1.json` retain the results. Final read-only actual-reader
+verification found the same 86-passage corpus, 16 byte/provenance-identical originals,
+four indexed parents, eight metadata windows and eight vectors. Neither the active
+research parent nor production was modified. The isolated UI preview remains pending.
+
 Some tail windows contain navigation fragments and can start inside a URL without
 `boundaryTruncated`; all eight are exact windows, not necessarily substantive article
 passages. Body cleaning/chunk boundary changes require a separately versioned design.

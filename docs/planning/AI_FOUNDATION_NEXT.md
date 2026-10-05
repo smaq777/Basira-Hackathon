@@ -35,7 +35,9 @@ continue isolated implementation and integrated local tests before acceptance.
   eight windows, and made 20 paid attempts (19 validated responses). Unconditional
   passage-first composition demoted an unindexed rank-1 source in all four
   controls. The correction preserves legacy ranks and enriches matching parents;
-  replay is pending. This intentionally does not establish new-parent discovery.
+  the zero-provider replay preserved all 24 parent ranking pairs and delivered the
+  selected qualified middle paragraph in four of four arms. Isolated UI review
+  remains pending. This does not establish new-parent discovery.
 - Three composed-corpus diagnostic arms delivered no cached parents despite valid direct rankings; the
   bounded cache budget and surfaced outcome follow-up belongs to #17. Navigation
   fragments remain in some exact windows, so byte integrity is not content quality.
@@ -47,7 +49,7 @@ continue isolated implementation and integrated local tests before acceptance.
 
 | Order | Task                                                   | Current evidence and next requirement                                                                                                                                                                    | Issue              |
 | ----- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| 1     | Passage correction and replay                          | Preserve legacy parent ranks, replay the same retained vectors, then verify isolated UI context delivery. Partial 4/16 indexing does not establish improved discovery.                                   | #8                 |
+| 1     | Passage correction and replay                          | Rank correction and zero-provider replay passed; verify isolated UI context delivery next. Partial 4/16 indexing does not establish improved discovery.                                                  | #8                 |
 | 2     | Capacity feedback                                      | Distinguish the existing 20-document capacity response in the UI.                                                                                                                                        | #79                |
 | 3     | Remaining claim consistency                            | Bounded empty-selection recovery reaches evidence in one source-free UI case; malformed mixed selections still fail. Preserve those outcomes and add representative coverage/editor confirmation.        | #11                |
 | 4     | Bounded cache delivery, compaction and source coverage | Surface cache-budget failures and evaluate a bounded operator budget separately. Durable report compaction, unified parent ranking, body cleaning, 170 passages and underrepresented topics remain open. | #17/#5/#7/#8       |
