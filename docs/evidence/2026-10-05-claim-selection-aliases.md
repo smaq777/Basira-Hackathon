@@ -60,3 +60,12 @@ parentheses containing conditions, negation or exceptions remain in the exact
 claim span. This is syntactic inventory handling, not semantic claim pruning or
 verification of the reference. Source originals and citation validators are
 unchanged. The correction is committed separately from the alias binding change.
+
+## Offline verification
+
+The integrated issue branch passed the required repository check: 52 test files /
+699 tests, typecheck, documentation links, bounded policy checks, formatting and
+production build. The focused alias/inventory/assessment suite passed 106 tests;
+full-flow cache passage and empty-recovery fixtures also use the new strict wire
+aliases while assessor citations remain canonical. No provider calls or database
+writes were made by these checks. The existing build chunk-size warning remains.

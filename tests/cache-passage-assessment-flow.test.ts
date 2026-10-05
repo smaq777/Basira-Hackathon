@@ -191,7 +191,7 @@ async function run(wrongCitation = false, bodyView = false) {
       ? {
           claims: data.candidates.map((c: any) => ({
             candidateId: c.candidateId,
-            evidenceKeys: [source.snapshotKey],
+            evidenceKeys: [data.evidenceManifest[0].evidenceKey],
           })),
         }
       : {
