@@ -1,28 +1,392 @@
+import { semanticBudgetConfiguration } from './semantic-budget.js';
 import { createApp } from './app.js';
-import { createDatabase, DatabaseUnavailable } from './database.js';
+import { createRewriteService } from './rewrite.js';
+import { createAuthorRewriteGenerator, createAuthorRewriteVerifier } from './rewrite-provider.js';
+import { createDatabase, databaseTls, DatabaseUnavailable } from './database.js';
+import { Pool } from 'pg';
 import { createClerkReviewerAuth } from './reviewer-auth.js';
+import { randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
+import { createPythonAdapter } from './foundation.js';
+import { createHostedDraftAdapter, foundationRuntimeMode } from './hosted-foundation.js';
+import { createReviewStore } from './review-store.js';
+import { createFoundationWorker } from './review-worker.js';
+import { createSemanticAssessmentAdapter } from './semantic-assessment.js';
+import { createHostedCorpus } from './hosted-corpus.js';
+import { createClaimRetrievalAdapter } from './claim-retrieval.js';
+import { loadSourcePolicy } from './source-policy.js';
+import { createWebGapDiscovery } from './web-gap-discovery.js';
+import { createResearchPageCache } from './research-page-cache.js';
+import { createResearchPagePassageIndex } from './research-page-passage-index.js';
+import { createPageTopicClassifier } from './page-topic-classifier.js';
+import {
+  createSourceContentStore,
+  assertContentViewDatabaseBinding,
+} from './source-content-store.js';
+import { withResearchPageCache } from './cached-gap-discovery.js';
+import { withResearchPageCorpus } from './cached-corpus.js';
+import { createTinyfishGapDiscovery } from './tinyfish-discovery.js';
+import { createCompositeGapDiscovery } from './composite-gap-discovery.js';
+import type { ClaimCorpusSearch } from './claim-retrieval.js';
+import {
+  createOpenRouterQueryEmbedding,
+  QUERY_EMBEDDING_MODEL,
+  QUERY_EMBEDDING_DIMENSIONS,
+} from './query-embedding.js';
+import { createTicketStore } from './ticket-store.js';
+import { createBrevoMailer, createTicketNotificationWorker } from './ticket-notifications.js';
 
 const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
+const host = process.env.HOST ?? '0.0.0.0';
+if (!['127.0.0.1', '0.0.0.0', '::1'].includes(host)) throw new Error('Invalid HOST');
 const connectionString = process.env.DATABASE_URL;
 if (process.env.NODE_ENV === 'production' && !connectionString)
   throw new Error('DATABASE_URL is required in production');
 const database = connectionString ? createDatabase(connectionString) : new DatabaseUnavailable();
+const ticketsEnabled = process.env.TICKETS_ENABLED === 'true';
+if (ticketsEnabled && !connectionString) throw new Error('TICKETS_REQUIRE_DATABASE');
+const ticketDataKey = process.env.TICKET_DATA_KEY?.trim();
+const ticketLookupPepper = process.env.TICKET_LOOKUP_PEPPER?.trim();
+if (ticketsEnabled && (!ticketDataKey || !ticketLookupPepper))
+  throw new Error('TICKETS_REQUIRE_DATA_KEY_AND_LOOKUP_PEPPER');
+const ticketStore = ticketsEnabled ? createTicketStore(connectionString!) : undefined;
+const brevoValues = [
+  process.env.BREVO_API_KEY,
+  process.env.BREVO_SENDER_EMAIL,
+  process.env.BREVO_SENDER_NAME,
+  process.env.PUBLIC_APP_URL,
+].map((value) => value?.trim());
+if (brevoValues.some(Boolean) && !brevoValues.every(Boolean))
+  throw new Error('BREVO_EMAIL_CONFIGURATION_INCOMPLETE');
+if (brevoValues.every(Boolean) && !ticketsEnabled) throw new Error('BREVO_EMAIL_REQUIRES_TICKETS');
+const notificationWorker =
+  ticketStore && ticketDataKey && brevoValues.every(Boolean)
+    ? createTicketNotificationWorker({
+        store: ticketStore,
+        dataKey: ticketDataKey,
+        mailer: createBrevoMailer({
+          apiKey: brevoValues[0]!,
+          senderEmail: brevoValues[1]!,
+          senderName: brevoValues[2]!,
+          publicAppUrl: brevoValues[3]!,
+        }),
+      })
+    : undefined;
 const reviewerAuth = createClerkReviewerAuth();
 const clerkFrontendApiOrigin = process.env.CLERK_FRONTEND_API_ORIGIN?.trim();
 if (reviewerAuth.configured !== Boolean(clerkFrontendApiOrigin))
   throw new Error(
     'CLERK_FRONTEND_API_ORIGIN must be configured exactly when Clerk reviewer authentication is enabled',
   );
+async function initializeFoundation() {
+  const runtimeMode = foundationRuntimeMode(process.env, host);
+  if (runtimeMode === 'disabled') return undefined;
+  const researchPreview = ['local_research', 'hosted_research'].includes(runtimeMode);
+  const hostedDemo = runtimeMode === 'hosted_demo';
+  const researchEvidence = researchPreview || hostedDemo;
+  // This opt-in uses only numeric verse references and the pinned Tafsir adapter.
+  // Both research profiles retain provisional source/edition status.
+  if (process.env.FOUNDATION_TAFSIR_LIVE === 'true' && !researchPreview)
+    throw new Error('LIVE_SOURCE_ACQUISITION_REQUIRES_RESEARCH_PREVIEW');
+  const semanticEnabled = process.env.FOUNDATION_SEMANTIC_ENABLED === 'true';
+  const semanticBudget = semanticBudgetConfiguration(process.env, researchEvidence);
+  if (semanticEnabled && !researchEvidence)
+    throw new Error('SEMANTIC_PILOT_REQUIRES_RESEARCH_PROFILE');
+  const retrievalEnabled = process.env.FOUNDATION_CLAIM_RETRIEVAL_ENABLED === 'true';
+  const webDiscoveryEnabled = process.env.FOUNDATION_WEB_DISCOVERY_ENABLED === 'true';
+  const webCacheEnabled = process.env.FOUNDATION_WEB_CACHE_ENABLED === 'true';
+  const cachePassageEnabled = process.env.FOUNDATION_WEB_CACHE_PASSAGES_ENABLED === 'true';
+  const contentViewsEnabled = process.env.FOUNDATION_WEB_CACHE_CONTENT_VIEWS_ENABLED === 'true';
+  if (cachePassageEnabled && !webCacheEnabled) throw Error('CACHE_PASSAGES_REQUIRE_WEB_CACHE');
+  if (contentViewsEnabled && !webCacheEnabled) throw Error('CONTENT_VIEWS_REQUIRE_WEB_CACHE');
+  if (
+    contentViewsEnabled &&
+    (process.env.FOUNDATION_CORPUS_TLS_MODE || 'verify-full') !== 'verify-full'
+  )
+    throw Error('CONTENT_VIEWS_REQUIRE_VERIFIED_TLS');
+  const webProvider = process.env.FOUNDATION_WEB_PROVIDER ?? 'firecrawl';
+  if (!['firecrawl', 'tinyfish_first'].includes(webProvider))
+    throw new Error('WEB_DISCOVERY_PROVIDER_INVALID');
+  if (webCacheEnabled && !webDiscoveryEnabled) throw new Error('WEB_CACHE_REQUIRES_WEB_DISCOVERY');
+  if (webDiscoveryEnabled && !retrievalEnabled)
+    throw new Error('WEB_DISCOVERY_REQUIRES_CLAIM_RETRIEVAL');
+  if (retrievalEnabled && !semanticEnabled)
+    throw new Error('CLAIM_RETRIEVAL_REQUIRES_SEMANTIC_PIPELINE');
+  const python = process.env.FOUNDATION_PYTHON;
+  const sourceDatabase = process.env.FOUNDATION_DATABASE;
+  const workerUrl = process.env.REVIEW_WORKER_DATABASE_URL;
+  const hostedCorpusVersion = process.env.FOUNDATION_CORPUS_VERSION?.trim();
+  if (
+    !connectionString ||
+    !workerUrl ||
+    (researchPreview && (!python || !sourceDatabase)) ||
+    (hostedDemo && !hostedCorpusVersion)
+  )
+    throw new Error('FOUNDATION_CONFIGURATION_INCOMPLETE');
+  const readiness = await database.readiness();
+  if (
+    !readiness.ready ||
+    !(Number(readiness.migrationVersion?.slice(0, 4)) >= (retrievalEnabled ? 9 : 7))
+  )
+    throw new Error('FOUNDATION_MIGRATION_REQUIRED');
+  const adapter = hostedDemo
+    ? createHostedDraftAdapter(hostedCorpusVersion!)
+    : createPythonAdapter({
+        python: python!,
+        script: resolve('apps/foundation_worker/intake_bridge.py'),
+        cwd: resolve('apps/foundation_worker'),
+        database: sourceDatabase!,
+        snapshotDirectory: process.env.FOUNDATION_SNAPSHOTS || undefined,
+        researchPreview,
+      });
+  let corpusPool: Pool | undefined;
+  let webCachePool: Pool | undefined;
+  try {
+    const intake = await adapter.analyze('تهيئة محرك المصادر المحلي.', randomUUID());
+    const configured = process.env.CORPUS_VERSION?.trim();
+    if (configured && configured !== 'unconfigured' && configured !== intake.corpusVersion)
+      throw new Error('FOUNDATION_CORPUS_VERSION_MISMATCH');
+    process.env.CORPUS_VERSION = intake.corpusVersion;
+    const store = createReviewStore(workerUrl);
+    const reports = createReviewStore(connectionString);
+    let claimRetrieval;
+    let baseCorpus: ClaimCorpusSearch | undefined;
+    let selectedCorpusVersion: string | undefined;
+    if (retrievalEnabled) {
+      const configuredUrl = process.env.FOUNDATION_CORPUS_DATABASE_URL;
+      const corpusVersion = process.env.FOUNDATION_CORPUS_VERSION?.trim();
+      if (!configuredUrl || !corpusVersion) throw new Error('HOSTED_CORPUS_CONFIGURATION_REQUIRED');
+      const corpusUrl = new URL(configuredUrl);
+      if (!['postgres:', 'postgresql:'].includes(corpusUrl.protocol))
+        throw new Error('HOSTED_CORPUS_URL_INVALID');
+      corpusUrl.searchParams.delete('sslmode');
+      corpusUrl.searchParams.delete('channel_binding');
+      corpusPool = new Pool({
+        connectionString: corpusUrl.toString(),
+        ssl: databaseTls(process.env.FOUNDATION_CORPUS_TLS_MODE || 'verify-full'),
+        max: semanticBudget.corpusPoolMax,
+        connectionTimeoutMillis: semanticBudget.corpusConnectionTimeoutMs,
+        idleTimeoutMillis: 30_000,
+      });
+      const corpus = createHostedCorpus({
+        pool: corpusPool,
+        corpusVersion,
+        researchPreview: researchEvidence,
+        embeddingSpace: {
+          modelId: QUERY_EMBEDDING_MODEL,
+          dimensions: QUERY_EMBEDDING_DIMENSIONS,
+          embedQuery: createOpenRouterQueryEmbedding({
+            apiKey: process.env.OPENROUTER_API_KEY ?? '',
+          }),
+        },
+      });
+      if (!(await corpus.readiness()).ready) throw new Error('HOSTED_CORPUS_NOT_READY');
+      baseCorpus = corpus;
+      selectedCorpusVersion = corpusVersion;
+      claimRetrieval = createClaimRetrievalAdapter({
+        corpus,
+        corpusVersion,
+        researchPreview: researchEvidence,
+        reserveDiscoveryKeys: webDiscoveryEnabled,
+      });
+    }
+    let gapDiscovery;
+    if (webDiscoveryEnabled) {
+      const apiKey = process.env.FIRECRAWL_API_KEY;
+      if (!apiKey) throw new Error('FIRECRAWL_CONFIGURATION_REQUIRED');
+      const sourcePolicy = await loadSourcePolicy(
+        process.env.FOUNDATION_WEB_POLICY_PATH || undefined,
+      );
+      gapDiscovery = createWebGapDiscovery({
+        apiKey,
+        policy: sourcePolicy,
+        timeoutMs: Math.min(30_000, semanticBudget.gapDiscoveryTimeoutMs),
+      });
+      if (webProvider === 'tinyfish_first') {
+        if (!process.env.TINYFISH_API_KEY) throw new Error('TINYFISH_CONFIGURATION_REQUIRED');
+        gapDiscovery = createCompositeGapDiscovery({
+          primary: createTinyfishGapDiscovery({
+            apiKey: process.env.TINYFISH_API_KEY,
+            policy: sourcePolicy,
+            timeoutMs: Math.min(30_000, semanticBudget.gapDiscoveryTimeoutMs),
+          }),
+          fallback: gapDiscovery,
+          timeoutMs: Math.min(30_000, semanticBudget.gapDiscoveryTimeoutMs),
+        });
+      }
+      if (webCacheEnabled) {
+        if (
+          !corpusPool ||
+          !process.env.FOUNDATION_WEB_CACHE_DATABASE_URL ||
+          !process.env.OPENROUTER_API_KEY
+        )
+          throw new Error('WEB_CACHE_CONFIGURATION_REQUIRED');
+        if (semanticBudget.gapDiscoveryTimeoutMs < 65_000)
+          throw new Error('WEB_CACHE_REQUIRES_EXTENDED_DISCOVERY_BUDGET');
+        const cacheUrl = new URL(process.env.FOUNDATION_WEB_CACHE_DATABASE_URL);
+        if (contentViewsEnabled)
+          assertContentViewDatabaseBinding(
+            process.env.FOUNDATION_CORPUS_DATABASE_URL!,
+            process.env.FOUNDATION_WEB_CACHE_DATABASE_URL,
+          );
+        if (!['postgres:', 'postgresql:'].includes(cacheUrl.protocol))
+          throw new Error('WEB_CACHE_URL_INVALID');
+        cacheUrl.searchParams.delete('sslmode');
+        cacheUrl.searchParams.delete('channel_binding');
+        webCachePool = new Pool({
+          connectionString: cacheUrl.toString(),
+          ssl: databaseTls(process.env.FOUNDATION_CORPUS_TLS_MODE || 'verify-full'),
+          max: 2,
+          connectionTimeoutMillis: 5_000,
+          idleTimeoutMillis: 30_000,
+        });
+        const cache = createResearchPageCache({
+          readerPool: corpusPool,
+          writerPool: webCachePool,
+          policy: sourcePolicy,
+          queryEmbeddingTimeoutMs: semanticBudget.cacheEmbeddingTimeoutMs,
+          statementTimeoutMs: semanticBudget.cacheSqlTimeoutMs,
+          classify: createPageTopicClassifier({
+            apiKey: process.env.OPENROUTER_API_KEY,
+            contentViews: contentViewsEnabled,
+          }),
+          ...(contentViewsEnabled
+            ? {
+                contentViews: createSourceContentStore({
+                  statementTimeoutMs: semanticBudget.contentSqlTimeoutMs,
+                  readerPool: corpusPool,
+                  writerPool: webCachePool,
+                  policy: sourcePolicy,
+                }),
+              }
+            : {}),
+          ...(cachePassageEnabled
+            ? {
+                passageIndex: createResearchPagePassageIndex({
+                  statementTimeoutMs: semanticBudget.passageSqlTimeoutMs,
+                  readerPool: corpusPool,
+                  policy: sourcePolicy,
+                }),
+              }
+            : {}),
+          embeddingSpace: {
+            modelId: QUERY_EMBEDDING_MODEL,
+            embed: createOpenRouterQueryEmbedding({ apiKey: process.env.OPENROUTER_API_KEY }),
+          },
+        });
+        gapDiscovery = withResearchPageCache(gapDiscovery, cache, {
+          timeoutMs: semanticBudget.gapDiscoveryTimeoutMs,
+        });
+        claimRetrieval = createClaimRetrievalAdapter({
+          corpus: withResearchPageCorpus(baseCorpus!, cache, {
+            timeoutMs: semanticBudget.cacheTimeoutMs,
+          }),
+          corpusVersion: selectedCorpusVersion!,
+          researchPreview: researchEvidence,
+          reserveDiscoveryKeys: true,
+        });
+      }
+    }
+    const semantic = semanticEnabled
+      ? createSemanticAssessmentAdapter({
+          enabled: true,
+          ...semanticBudget,
+          apiKey: process.env.OPENROUTER_API_KEY,
+          extractor: { modelId: 'openai/gpt-6-luna', providerId: 'OpenAI', reasoningEffort: 'low' },
+          assessor: {
+            modelId: process.env.FOUNDATION_ASSESSOR_MODEL || 'openai/gpt-6.1-sol',
+            providerId: 'OpenAI',
+            reasoningEffort: 'low',
+          },
+          allowedModels: ['openai/gpt-6-luna', 'openai/gpt-6.1-sol'],
+          allowedProviders: ['OpenAI'],
+          researchPreview: researchEvidence,
+          claimRetrieval,
+          gapDiscovery,
+        })
+      : undefined;
+    const worker = createFoundationWorker(adapter, store, semantic, {
+      researchPreview: researchEvidence,
+      semanticTimeoutMs: semanticBudget.overallTimeoutMs,
+    });
+    return {
+      worker,
+      reports,
+      runtimeMode,
+      researchPreview,
+      hostedDemo,
+      liveTafsir: process.env.FOUNDATION_TAFSIR_LIVE === 'true',
+      semanticPilot: semanticEnabled,
+      webDiscovery: webDiscoveryEnabled,
+      webProvider: webProvider as 'firecrawl' | 'tinyfish_first',
+      corpusPool,
+      webCachePool,
+    };
+  } catch (error) {
+    await corpusPool?.end();
+    await webCachePool?.end();
+    await adapter.close();
+    throw error;
+  }
+}
+const foundation = await initializeFoundation().catch(async (error: unknown) => {
+  await database.close();
+  throw error;
+});
+const rewriteEnabled = process.env.FOUNDATION_REWRITE_ENABLED === 'true';
+if (
+  rewriteEnabled &&
+  (!foundation?.researchPreview ||
+    !['local_research', 'hosted_research'].includes(foundation.runtimeMode))
+)
+  throw new Error('REWRITE_REQUIRES_RESEARCH_PREVIEW');
+const rewrite = rewriteEnabled
+  ? createRewriteService(createAuthorRewriteGenerator(process.env.OPENROUTER_API_KEY ?? ''), {
+      verifier: createAuthorRewriteVerifier(process.env.OPENROUTER_API_KEY ?? ''),
+      timeoutMs: 90_000,
+    })
+  : undefined;
 const server = createApp({
+  rewrite,
   database,
   reviewerAuth,
   clerkFrontendApiOrigin,
-}).listen(port, '0.0.0.0', () =>
-  console.info(`Basirah API listening on port ${port}; evidence review remains unavailable.`),
-);
+  foundation,
+  tickets:
+    ticketStore && ticketDataKey && ticketLookupPepper
+      ? {
+          store: ticketStore,
+          dataKey: ticketDataKey,
+          lookupPepper: ticketLookupPepper,
+          notifications: notificationWorker,
+        }
+      : undefined,
+}).listen(port, host, () => {
+  foundation?.worker.start();
+  notificationWorker?.start();
+  console.info(
+    `Basirah API listening on port ${port}; source review ${foundation ? 'enabled' : 'unavailable'}; provisional semantic pilot ${foundation?.semanticPilot ? 'enabled' : 'disabled'}.`,
+  );
+});
+async function closeResources() {
+  rewrite?.close();
+  await Promise.allSettled([
+    foundation?.worker.stop(),
+    foundation?.reports.close(),
+    foundation?.corpusPool?.end(),
+    foundation?.webCachePool?.end(),
+    notificationWorker?.stop(),
+    ticketStore?.close(),
+    database.close(),
+  ]);
+}
+server.on('error', () => {
+  console.error('API_LISTEN_FAILED');
+  void closeResources().finally(() => process.exit(1));
+});
 for (const signal of ['SIGTERM', 'SIGINT'] as const)
   process.on(signal, () => {
-    server.close(() => void database.close().finally(() => process.exit(0)));
+    server.close(() => void closeResources().finally(() => process.exit(0)));
     setTimeout(() => process.exit(1), 10_000).unref();
   });

@@ -14,7 +14,7 @@
     "db:migrate": "node scripts/migrate.mjs",
     "db:verify": "node scripts/verify-database.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --exclude \"**/dist/**\"",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "docs:check": "node scripts/check-docs.mjs",
@@ -48,7 +48,7 @@
     "prettier": "3.9.9",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
-    "vite": "8.3.1",
+    "vite": "8.3.2",
     "vitest": "5.0.3"
   }
 }

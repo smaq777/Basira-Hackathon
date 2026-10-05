@@ -4,7 +4,7 @@ Evidence-linked review of Arabic Islamic content before publication.
 
 A quotation can be accurate while the conclusion drawn from it exceeds the source. Basirah separates **quotation fidelity** from **claim support**, targeting unsupported generalization, omitted qualifications, and unsupported exclusivity.
 
-> **Status: public staging prototype, 4 October 2026.** Documentation, data contracts, deterministic checks, a database-backed guest intake API and the approved Arabic UI are deployed at [api-staging-42bc.up.railway.app](https://api-staging-42bc.up.railway.app/). The verification engine, approved corpus, RAG integrations and scientific evaluation are **not complete**. Review results and reviewer records remain labelled dummy content; a successful software check is not proof of religious correctness.
+> **Status: public staging prototype, 3 October 2026.** Documentation, data contracts, deterministic checks, a database-backed guest intake API and the approved Arabic UI are deployed at [api-staging-42bc.up.railway.app](https://api-staging-42bc.up.railway.app/). The verification engine, approved corpus, RAG integrations and scientific evaluation are **not complete**. Review results and reviewer records remain labelled dummy content; a successful software check is not proof of religious correctness.
 
 ## Start here
 
@@ -23,7 +23,11 @@ Browse the [documentation hub](docs/README.md) and [English–Arabic terminology
 
 ## Local development
 
-Use Node.js **24 LTS** and npm **11**. Repository checks require no external credentials.
+The default-off [source-review integration](docs/architecture/FOUNDATION_INTEGRATION.md)
+adds a persisted report path to this UI for configured local development. Its semantic
+indicator remains unassessed; staging is unchanged until owner-approved deployment.
+
+Use Node.js **24 LTS** and npm **11**. Foundation tests require no external credentials.
 
 ```bash
 npm ci
@@ -33,7 +37,7 @@ npm run dev:api
 npm run dev:web
 ```
 
-Web: `http://localhost:5173`. API: `http://localhost:3000`. The browser demo provides the approved Arabic public journey and a Clerk-protected reviewer workspace. Authorization defaults to an explicit reviewer allowlist; hackathon staging can temporarily admit any authenticated Clerk user so judges are not blocked. Anonymous users never receive reviewer access. Reviewer records are still labelled dummy data. Text moves directly into an automatic-analysis transition; there is no manual phrase-classification step. Guest sessions, documents, immutable revisions and idempotent review-run lifecycle records are implemented when a database is configured. The verification worker and evidence pipeline are not connected yet, so the UI labels illustrative results rather than presenting them as live verification.
+Web: `http://localhost:5173`. API: `http://localhost:3000`. The browser demo provides the approved Arabic public journey and a Clerk-protected reviewer workspace. Authorization defaults to an explicit reviewer allowlist; hackathon staging can temporarily admit any authenticated Clerk user so judges are not blocked. Anonymous users never receive reviewer access. Reviewer records are still labelled dummy data. Text moves directly into an automatic-analysis transition; there is no manual phrase-classification step. Guest sessions, documents, immutable revisions and idempotent review-run lifecycle records are implemented when a database is configured. When the source-backed review capability is disabled, a real submission is saved and routed to an explicit unavailable result with the human-review ticket option; illustrative findings are not shown as its result. Configured local development can persist source-backed reports; semantic verification remains unavailable.
 
 ```bash
 npm run build
@@ -52,8 +56,8 @@ Never commit a real value to `.env.example`. Backend credentials belong in Railw
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Railway                 | Public staging app and isolated staging PostgreSQL are live; production remains gated                                                           | [Railway](https://railway.com/) and [project-token guidance](https://docs.railway.com/cli#authentication)                                               |
 | Clerk                   | Reviewer sign-in is implemented; production defaults to owner-approved user IDs, with an explicit authenticated-user mode for hackathon staging | [Clerk API keys](https://dashboard.clerk.com/last-active?path=api-keys) and [React quickstart](https://clerk.com/docs/react/getting-started/quickstart) |
-| Vercel                  | GitHub integration and public pull-request previews are verified; the committee production alias remains gated                                  | [Vercel GitHub integration](https://vercel.com/docs/git/vercel-for-github) and [account tokens](https://vercel.com/account/tokens)                      |
-| Neon                    | Production schema and migration `0005` are verified; the separate production runtime connection remains gated                                   | [Neon console](https://console.neon.tech/)                                                                                                              |
+| Vercel                  | Configuration is checked in; authorize and verify this repository before relying on preview checks                                              | [Vercel GitHub integration](https://vercel.com/docs/git/vercel-for-github) and [account tokens](https://vercel.com/account/tokens)                      |
+| Neon                    | Production project/schema exist; production runtime and latest migrations need final verification                                               | [Neon console](https://console.neon.tech/)                                                                                                              |
 | Cohere                  | Candidate embeddings; not selected by evaluation                                                                                                | [Cohere API keys](https://dashboard.cohere.com/api-keys)                                                                                                |
 | Language-model provider | Not selected; do not create a key yet                                                                                                           | The accepted release must name and link the chosen provider's official key page                                                                         |
 
@@ -61,7 +65,7 @@ Exact variables, scope, storage, rotation and environment separation are in the 
 
 ## Intended architecture
 
-React + TypeScript + Vite; Node.js + Express on Railway; PostgreSQL with pgvector and pg_trgm. Cohere Embed v4 is an **evaluation candidate**, not a proven winner. SQL migrations implement the current persistence layer. Vercel provides public frontend previews; the accepted committee production route remains gated.
+React + TypeScript + Vite; Node.js + Express on Railway; Neon PostgreSQL with pgvector and pg_trgm. Cohere Embed v4 is an **evaluation candidate**, not a proven winner. Drizzle is planned for database implementation. Vercel previews are optional and require a provider-side connection specifically authorized for this repository; `main` remains undeployed.
 
 ```mermaid
 flowchart TD

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { databaseTls } from '../apps/api/src/database.js';
 
@@ -15,6 +15,11 @@ const runtimeSchemaMigration = readFileSync(
 );
 const expiredGuestCleanupMigration = readFileSync(
   'migrations/0005_expired_guest_cleanup.sql',
+  'utf8',
+);
+const secureTicketMigration = readFileSync('migrations/0013_secure_review_tickets.sql', 'utf8');
+const directTicketMigration = readFileSync(
+  'migrations/0014_direct_review_ticket_intake.sql',
   'utf8',
 );
 const tables = [
@@ -162,5 +167,61 @@ describe('expired guest cleanup migration', () => {
       'grant execute on function basirah_api.purge_expired_guest_sessions(integer) to basirah_runtime',
     );
     expect(expiredGuestCleanupMigration).not.toMatch(/grant\s+delete\s+on/iu);
+  });
+});
+
+describe('secure human-review ticket migration', () => {
+  it.each([
+    'review_ticket',
+    'review_ticket_response',
+    'reviewer_knowledge_candidate',
+    'review_notification_outbox',
+    'review_ticket_event',
+  ])('enables RLS and withholds direct runtime access for %s', (table) => {
+    expect(secureTicketMigration).toContain(`create table basirah.${table}`);
+    expect(secureTicketMigration).toContain(
+      `alter table basirah.${table} enable row level security`,
+    );
+  });
+
+  it('uses non-sequential public codes and constant-shape email lookup', () => {
+    expect(secureTicketMigration).toContain("ticket_code ~ '^BR-[A-Z0-9]{12}$'");
+    expect(secureTicketMigration).toContain('\'{"found": false}\'::jsonb');
+    expect(secureTicketMigration).toContain('email_lookup_hash = requested_email_hash');
+  });
+
+  it('separates publication, notification and retrieval admission', () => {
+    expect(secureTicketMigration).toContain('review_notification_outbox');
+    expect(secureTicketMigration).toContain('reviewer_knowledge_candidate');
+    expect(secureTicketMigration).toContain('approve_review_response_for_retrieval');
+    expect(secureTicketMigration).toContain("'0013_secure_review_tickets'");
+  });
+});
+
+describe('direct human-review ticket intake migration', () => {
+  it('binds every ticket to an owned immutable revision without requiring a report', () => {
+    expect(directTicketMigration).toContain('alter column revision_id set not null');
+    expect(directTicketMigration).toContain('alter column run_id drop not null');
+    expect(directTicketMigration).toContain('create_revision_review_ticket');
+    expect(directTicketMigration).toContain('d.current_revision_id = dr.id');
+  });
+
+  it('preserves constant-shape lookup and returns the original submission', () => {
+    expect(directTicketMigration).toContain('\'{"found": false}\'::jsonb');
+    expect(directTicketMigration).toContain("'submission', jsonb_build_object");
+    expect(directTicketMigration).toContain("'0014_direct_review_ticket_intake'");
+  });
+});
+
+describe('deployment migration ordering', () => {
+  it('assigns one immutable migration to each numeric deployment position', () => {
+    const files = readdirSync('migrations').filter((file) => /^\d+_[a-z0-9_]+\.sql$/u.test(file));
+    const positions = files.map((file) => file.split('_', 1)[0]);
+    expect(new Set(positions).size).toBe(files.length);
+    expect(files).toContain('0013_secure_review_tickets.sql');
+    expect(files).toContain('0014_direct_review_ticket_intake.sql');
+    expect(files).toContain('0015_source_content_views.sql');
+    expect(files).not.toContain('0013_source_content_views.sql');
+    expect(files).not.toContain('0014_source_content_views.sql');
   });
 });

@@ -1,5 +1,25 @@
 # Database migrations
 
+An explicit [copied-role bootstrap](../docs/operations/COPIED_ROLE_BOOTSTRAP.md)
+addresses existing cluster roles under #81 without editing historical SQL or
+checksums. Its separate atomic receipt records the compatibility execution path.
+
+Migration `0015` adds separate insert-only source-content views and contiguous body
+windows after owner ticket migrations `0013`/`0014`; original/v1 records remain unchanged.
+It adds no vectors or roles. The content-view flag defaults off and requires isolated validation.
+See [conservative cleaning evidence](../docs/evidence/2026-10-05-source-content-views.md).
+
+Migration `0014` lets an owned current revision enter the same secure human-review
+queue when automated analysis is unavailable. It keeps report-backed tickets
+compatible, exposes the original submission to authorized reviewers, and does
+not weaken the ticket-code plus email lookup requirement.
+
+Migration `0011` adds insert-only retained-page metadata and pinned vectors with
+exact UTF16/codepoint parent bindings. It requires `0010` and isolated fresh/copy
+validation. Forward `0012` fixes empty-prefix UTF16 length discovered by a valid
+Unicode insertion probe; apply both before enabling. The application flag defaults off. See the
+[passage-index evidence](../docs/evidence/2026-10-05-cache-passage-index.md).
+
 Basirah uses reviewed, forward-only SQL migrations. Production migrations are explicit operator actions; the application never runs them at startup.
 
 ## Connections and roles
@@ -19,6 +39,12 @@ DATABASE_URL='postgresql://...' npm run db:verify
 
 The migration runner records a SHA-256 checksum and refuses to accept a changed migration that is already applied. The verification script uses synthetic data inside a rolled-back serializable transaction to check schema version, RLS coverage, absence of `PUBLIC` table grants, required indexes, cross-session isolation, signed-session anti-forgery and immutable revisions.
 
+New migrations execute and record their checksum with canonical LF line endings.
+Existing recorded checksums are accepted only when they match the same exact SQL
+in deterministic LF or CRLF form, supporting Windows checkout conversion without
+rewriting historical SQL or database metadata. SQL edits, whitespace changes,
+mixed-ending historical hashes and local extension substitutions remain rejected.
+
 Migration `0005` grants the runtime role one bounded cleanup function, not direct delete access.
 The API calls it opportunistically in batches of 100 after confirming that `0005` is active. This
 keeps normal traffic from accumulating expired primary rows, but a production scheduler is still
@@ -27,4 +53,32 @@ retention and deletion policy.
 
 ## Forward-fix policy
 
+Migration `0006` adds immutable source reports and bounded worker leases. Configure
+`REVIEW_WORKER_DATABASE_URL` with a separate login inheriting `basirah_worker`;
+keep report reads on the ordinary `basirah_runtime` connection. The worker role
+receives only scoped function execution, not table ownership. Review the
+[integration guide](../docs/architecture/FOUNDATION_INTEGRATION.md) before enabling.
+Local workflow tests on PostgreSQL without pgvector are not full migration validation;
+fresh and production-shaped isolated Neon validation remains required under #6.
+
 Do not edit an applied migration. Add a numbered migration, test it against a fresh database and a production-shaped copy, and prefer expand-and-contract changes. Do not put destructive migrations in application startup. Production data deletion, restore, reset or project removal requires separate owner approval.
+
+Migration `0007` preserves up to 80 quotation findings per report. The former five-item bound belonged to claim proposals and truncated longer quotation reviews. Apply this forward migration before enabling the source worker. Existing immutable reports remain unchanged; reanalysis produces a new complete report. Roll back the application flag rather than rewriting applied migration history.
+
+Migration `0008` adds explicit scholarly-book/explanation source roles, immutable
+passage metadata and typed cross-work links, and extends report persistence for
+the truthful new roles. Its separate `basirah_research_runtime` role admits
+pending sources only for explicit development research. Never grant it to the
+production login. Migration `0009` records versioned corpus membership separately
+from immutable source originals, allowing the same snapshot and compatible
+embedding configuration to be reused in another corpus version. Hosted claim
+retrieval requires both forward migrations. See the [persistent corpus evidence](../docs/evidence/2026-10-05-hosted-source-corpus.md).
+
+The failed experiment at `0c04dcf` applied `0013_source_content_views` and retained
+SQL `42702`. Corrected source `ae11c0d` applied cleaning `0014_source_content_views`
+on a second isolated child; role/window probes, eight selected public classifier
+calls and first-repeat sidecar readback passed. Both experimental checksums remain
+unchanged. Owner development now owns `0014_direct_review_ticket_intake`, so the
+unapplied deployment cleaning migration is `0015_source_content_views`. This
+renumbering changes only its lock and metadata labels; shared deployment remains
+owner-controlled and experimental migration receipts are not deployment parity.

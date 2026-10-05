@@ -1,8 +1,10 @@
 # Proposed PostgreSQL data model and retrieval indexes
 
-**Implementation status:** the core PostgreSQL schema and migrations through `0005_expired_guest_cleanup` are verified in staging and Neon. Approved-corpus ingestion, embeddings and the complete evidence pipeline remain pending.
+**Target relational model, partly superseded by implemented migrations.** As of 5 October, migrations 0001–0010 implement guest/document/review lifecycle, durable foundation reports, corpus snapshots, context, typed links, and a separate public-page research cache. Local PostgreSQL stores development reports; a separate isolated Neon database hosts the frozen versioned research corpus and reusable cache with pgvector. This is not production promotion.
 
-This document is the physical database handoff for [Issue #6](https://github.com/smaq777/Basira-Hackathon/issues/6), [Issue #7](https://github.com/smaq777/Basira-Hackathon/issues/7), [Issue #8](https://github.com/smaq777/Basira-Hackathon/issues/8), and the [complete system blueprint](SYSTEM_BLUEPRINT.md). Table and index names are proposed contracts, not evidence of a deployed Neon schema.
+The table catalog below remains a proposed normalized model. In particular, semantic claim proposals and support findings currently persist in revision-bound report JSON, not the proposed confirmed `claim` and `finding_evidence` relations. Cross-database evidence uses immutable snapshot keys, original hashes, attribution and corpus versions; it cannot assume a local foreign key into the hosted corpus. Web-acquired originals persist with the report; eligible public originals can also be automatically machine-topic-classified into `research_page_cache` for research reuse. Originals/labels remain immutable, verification/expiry can refresh from fresh matching acquisition, and revoked/expired/old-policy rows are excluded. This does not promote them into the frozen approved-corpus workflow or resolve rights/scholarly approval. See the [current records flow](SYSTEM_BLUEPRINT.md#current-development-records-flow), [cache evidence](../evidence/2026-10-05-reusable-research-page-cache.md), and [audit](../evidence/2026-10-05-islamiceval-records-audit.md).
+
+This document is the physical database handoff for [Issue #5](https://github.com/smaq777/Basira-Hackathon/issues/6), [Issue #6](https://github.com/smaq777/Basira-Hackathon/issues/7), [Issue #7](https://github.com/smaq777/Basira-Hackathon/issues/8), and the [complete system blueprint](SYSTEM_BLUEPRINT.md). Table and index names below are proposed contracts; migrations and verified receipts define the actual deployed research schema.
 
 ```mermaid
 erDiagram
@@ -264,7 +266,7 @@ Performance rules:
 
 ## Performance verification before acceptance
 
-No latency claim is valid until measured on the selected Neon region and a representative staged corpus. Issue #6 and Issue #8 should record the following evidence:
+No latency claim is valid until measured on the selected Neon region and a representative staged corpus. Issue #5 and Issue #7 should record the following evidence:
 
 1. Seed a representative corpus and realistic run/history counts without using private user data.
 2. Run `analyze` after the seed so planner statistics are current.
@@ -276,7 +278,7 @@ No latency claim is valid until measured on the selected Neon region and a repre
 8. Inspect slow/frequent queries with `pg_stat_statements` if the Neon plan permits it; never log bound user text.
 9. Remove redundant or unused indexes only after representative observation, not during the first migration.
 
-Set provisional database and end-to-end latency budgets in Issue #8 after the first staging pilot. The team must report measured results rather than converting a target into a performance claim.
+Set provisional database and end-to-end latency budgets in Issue #7 after the first staging pilot. The team must report measured results rather than converting a target into a performance claim.
 
 Use relational constraints for identity, ownership, lifecycle and evidence links. JSONB may store bounded provider metadata and model diagnostics, but it must not replace ownership constraints or allow arbitrary source claims. Do not add a broad JSONB GIN index unless a measured containment query requires it. Do not store hidden model chain-of-thought; retain concise user-facing justifications and evidence.
 

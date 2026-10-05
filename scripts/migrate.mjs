@@ -1,11 +1,17 @@
-import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import pg from 'pg';
+import { migrationChecksums } from './migration-checksum.mjs';
+import {
+  roleBootstrapMode,
+  inspectBootstrapRoles,
+  executeCopiedRoleBootstrap,
+} from './role-bootstrap.mjs';
 
 const { Client } = pg;
 const connectionString = process.env.DATABASE_URL_UNPOOLED;
 if (!connectionString) throw new Error('DATABASE_URL_UNPOOLED is required');
+const bootstrapMode = roleBootstrapMode(process.env.MIGRATION_ROLE_BOOTSTRAP);
 
 const migrationsDirectory = resolve('migrations');
 const files = (await readdir(migrationsDirectory))
@@ -32,10 +38,15 @@ const client = new Client({
 
 await client.connect();
 try {
+  if (bootstrapMode === 'existing-roles-v1') await inspectBootstrapRoles(client);
   for (const file of files) {
     const version = file.replace(/\.sql$/u, '');
     const template = await readFile(resolve(migrationsDirectory, file), 'utf8');
-    const checksum = createHash('sha256').update(template, 'utf8').digest('hex');
+    const {
+      canonicalSql,
+      canonicalChecksum: checksum,
+      matchesRecorded,
+    } = migrationChecksums(template);
     const table = await client.query(
       "select to_regclass('basirah_private.schema_migration') is not null as exists",
     );
@@ -45,19 +56,25 @@ try {
         [version],
       );
       if (applied.rows[0]) {
-        if (applied.rows[0].checksum_sha256 !== checksum)
+        if (!matchesRecorded(applied.rows[0].checksum_sha256))
           throw new Error(`Applied migration checksum changed: ${version}`);
         console.log(`already applied ${version}`);
         continue;
       }
     }
-    const sql = template.replace(
+    const sql = canonicalSql.replace(
       "'0000000000000000000000000000000000000000000000000000000000000000'",
       `'${checksum}'`,
     );
-    await client.query(sql);
+    if (bootstrapMode === 'existing-roles-v1' && version === '0008_typed_source_corpus') {
+      const receipt = await executeCopiedRoleBootstrap(client, { version, checksum, sql });
+      console.log(JSON.stringify(receipt));
+    } else {
+      await client.query(sql);
+    }
     console.log(`applied ${version}`);
   }
+  if (bootstrapMode === 'existing-roles-v1') await inspectBootstrapRoles(client);
 } finally {
   await client.end();
 }

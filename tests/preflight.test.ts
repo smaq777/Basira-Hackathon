@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDemoPreflight } from '../apps/api/src/preflight.js';
+import { buildDemoPreflight, PreflightInputSchema } from '../apps/api/src/preflight.js';
 
 describe('local preflight demonstration', () => {
   it('classifies a Quran quotation independently from its fidelity warning', () => {
@@ -122,5 +122,156 @@ describe('local preflight demonstration', () => {
       issueCode: 'overgeneralization',
       severity: 'warning',
     });
+  });
+
+  it('classifies a late quotation independently of the five finding limit', () => {
+    const text =
+      'هذه مقدمة طويلة بلا نسبة إلى مصدر. '.repeat(70) +
+      'قال تعالى: ﴿نص مثال عربي يحتاج إلى التحقق﴾.';
+    const result = buildDemoPreflight({ text });
+    expect(text.length).toBeLessThanOrEqual(3000);
+    expect(result.findings).toHaveLength(5);
+    expect(result.annotations).toContainEqual(
+      expect.objectContaining({
+        contentType: 'quran',
+        text: 'نص مثال عربي يحتاج إلى التحقق',
+        classificationBasis: 'cue',
+      }),
+    );
+    expect(result.warnings).toContain('candidate_limit_reached');
+  });
+
+  it('separates multiple quotations and attribution in one paragraph', () => {
+    const text =
+      'قال تعالى: «نص قرآني تجريبي يحتاج إلى تحقق» ثم قال رسول الله ﷺ: «نص حديث تجريبي يحتاج إلى تحقق» [صحيح البخاري: 99].';
+    const result = buildDemoPreflight({ text });
+    expect(
+      result.annotations.filter((row) => ['quran', 'hadith_matn'].includes(row.contentType)),
+    ).toEqual([
+      expect.objectContaining({ contentType: 'quran', text: 'نص قرآني تجريبي يحتاج إلى تحقق' }),
+      expect.objectContaining({
+        contentType: 'hadith_matn',
+        text: 'نص حديث تجريبي يحتاج إلى تحقق',
+      }),
+    ]);
+    expect(result.annotations).toContainEqual(
+      expect.objectContaining({
+        contentType: 'isnad',
+        text: 'قال رسول الله ﷺ:',
+      }),
+    );
+  });
+
+  it.each([
+    ['﴿', '﴾'],
+    ['{', '}'],
+    ['(', ')'],
+    ['“', '”'],
+    ['"', '"'],
+  ])('recognizes the framed %s %s wrapper without altering wording', (left, right) => {
+    const text = `قال تعالى: ${left}نص مثال (3) مع تتمة محفوظة${right}.`;
+    const result = buildDemoPreflight({ text });
+    expect(result.annotations).toContainEqual(
+      expect.objectContaining({
+        contentType: 'quran',
+        text: 'نص مثال (3) مع تتمة محفوظة',
+      }),
+    );
+  });
+
+  it('does not assign Quran or hadith identity to arbitrary parentheses or numeric notes', () => {
+    const result = buildDemoPreflight({
+      text: 'هذا شرح عادي (عبارة مؤلفة) مع حاشية (٣) ونقاش عن القرآن والحديث.',
+    });
+    expect(
+      result.annotations.some((row) => ['quran', 'hadith_matn', 'isnad'].includes(row.contentType)),
+    ).toBe(false);
+  });
+
+  it.each(['لم يقل النبي', 'ليس قول النبي', 'لا قال تعالى'])(
+    'does not affirm denied attribution: %s',
+    (prefix) => {
+      const result = buildDemoPreflight({ text: `${prefix}: «نص مثال عربي غير منسوب».` });
+      expect(
+        result.annotations.some((row) =>
+          ['quran', 'hadith_matn', 'isnad'].includes(row.contentType),
+        ),
+      ).toBe(false);
+    },
+  );
+
+  it('preserves leading whitespace, emoji, and exact UTF-16 spans', () => {
+    const text =
+      '  \n😀 مقدمة قصيرة.\nعن عمر قال: قال رسول الله ﷺ: «  نص مثال عربي محفوظ  » [صحيح البخاري: 99].  ';
+    expect(PreflightInputSchema.parse({ text }).text).toBe(text);
+    const result = buildDemoPreflight({ text });
+    const matn = result.annotations.find((row) => row.contentType === 'hadith_matn');
+    const isnad = result.annotations.find((row) => row.contentType === 'isnad');
+    expect(matn?.text).toBe('نص مثال عربي محفوظ');
+    expect(isnad?.text).toBe('عن عمر قال: قال رسول الله ﷺ:');
+    for (const row of [...result.annotations, ...result.findings]) {
+      expect(text.slice(row.startOffset, row.endOffset)).toBe(row.text);
+    }
+    expect(matn?.startOffset).toBe(text.indexOf('نص مثال'));
+  });
+
+  it('separates an unwrapped matn from its narrator attribution', () => {
+    const text = 'عن راو تجريبي قال: قال رسول الله ﷺ: لا تحذف هذه العبارة التجريبية.';
+    const result = buildDemoPreflight({ text });
+    expect(result.annotations).toContainEqual(
+      expect.objectContaining({
+        contentType: 'hadith_matn',
+        text: 'لا تحذف هذه العبارة التجريبية.',
+      }),
+    );
+    expect(result.annotations).toContainEqual(
+      expect.objectContaining({
+        contentType: 'isnad',
+        text: 'عن راو تجريبي قال: قال رسول الله ﷺ:',
+      }),
+    );
+  });
+
+  it('uses the nearest scholarly attribution instead of an earlier Quran cue', () => {
+    const result = buildDemoPreflight({
+      text: 'ذكر عبارة قال تعالى ثم قال الإمام: «نص مثال يحتاج إلى مصدر». ',
+    });
+    expect(result.annotations).toContainEqual(
+      expect.objectContaining({
+        contentType: 'scholarly_statement',
+        text: 'نص مثال يحتاج إلى مصدر',
+      }),
+    );
+  });
+
+  it('recognizes the bounded prophetic prayer attribution', () => {
+    const text = 'في الصحيحين قال - صلى الله عليه وسلم - لمعاذ: (نص حديث تجريبي واضح).';
+    const result = buildDemoPreflight({ text });
+    expect(result.annotations).toContainEqual(
+      expect.objectContaining({
+        contentType: 'hadith_matn',
+        text: 'نص حديث تجريبي واضح',
+      }),
+    );
+    expect(result.annotations).toContainEqual(expect.objectContaining({ contentType: 'isnad' }));
+  });
+
+  it('anchors a finding inside the quotation when its wording also occurs in the introduction', () => {
+    const text = 'نص مثال عربي ثم قال تعالى: «نص مثال عربي». ';
+    const result = buildDemoPreflight({ text });
+    expect(result.findings[0]?.startOffset).toBe(text.lastIndexOf('نص مثال عربي'));
+    expect(result.annotations).toContainEqual(
+      expect.objectContaining({
+        contentType: 'quran',
+        startOffset: text.lastIndexOf('نص مثال عربي'),
+      }),
+    );
+  });
+
+  it('bounds structural annotations separately and discloses omitted annotation coverage', () => {
+    const result = buildDemoPreflight({ text: 'قال تعالى: «نص مثال عربي». '.repeat(100) });
+    expect(result.annotations).toHaveLength(80);
+    expect(result.findings.length).toBeLessThanOrEqual(5);
+    expect(result.warnings).toContain('annotation_limit_reached');
   });
 });
