@@ -1,6 +1,6 @@
 # Repository governance evidence — 1 October 2026
 
-This is a sanitized engineering record for issue [#31](https://github.com/smaq777/Basira-Hackathon/issues/27). It contains no credential values, team conversations, personal notes, local paths or private provider output.
+This is a sanitized engineering record for issue [#27](https://github.com/smaq777/Basira-Hackathon/issues/27). It contains no credential values, team conversations, personal notes, local paths or private provider output.
 
 ## GitHub settings verified
 
@@ -36,4 +36,4 @@ Vercel authorization was initiated but no Basirah project, GitHub connection, pr
 - Gitleaks 8.30.1 archive checksum matched the official release checksum.
 - Gitleaks scanned 11 commits (about 641 KB) and reported no leak. A separate working-directory scan (about 489 KB) also reported no leak.
 
-The scan is evidence for the checked refs and working tree at this time, not a guarantee against a future credential commit. Commit, pull request and any verified provider connection are appended to issue #31 after execution.
+The scan is evidence for the checked refs and working tree at this time, not a guarantee against a future credential commit. Commit, pull request and any verified provider connection are appended to issue #27 after execution.

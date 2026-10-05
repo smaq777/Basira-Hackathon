@@ -27,7 +27,7 @@ flowchart LR
 
 ## Experimental pre-submit preflight
 
-Issue #71 adds a local, reversible interaction trial before the full review starts. After a user
+Issue #41 adds a local, reversible interaction trial before the full review starts. After a user
 pastes or edits at least 20 characters, the editor separates semantic annotations from verification
 findings. Semantic spans include Quran, hadith matn, isnad/attribution, user-claimed source,
 attributed scholarly statement, interpretation, general claim and unknown. The background colour
@@ -58,7 +58,7 @@ The human-review package is a downloadable handoff, not an operational live-scho
 
 Use the locally bundled Cairo family as the primary Arabic interface font, with system sans-serif fallbacks when the asset cannot load. Use logical CSS properties, RTL-aware navigation, accessible names, keyboard focus restoration, live progress announcements and a clear undo for suggested edits. English references and code fragments need isolated LTR rendering. Announce expired sessions before silently losing edits. A changed draft invalidates old results.
 
-Existing concept images are design references only; the implemented foundation shell is deliberately marked incomplete. Visual approval does not establish scholarly approval or implementation completion.
+Existing concept images are design references only; the implemented prototype clearly labels illustrative and incomplete verification states. Visual approval does not establish scholarly approval or implementation completion.
 
 The reviewer workspace uses a simple sidebar on desktop and a bottom navigation bar on mobile. Clerk authentication is verified again by the API before protected content is shown, while dashboard counts, queue records, decisions and source-registry entries remain labelled dummy data until reviewer persistence is implemented. Returning to the public interface keeps the current account session. The separate **تسجيل الخروج** action completes Clerk session termination, moves to the public home route and performs a full-page refresh. A later reviewer-entry click therefore starts from a fresh signed-out state and shows the login screen without a manual refresh. The workspace includes loading, empty, recoverable error and saved-decision feedback without implying an operational scholar service.
 

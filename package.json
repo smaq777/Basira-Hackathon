@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Pre-hackathon engineering foundation for evidence-linked Arabic content review",
+  "description": "Evidence-linked Arabic Islamic content review before publication",
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11 <12"
@@ -48,7 +48,7 @@
     "prettier": "3.9.9",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
-    "vite": "8.3.1",
+    "vite": "8.3.2",
     "vitest": "5.0.3"
   }
 }

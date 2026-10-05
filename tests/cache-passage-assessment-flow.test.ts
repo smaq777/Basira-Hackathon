@@ -7,10 +7,16 @@ import { withResearchPageCorpus } from '../apps/api/src/cached-corpus.js';
 import { createClaimRetrievalAdapter } from '../apps/api/src/claim-retrieval.js';
 import { createSemanticAssessmentAdapter } from '../apps/api/src/semantic-assessment.js';
 import { cachePassages } from '../apps/api/src/research-page-passages.js';
+import {
+  sourceBlocks,
+  selectSourceContent,
+  sourceContentPassages,
+} from '../apps/api/src/source-content-view.js';
+import { createSourceContentStore } from '../apps/api/src/source-content-store.js';
 import { sha256 } from '../apps/api/src/foundation.js';
 import { parseSourcePolicy } from '../apps/api/src/source-policy.js';
 import type { SourceEvidence, FoundationIntake } from '../packages/contracts/src/foundation.js';
-async function run(wrongCitation = false) {
+async function run(wrongCitation = false, bodyView = false) {
   const policy = parseSourcePolicy({
     schemaVersion: 1,
     policyVersion: 'v1',
@@ -39,7 +45,10 @@ async function run(wrongCitation = false) {
     'فاصل موضوع مستقل.\n'.repeat(200) +
     b +
     '\n' +
-    'خاتمة موضوع مستقل.\n'.repeat(200);
+    'خاتمة موضوع مستقل.\n'.repeat(200) +
+    (bodyView
+      ? '\n[آخر](https://example.com/fatwas/2/other)\n\n[تصنيف](https://example.com/categories/one)\n\n[ثالث](https://example.com/fatwas/3/other)\n\n[تصنيف آخر](https://example.com/categories/two)'
+      : '');
   const source: SourceEvidence = {
     snapshotKey: 'web-cache:' + sha256(text),
     sourceId: 'web-owned',
@@ -62,9 +71,27 @@ async function run(wrongCitation = false) {
   const built = cachePassages(source),
     pa = built.passages.find((p) => p.originalText.includes(a))!,
     pb = built.passages.find((p) => p.originalText.includes(b))!;
+  const content = bodyView
+    ? sourceContentPassages(
+        source,
+        selectSourceContent(
+          { ...source, sourceUrl: source.sourceUrl! },
+          sourceBlocks(source).map((block) => ({ blockId: block.blockId, label: 'navigation' })),
+          {
+            modelId: 'owned',
+            promptVersion: 'owned',
+            requestSha256: 'c'.repeat(64),
+            responseSha256: 'd'.repeat(64),
+          },
+        ).selection,
+      )
+    : undefined;
   const query = vi.fn(async (sql: string, v: unknown[] = []) => {
-    if (sql.startsWith('with scores')) {
-      const p = String(v[1]).includes('الامانة') ? pa : pb;
+    if (sql.startsWith('with scores') || sql.startsWith('with ranked')) {
+      const selected = sql.startsWith('with ranked') ? content!.passages : [pa, pb];
+      const p = selected.find((p) =>
+        p.originalText.includes(String(v[1]).includes('الامانة') ? a : b),
+      )!;
       return {
         rows: [
           {
@@ -85,7 +112,8 @@ async function run(wrongCitation = false) {
             passage_sha256: p.passageSha256,
             context_truncated: p.contextTruncated,
             boundary_truncated: p.boundaryTruncated,
-            coverage: built.coverage,
+            coverage: sql.startsWith('with ranked') ? content!.coverage : built.coverage,
+            selection: content?.selection,
             lexical_hit: false,
             semantic_hit: true,
           },
@@ -110,6 +138,7 @@ async function run(wrongCitation = false) {
     classify,
     embeddingSpace: { modelId: 'openai/text-embedding-3-small', embed },
     passageIndex: createResearchPagePassageIndex({ readerPool: pool, policy }),
+    ...(bodyView ? { contentViews: createSourceContentStore({ readerPool: pool, policy }) } : {}),
   });
   const combined = withResearchPageCorpus(
     { search: async () => [], restore: async () => [] },
@@ -162,7 +191,7 @@ async function run(wrongCitation = false) {
       ? {
           claims: data.candidates.map((c: any) => ({
             candidateId: c.candidateId,
-            evidenceKeys: [source.snapshotKey],
+            evidenceKeys: [data.evidenceManifest[0].evidenceKey],
           })),
         }
       : {
@@ -225,5 +254,32 @@ it('delivers two different dense-only windows from the same existing seed throug
 });
 it('citation validation uses each claim packet windows and rejects a citation present only in the other claim window', async () => {
   const r = await run(true);
+  expect(r.report.errorCode).toBe('invalid_citations');
+});
+it('delivers source-bound cleaned windows for two claims sharing an immutable seed and excludes related navigation', async () => {
+  const r = await run(false, true);
+  expect(r.report.status).toBe('completed');
+  expect(r.report.trace.retrieval!.passagePreferences!.map((p) => p.chunkerVersion)).toEqual([
+    'exact-content-block-context-v1',
+    'exact-content-block-context-v1',
+  ]);
+  for (const claim of r.assessmentPacket.claims)
+    expect(claim.evidence[0].passages.map((p: any) => p.originalText).join('\n')).not.toContain(
+      'categories/',
+    );
+  expect(
+    r.assessmentPacket.claims[0].evidence[0].passages.some((p: any) =>
+      p.originalText.includes(r.a),
+    ),
+  ).toBe(true);
+  expect(
+    r.assessmentPacket.claims[1].evidence[0].passages.some((p: any) =>
+      p.originalText.includes(r.b),
+    ),
+  ).toBe(true);
+  expect(r.classify).not.toHaveBeenCalled();
+});
+it('cleaned citation validation still rejects another claim window', async () => {
+  const r = await run(true, true);
   expect(r.report.errorCode).toBe('invalid_citations');
 });

@@ -287,7 +287,7 @@ describe('v1.7 assessment wire and coverage', () => {
       if (request.response_format.json_schema.name === 'extraction') {
         const claims = data.candidates.slice(0, 5).map((candidate: { candidateId: string }) => ({
           candidateId: candidate.candidateId,
-          evidenceKeys: ['owned-source'],
+          evidenceKeys: ['E1'],
         }));
         reverse = !reverse;
         return modelResponse({ claims: reverse ? claims.reverse() : claims }, request.model);
@@ -353,9 +353,7 @@ describe('v1.7 assessment wire and coverage', () => {
       if (request.response_format.json_schema.name === 'extraction')
         return modelResponse(
           {
-            claims: [
-              { candidateId: data.candidates[0].candidateId, evidenceKeys: ['owned-source'] },
-            ],
+            claims: [{ candidateId: data.candidates[0].candidateId, evidenceKeys: ['E1'] }],
           },
           request.model,
         );
@@ -408,4 +406,89 @@ describe('v1.7 assessment wire and coverage', () => {
       assessments: [],
     });
   });
+});
+
+describe('recognized bracketed citation inventory framing', () => {
+  it('excludes a manifest-bound named Quran reference while retaining the complete qualified author assertion', () => {
+    const original = {
+      ...source('نص المصدر الأصلي.'),
+      sourceRole: 'quran_text' as const,
+      reference: '31:15',
+      provenance: { surah_name: 'لُقمَان ' },
+    };
+    const text =
+      'لا يلزم طاعتهما في المعصية، ويلزم صحبتهما بالمعروف فيما لا إثم فيه. قال تعالى: ﴿نص المصدر الأصلي﴾ [لقمان:31:15].';
+    const row = intake(text, original);
+    const before = canonical(row);
+    const inventory = claimInventory(row);
+    expect(inventory.candidates).toHaveLength(1);
+    expect(inventory.candidates[0]!.originalText).toBe(
+      'لا يلزم طاعتهما في المعصية، ويلزم صحبتهما بالمعروف فيما لا إثم فيه',
+    );
+    expect(inventory.excluded).toContainEqual({
+      startOffset: text.indexOf('[لقمان'),
+      endOffset: text.indexOf('[لقمان') + '[لقمان:31:15]'.length,
+      reason: 'framing',
+    });
+    expect(canonical(row)).toBe(before);
+  });
+  it('supports exact references and Arabic digits without asserting unmatched references are claims or source support', () => {
+    const original = {
+      ...source('نص المصدر.'),
+      sourceRole: 'quran_text' as const,
+      reference: '31:15',
+      provenance: { surah_name: 'لُقمَان ' },
+    };
+    for (const reference of ['[31:15]', '[لقمان:٣١:١٥]'])
+      expect(
+        claimInventory(intake('قال تعالى: ﴿نص المصدر﴾ ' + reference, original)).candidates,
+      ).toEqual([]);
+    const unmatched = claimInventory(intake('قال تعالى: ﴿نص المصدر﴾ [لقمان:31:16]', original));
+    expect(
+      unmatched.excluded.some(
+        (row) => row.reason === 'framing' && row.startOffset === 'قال تعالى: ﴿نص المصدر﴾ '.length,
+      ),
+    ).toBe(false);
+  });
+  it.each([
+    'يجب حفظ الحقوق [إلا عند التعذر، فلا يلزم ذلك].',
+    'يجب حفظ الحقوق (إلا عند التعذر، فلا يلزم ذلك).',
+    'لا يلزم حفظ السجل [إذا كان فيه ضرر]، ويلزم حفظ الحقوق.',
+  ])('retains bracketed/parenthesized author qualifiers: %s', (text) => {
+    const inventory = claimInventory(intake(text));
+    expect(inventory.candidates).toHaveLength(1);
+    expect(inventory.candidates[0]!.originalText).toBe(text.slice(0, -1));
+    expect(inventory.excluded).toEqual([]);
+  });
+});
+
+it('retains wrong/missing Quran names and inline references without fragmenting author negation or conditions', () => {
+  const original = {
+    ...source('نص المصدر.'),
+    sourceRole: 'quran_text' as const,
+    reference: '31:15',
+    provenance: { surah_name_original: 'لقمان' },
+  };
+  const wrongName = 'قال تعالى: ﴿نص المصدر﴾ [البقرة:31:15].';
+  expect(
+    claimInventory(intake(wrongName, original)).candidates.some((row) =>
+      row.originalText.includes('البقرة:31:15'),
+    ),
+  ).toBe(true);
+  const missingName = { ...original, provenance: {} };
+  expect(
+    claimInventory(intake('قال تعالى: ﴿نص المصدر﴾ [لقمان:31:15].', missingName)).candidates.some(
+      (row) => row.originalText.includes('لقمان:31:15'),
+    ),
+  ).toBe(true);
+  for (const text of [
+    'طاعة الوالدين [31:15] لا تكون في المعصية مع الصحبة بالمعروف.',
+    'طاعة الوالدين [لقمان:31:15] لا تكون في المعصية إلا إذا زال المنع.',
+    'طاعة الوالدين [31:15]، فيما لا إثم فيه، تلزم مع الصحبة بالمعروف.',
+  ]) {
+    const inventory = claimInventory(intake(text, original));
+    expect(inventory.candidates).toHaveLength(1);
+    expect(inventory.candidates[0]!.originalText).toBe(text.slice(0, -1));
+    expect(inventory.excluded).toEqual([]);
+  }
 });

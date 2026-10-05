@@ -1,7 +1,7 @@
 [
   {
-    "number": 2,
-    "title": "[GOVERNANCE] Enforce main and development protection and invite the second developer",
+    "number": 3,
+    "title": "[GOVERNANCE] Enforce main and development protection and invite collaborator",
     "milestone": 1,
     "area": "platform",
     "type": "setup",
@@ -14,11 +14,11 @@
       "Record collaborator invitation/acceptance only after the owner supplies the username"
     ],
     "tests": "Settings read-back and a controlled pull-request/check enforcement test after protection becomes available.",
-    "dependencies": [1, 31],
+    "dependencies": [2, 27],
     "risk": "Incorrect access changes can weaken controls or block both developers. Change one control at a time and revert only the specific mistaken setting."
   },
   {
-    "number": 3,
+    "number": 4,
     "title": "[CONTENT] Establish the approved source and licensing registry",
     "milestone": 1,
     "area": "content",
@@ -30,11 +30,11 @@
       "A qualified content reviewer confirms the bounded source-selection policy"
     ],
     "tests": "Registry completeness, rejected/withdrawn source cases and manual attribution review.",
-    "dependencies": [1],
+    "dependencies": [2],
     "risk": "Unlicensed or unsuitable material must not enter the corpus. Remove unapproved entries and rebuild affected indexes."
   },
   {
-    "number": 4,
+    "number": 5,
     "title": "[CONTENT] Curate 30–50 contextual reference passages",
     "milestone": 1,
     "area": "content",
@@ -46,11 +46,11 @@
       "Coverage and exclusions are documented; no claim of comprehensive Islamic coverage"
     ],
     "tests": "Context/negation preservation and source-reference spot checks.",
-    "dependencies": [3],
+    "dependencies": [4],
     "risk": "Truncated context can reverse meaning. Withdraw affected passages and invalidate dependent evaluations."
   },
   {
-    "number": 5,
+    "number": 6,
     "title": "[DATA] Implement Neon schema, migrations and guest ownership",
     "milestone": 2,
     "area": "platform",
@@ -62,11 +62,11 @@
       "Cross-session access is denied and revision/run relationships are enforced"
     ],
     "tests": "Migration apply/compatibility, foreign-key, ownership, expiration and deletion tests.",
-    "dependencies": [2],
+    "dependencies": [3],
     "risk": "Data loss or exposure. Use isolated synthetic data and reviewed expand-and-contract/forward-fix; no destructive production operations."
   },
   {
-    "number": 6,
+    "number": 7,
     "title": "[RAG] Implement versioned embedding ingestion",
     "milestone": 2,
     "area": "rag",
@@ -78,11 +78,11 @@
       "Incompatible embedding models/configurations cannot share a query space"
     ],
     "tests": "Idempotent ingestion, interrupted batch recovery, model/dimension mismatch and mocked provider failures.",
-    "dependencies": [4, 5],
+    "dependencies": [5, 6],
     "risk": "Unexpected costs or incompatible vectors. Bound batches and retain a lexical-only fallback; rebuild a separate index when models change."
   },
   {
-    "number": 7,
+    "number": 8,
     "title": "[RAG] Implement hybrid retrieval and evidence recall evaluation",
     "milestone": 2,
     "area": "rag",
@@ -94,11 +94,11 @@
       "Compare lexical, vector and hybrid retrieval on held-out reviewer-labeled passages"
     ],
     "tests": "Reference resolution, Recall@5, context restoration, duplicate-source and unavailable-embedding cases.",
-    "dependencies": [4, 5, 6],
+    "dependencies": [5, 6, 7],
     "risk": "Relevant evidence can be missed. Disclose degraded retrieval and abstain where evidence is insufficient."
   },
   {
-    "number": 8,
+    "number": 9,
     "title": "[API] Integrate Tafsir MCP with an approved snapshot fallback",
     "milestone": 2,
     "area": "api",
@@ -110,11 +110,11 @@
       "A licensed same-edition snapshot path is tested or explicitly marked unavailable"
     ],
     "tests": "Schema contract, timeout, malformed response, missing reference and fallback attribution tests.",
-    "dependencies": [3, 4],
+    "dependencies": [4, 5],
     "risk": "Endpoint/version changes or unsuitable tafsir selection. Disable the adapter and use only approved disclosed evidence."
   },
   {
-    "number": 9,
+    "number": 10,
     "title": "[API] Verify authorized Dorar access and bounded hadith coverage",
     "milestone": 2,
     "area": "api",
@@ -126,11 +126,11 @@
       "Preserve named scholar/source attribution and disclose limited fallback coverage"
     ],
     "tests": "Controlled happy-path and 403/429/HTML challenge tests; do not report uptime from a small access probe.",
-    "dependencies": [3],
+    "dependencies": [4],
     "risk": "Access denial must not become a false hadith verdict. Disable live feature and route unresolved cases for review."
   },
   {
-    "number": 10,
+    "number": 11,
     "title": "[CORE] Extract claims and obtain editor confirmation",
     "milestone": 2,
     "area": "rag",
@@ -142,11 +142,11 @@
       "Editors can correct/remove extracted claims before paid assessment"
     ],
     "tests": "Mixed text, nested quotes, ambiguity, malicious instructions and invalid structured output.",
-    "dependencies": [5],
+    "dependencies": [6],
     "risk": "Extraction can change meaning. Preserve original text and require confirmation; fall back to manual claim selection."
   },
   {
-    "number": 11,
+    "number": 12,
     "title": "[CORE] Implement deterministic quotation and attribution checks",
     "milestone": 2,
     "area": "content",
@@ -158,11 +158,11 @@
       "Negation, omitted conditions and incorrect references are not normalized into a match"
     ],
     "tests": "Exact, diacritics, punctuation, ellipsis, wrong verse and missing source fixtures.",
-    "dependencies": [4, 7],
+    "dependencies": [5, 8],
     "risk": "Over-normalization can conceal meaning changes. Use conservative unresolved status and reviewer inspection."
   },
   {
-    "number": 12,
+    "number": 13,
     "title": "[CORE] Assess claim support with evidence and scope guards",
     "milestone": 2,
     "area": "rag",
@@ -174,11 +174,11 @@
       "Invalid citations, unsupported output and out-of-scope requests abstain or require review"
     ],
     "tests": "Correct quote/unsupported inference, invented IDs, stale revisions, insufficient evidence and disagreement.",
-    "dependencies": [7, 10, 11],
+    "dependencies": [8, 11, 12],
     "risk": "Plausible model reasoning can be wrong. Require scientific evaluation and disable categories failing critical cases."
   },
   {
-    "number": 13,
+    "number": 14,
     "title": "[API] Implement review orchestration and recoverable run state",
     "milestone": 2,
     "area": "platform",
@@ -190,11 +190,11 @@
       "Timeouts/restarts produce recoverable or explicitly interrupted states; no untracked background promises"
     ],
     "tests": "Duplicate submission, late result, cancellation, restart and exhausted-budget integration tests.",
-    "dependencies": [5, 8, 10, 11, 12],
+    "dependencies": [6, 9, 11, 12, 13],
     "risk": "Duplicate costs or incorrect lifecycle. Preserve immutable run records and stop affected processing safely."
   },
   {
-    "number": 14,
+    "number": 15,
     "title": "[UX] Build the Arabic intake and claim-confirmation flow",
     "milestone": 2,
     "area": "ux",
@@ -206,11 +206,11 @@
       "Keyboard and RTL operation preserve original text and user corrections"
     ],
     "tests": "Component and browser tests for input, validation, focus, mobile layout and API errors.",
-    "dependencies": [10],
+    "dependencies": [11],
     "risk": "User may mistake prototype for complete verification. Retain explicit capability/coverage disclosures."
   },
   {
-    "number": 15,
+    "number": 16,
     "title": "[UX] Build evidence-linked reports, revisions and review export",
     "milestone": 3,
     "area": "ux",
@@ -222,11 +222,11 @@
       "Edits create new revisions; export does not promise a live scholar service"
     ],
     "tests": "Evidence navigation, stale outputs, undo/recheck, partial report and export completeness.",
-    "dependencies": [13, 14],
+    "dependencies": [14, 15],
     "risk": "A simplified badge may imply religious approval. Use explicit bounded labels and reject unsupported summaries."
   },
   {
-    "number": 16,
+    "number": 17,
     "title": "[RELIABILITY] Implement bounded retries, caching and fallback",
     "milestone": 3,
     "area": "api",
@@ -238,11 +238,11 @@
       "Different-source or lexical-only fallback is disclosed and reassessed"
     ],
     "tests": "Failure injection across provider/model/embedding paths, cache-version and breaker recovery tests.",
-    "dependencies": [8, 13],
+    "dependencies": [9, 14],
     "risk": "Fallback may appear successful while losing evidence quality. Return partial/insufficient results instead of invented completeness."
   },
   {
-    "number": 17,
+    "number": 18,
     "title": "[EVALUATION] Build the reviewed benchmark and comparative report",
     "milestone": 3,
     "area": "content",
@@ -254,11 +254,11 @@
       "Keep development fixtures separate from held-out scientific evaluation"
     ],
     "tests": "Reproducible evaluator, metric calculation checks and manual review of critical errors.",
-    "dependencies": [4, 12, 15],
+    "dependencies": [5, 13, 16],
     "risk": "Inflated accuracy or biased baselines. Predeclare criteria and retain negative results; block unsupported claims."
   },
   {
-    "number": 18,
+    "number": 19,
     "title": "[SECURITY] Verify privacy, ownership and untrusted-input controls",
     "milestone": 3,
     "area": "security",
@@ -270,11 +270,11 @@
       "HTML, arbitrary URLs and embedded instructions cannot escalate privileges"
     ],
     "tests": "IDOR, XSS, SSRF, injection, expiration and deletion negative cases.",
-    "dependencies": [5, 13, 15],
+    "dependencies": [6, 14, 16],
     "risk": "User data exposure. Keep real-user deployment blocked until verified; revoke exposed credentials immediately."
   },
   {
-    "number": 19,
+    "number": 20,
     "title": "[OPS] Connect staging services and verify deployment recovery",
     "milestone": 3,
     "area": "platform",
@@ -288,11 +288,11 @@
       "No secrets in frontend/repo; rollback and migration compatibility are documented"
     ],
     "tests": "Build, workflow, flag-off/on, HTTPS, readiness, review smoke, restart and rollback tests in non-production.",
-    "dependencies": [2, 5, 13, 18, 31],
+    "dependencies": [3, 6, 14, 19, 27],
     "risk": "Accidental production changes, spending or secret exposure. Use isolated resources, bounded limits, safe-default flags and manual production promotion."
   },
   {
-    "number": 20,
+    "number": 21,
     "title": "[QA] Verify end-to-end Arabic UX and accessibility",
     "milestone": 3,
     "area": "ux",
@@ -304,12 +304,12 @@
       "RTL, contrast, focus and non-color status communication are verified"
     ],
     "tests": "Browser E2E, keyboard walkthrough, mobile viewport and accessibility checks.",
-    "dependencies": [14, 15, 16, 18, 19],
+    "dependencies": [15, 16, 17, 19, 20],
     "risk": "Happy-path demos conceal failures. Keep failed states in the test matrix and document unresolved limits."
   },
   {
-    "number": 21,
-    "title": "[HANDOFF] Prepare the public release and committee submission package",
+    "number": 22,
+    "title": "[HANDOFF] Final submission checklist — deadline 6 Oct 2026, 23:59 Riyadh",
     "milestone": 4,
     "area": "platform",
     "type": "docs",
@@ -320,11 +320,11 @@
       "Record release, artifact verification and actual final submission receipt separately"
     ],
     "tests": "Clean installation, public access, artifact/link checks and timed demonstration.",
-    "dependencies": [17, 19, 20],
+    "dependencies": [18, 20, 21],
     "risk": "Exposing secrets or misrepresenting readiness. Remain private until approved; correct artifacts before submission."
   },
   {
-    "number": 22,
+    "number": 23,
     "title": "[LATER] Explore evidence-bounded finding discussions",
     "area": "ux",
     "type": "research",
@@ -335,11 +335,11 @@
       "No unrestricted fatwa/chat scope is introduced"
     ],
     "tests": "Evidence-boundary and topic-change tests before implementation.",
-    "dependencies": [21],
+    "dependencies": [22],
     "risk": "Scope expansion and unsupported advice. Keep disabled during MVP; revert to static explanations."
   },
   {
-    "number": 23,
+    "number": 24,
     "title": "[LATER] Evaluate accounts, saved history and image intake",
     "area": "platform",
     "type": "research",
@@ -350,11 +350,11 @@
       "No extra personal data collected by the MVP"
     ],
     "tests": "Discovery and threat-model review; no production feature promised.",
-    "dependencies": [21],
+    "dependencies": [22],
     "risk": "Unnecessary complexity and sensitive-data collection. Defer until justified by users and a reviewed design."
   },
   {
-    "number": 31,
+    "number": 27,
     "title": "[GOVERNANCE] Prepare judge-ready repository and secure handoff",
     "milestone": 1,
     "area": "platform",
@@ -368,7 +368,7 @@
       "Full-history and tracked-file scans are recorded before public handoff"
     ],
     "tests": "npm run check, workflow syntax, GitHub settings read-back, credential scan and clean-clone rehearsal.",
-    "dependencies": [2, 19],
+    "dependencies": [3, 20],
     "risk": "A weak handoff can expose credentials or misrepresent readiness. Revoke first, keep production manual and distinguish configured from verified."
   }
 ]

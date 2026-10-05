@@ -1,5 +1,15 @@
 # Local development setup
 
+## Optional conservative source content views
+
+`FOUNDATION_WEB_CACHE_CONTENT_VIEWS_ENABLED=false` preserves topic-only admission
+and original/v1 delivery. Enabling requires the existing research cache configuration
+and reviewed migration `0015`. New public pages receive one joint topic/block-label
+request; existing retained originals need an explicit frozen zero-provider sidecar
+backfill after their classification diagnostic. Derived body windows use lexical
+selection, with no cleaned-view embeddings. Read the [source-bound selection,
+operator and rollback limits](../evidence/2026-10-05-source-content-views.md).
+
 ## Optional retained-page passage index
 
 `FOUNDATION_WEB_CACHE_PASSAGES_ENABLED=false` keeps the legacy cache path. Enabling
@@ -104,6 +114,9 @@ Use `npm ci` in CI for locked dependencies. If a dependency changes, regenerate 
 
 ## Optional local semantic experiment
 
+The existing loopback profile below remains the default. An independently opted-in
+Railway staging profile is described in [hosted research setup](HOSTED_RESEARCH_STAGING.md).
+
 Apply migration `0007_complete_quotation_findings` before source review. Keep
 `FOUNDATION_SEMANTIC_ENABLED=false` unless an operator has authorized the test
 payload to be sent to OpenRouter and its selected provider. Activation requires
@@ -130,7 +143,12 @@ stored reports or enable rewriting. See the [pilot evidence](../evidence/2026-10
 
 ## Research cache and discovery profile — 5 October
 
-All foundation, semantic, retrieval, discovery, and cache flags default off. Live research activation requires `NODE_ENV` other than production, `HOST=127.0.0.1` or `::1`, and `FOUNDATION_RESEARCH_PREVIEW=true`. It is not a production deployment setting.
+All foundation, semantic, retrieval, discovery, and cache flags default off. The
+default local profile requires `NODE_ENV` other than production, `HOST=127.0.0.1`
+or `::1`, and `FOUNDATION_RESEARCH_PREVIEW=true`. The separate
+[hosted staging profile](HOSTED_RESEARCH_STAGING.md) permits real connected testing
+in the explicitly selected Railway staging service, retaining provisional research
+status. It does not authorize a main/production release.
 
 For a time-bounded public hackathon demonstration, `FOUNDATION_HOSTED_DEMO=true`
 selects a separate read-only hosted profile. It starts from the immutable submitted
@@ -161,3 +179,21 @@ REVIEW_DEADLINE_SECONDS=300
 These are ceilings, not additive guaranteed processing time or a service-level promise. The worker uses remaining deadline budget and preserves time for persistence; acquisition, classification, and cache writes share the discovery stage. Cache activation requires the extended 65-second discovery setting. The default budgets remain 60/45/8/18 seconds and a 60-second outer review deadline.
 
 Validated public-page originals are automatically machine-topic-classified and saved to a separate pending research cache; private draft/query/review provenance is excluded. Future initial claim retrieval searches eligible cached originals alongside the frozen hosted corpus, so a weak cached match cannot suppress later gap discovery. TTL defaults to 30 days; expired, revoked, or old-policy entries are excluded. Fresh matching acquisition can refresh expiry without changing originals; the writer cannot remove revocation. See [cache evidence](../evidence/2026-10-05-reusable-research-page-cache.md). Disable the optional flags to stop provider/cache use; existing reports remain durable and rewriting stays unavailable.
+
+## Optional bounded retrieval diagnostics (#17)
+
+See [behavior, limits and rollback](../evidence/2026-10-05-cache-delivery-budgets.md). Ordinary defaults are unchanged. An explicit loopback research profile can additionally set:
+
+```dotenv
+FOUNDATION_RETRIEVAL_TIMEOUT_MS=60000
+FOUNDATION_RETRIEVAL_ASSESSMENT_RESERVE_MS=90000
+FOUNDATION_CACHE_TIMEOUT_MS=20000
+FOUNDATION_CACHE_QUERY_EMBEDDING_TIMEOUT_MS=2000
+FOUNDATION_CACHE_SQL_TIMEOUT_MS=5000
+FOUNDATION_CACHE_PASSAGE_SQL_TIMEOUT_MS=3000
+FOUNDATION_CACHE_CONTENT_SQL_TIMEOUT_MS=5000
+FOUNDATION_CORPUS_CONNECTION_TIMEOUT_MS=5000
+FOUNDATION_CORPUS_POOL_MAX=6
+```
+
+Use these only with the existing 240-second semantic/20-second extraction/90-second assessment/300-second review research configuration above. Retrieval respects the remaining deadline and reserves assessment time. Longer per-phase ceilings do not guarantee all fifteen potential query plans complete or fit the immutable report packet. Per-query and restore diagnostics distinguish partial/unavailable work from successful empty retrieval; the UI presents a separate limited-retrieval notice without changing the evidence verdict. No owner database login or environment-file edit is required by this feature.
