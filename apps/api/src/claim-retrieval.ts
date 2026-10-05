@@ -17,6 +17,7 @@ import {
   cachePassagePreference,
   stripCachePassageProvenance,
 } from './research-page-passages.js';
+import { extractQuranReferences } from './quran-reference.js';
 
 export interface ClaimRetrievalTrace {
   corpusVersion: string;
@@ -128,10 +129,16 @@ export function createClaimRetrievalAdapter(options: {
           throw new Error('RETRIEVAL_IDENTITY_COLLISION');
         return true;
       };
+      const explicitReferences = extractQuranReferences(intake.originalText);
       const searchPlans = claims.flatMap((claim) => {
-        const references = intake.evidence
-          .filter((row) => claim.evidenceKeys.includes(row.snapshotKey))
-          .map((row) => row.reference);
+        const references = [
+          ...new Set([
+            ...intake.evidence
+              .filter((row) => claim.evidenceKeys.includes(row.snapshotKey))
+              .map((row) => row.reference),
+            ...explicitReferences,
+          ]),
+        ];
         return claimQueries(claim.originalText).map((query) => ({ claim, query, references }));
       });
       const searchRows: SourceEvidence[][] = new Array(searchPlans.length);

@@ -7,7 +7,7 @@ import { Pool } from 'pg';
 import { createClerkReviewerAuth } from './reviewer-auth.js';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
-import { createPythonAdapter } from './foundation.js';
+import { createPythonAdapter, type FoundationAdapter } from './foundation.js';
 import { createHostedDraftAdapter, foundationRuntimeMode } from './hosted-foundation.js';
 import { createReviewStore } from './review-store.js';
 import { createFoundationWorker } from './review-worker.js';
@@ -130,26 +130,10 @@ async function initializeFoundation() {
     !(Number(readiness.migrationVersion?.slice(0, 4)) >= (retrievalEnabled ? 9 : 7))
   )
     throw new Error('FOUNDATION_MIGRATION_REQUIRED');
-  const adapter = hostedDemo
-    ? createHostedDraftAdapter(hostedCorpusVersion!)
-    : createPythonAdapter({
-        python: python!,
-        script: resolve('apps/foundation_worker/intake_bridge.py'),
-        cwd: resolve('apps/foundation_worker'),
-        database: sourceDatabase!,
-        snapshotDirectory: process.env.FOUNDATION_SNAPSHOTS || undefined,
-        researchPreview,
-      });
+  let adapter: FoundationAdapter | undefined;
   let corpusPool: Pool | undefined;
   let webCachePool: Pool | undefined;
   try {
-    const intake = await adapter.analyze('تهيئة محرك المصادر المحلي.', randomUUID());
-    const configured = process.env.CORPUS_VERSION?.trim();
-    if (configured && configured !== 'unconfigured' && configured !== intake.corpusVersion)
-      throw new Error('FOUNDATION_CORPUS_VERSION_MISMATCH');
-    process.env.CORPUS_VERSION = intake.corpusVersion;
-    const store = createReviewStore(workerUrl);
-    const reports = createReviewStore(connectionString);
     let claimRetrieval;
     let baseCorpus: ClaimCorpusSearch | undefined;
     let selectedCorpusVersion: string | undefined;
@@ -288,6 +272,23 @@ async function initializeFoundation() {
         });
       }
     }
+    adapter = hostedDemo
+      ? createHostedDraftAdapter(hostedCorpusVersion!, baseCorpus)
+      : createPythonAdapter({
+          python: python!,
+          script: resolve('apps/foundation_worker/intake_bridge.py'),
+          cwd: resolve('apps/foundation_worker'),
+          database: sourceDatabase!,
+          snapshotDirectory: process.env.FOUNDATION_SNAPSHOTS || undefined,
+          researchPreview,
+        });
+    const intake = await adapter.analyze('تهيئة محرك المصادر المحلي.', randomUUID());
+    const configured = process.env.CORPUS_VERSION?.trim();
+    if (configured && configured !== 'unconfigured' && configured !== intake.corpusVersion)
+      throw new Error('FOUNDATION_CORPUS_VERSION_MISMATCH');
+    process.env.CORPUS_VERSION = intake.corpusVersion;
+    const store = createReviewStore(workerUrl);
+    const reports = createReviewStore(connectionString);
     const semantic = semanticEnabled
       ? createSemanticAssessmentAdapter({
           enabled: true,
@@ -326,7 +327,7 @@ async function initializeFoundation() {
   } catch (error) {
     await corpusPool?.end();
     await webCachePool?.end();
-    await adapter.close();
+    await adapter?.close();
     throw error;
   }
 }

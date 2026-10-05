@@ -124,7 +124,9 @@ export function createHostedCorpus(options: HostedCorpusOptions): ClaimCorpusSea
       if (!normalized) return [];
       const space = options.embeddingSpace;
       let vector: number[] | undefined;
-      if (space) {
+      // An explicit bibliographic locator is stronger than similarity search and
+      // avoids spending a provider call on unrelated topical neighbors.
+      if (space && references.length === 0) {
         try {
           vector = await space.embedQuery(query, signal);
         } catch {
@@ -157,16 +159,23 @@ export function createHostedCorpus(options: HostedCorpusOptions): ClaimCorpusSea
         const exact = [
           ...new Set([...references, ...(query.match(/\b\d{1,3}:\d{1,3}\b/gu) ?? [])]),
         ];
-        if (exact.length)
-          merge(
-            (
-              await client.query(
-                `${selectRows} where exists(select 1 from basirah.corpus_snapshot membership where membership.passage_id=p.id and membership.corpus_version=$1) and p.snapshot_key is not null and p.source_role is not null and p.stable_reference=any($2::text[]) order by p.snapshot_key limit $3`,
-                [options.corpusVersion, exact, limit],
-              )
-            ).rows,
-            'exact',
-          );
+        let exactRows: Record<string, unknown>[] = [];
+        if (exact.length) {
+          exactRows = (
+            await client.query(
+              `${selectRows} where exists(select 1 from basirah.corpus_snapshot membership where membership.passage_id=p.id and membership.corpus_version=$1) and p.snapshot_key is not null and p.source_role is not null and p.stable_reference=any($2::text[]) order by p.snapshot_key limit $3`,
+              [options.corpusVersion, exact, limit],
+            )
+          ).rows;
+          merge(exactRows, 'exact');
+        }
+        // When a valid explicit locator resolves, return only that immutable
+        // source family. Broad lexical/vector neighbors are not substitutes for
+        // the source the writer actually cited.
+        if (exactRows.length)
+          return [...ranked.values()]
+            .sort((a, b) => String(a.row.snapshot_key).localeCompare(String(b.row.snapshot_key)))
+            .map((result) => evidence(result.row, result.modes));
         merge(
           (
             await client.query(
