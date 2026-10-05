@@ -16,21 +16,26 @@ continue isolated implementation and integrated local tests before acceptance.
 - [Fixed-evidence model comparison](../evidence/2026-10-05-fixed-packet-routing.md)
   is complete as a selected engineering diagnostic. It establishes neither
   general stronger-model benefit nor consistent detailed qualifier fields.
-- The local rewrite action improves supported author wording, preserves quoted
-  spans, checks meaning/evidence separately and revalidates copy ownership. A
-  live candidate may have reduced explicit obligation to indicative language;
-  retain this concern and strengthen preservation before treating rewrite as
-  reliable. See [rewrite evidence](../evidence/2026-10-05-substantive-rewrite.md).
-- PRs #59 and #70–#76 were open/unmerged at this checkpoint. Required CI passed
-  for #75/#76 at their published commits. Local activation is not shared staging
+- [Claim recovery PR #77](https://github.com/smaq777/Basira-Hackathon/pull/77)
+  implements bounded reconsideration of a valid empty selection. One fresh
+  source-free hadith-studies UI report now reaches actual Neon/cache retrieval
+  and assessment. Another mixed 31:15 trial failed claim binding and remains
+  recorded. Exhaustive extraction and editor confirmation are still open.
+- [Rewrite PR #76](https://github.com/smaq777/Basira-Hackathon/pull/76) now
+  requires explicit modality preservation. The integrated UI generated wording
+  retaining absence of obligation and obligation, preserved the Ayah, displayed
+  before/after and completed its copy action using a retained supported report.
+  This does not establish general reliability or fresh extraction success.
+- PRs #59 and #70–#78 were open/unmerged at this checkpoint. Required CI passed
+  for #76–#78 at their published commits. Local activation is not shared staging
   deployment, source approval or Saleh acceptance.
 
 ## Ordered implementation and evaluation
 
 | Order | Task                                                | Current evidence and next requirement                                                                                                                                                                                                                                                         | Issue              |
 | ----- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| 1     | Claim-selection consistency                         | A real source-free hadith-studies assertion was skipped despite a valid original-span candidate; retrieval never ran. Diagnose and recover bounded omissions without forcing questions, quotations or prose into claims. Retain unselected coverage and failed trials.                        | #11                |
-| 2     | Rewrite modality preservation                       | Preserve obligation, prohibition, permission and certainty explicitly, alongside conditions/negation/exceptions/scope. Freeze positive and negative controls; reject ambiguous or strengthened wording even when evidence supports it. Verify the integrated before/after and copy flow.      | #38                |
+| 1     | Claim-selection consistency                         | Bounded empty-selection recovery is implemented and one source-free UI case now reaches evidence. Malformed selections can still fail; retain these outcomes, test representative mixed writing and add the still-pending editor confirmation.                                                | #11                |
+| 2     | Rewrite modality preservation                       | Version-2 guard and selected controls are implemented; integrated before/after and copy UI preserve explicit modality on an existing supported report. Broader independently reviewed preservation and ambiguity controls remain pending.                                                     | #38                |
 | 3     | Relevant passage retrieval and topic coverage       | Grow contextual sources across the nine labels, with independent works and exact parent bindings. Implement compact retained-parent passage storage/vector retrieval before claiming full-page packet headroom is solved. The 170-passage plan and underrepresented labels remain unfinished. | #5/#7/#8           |
 | 4     | Semantic calibration and Arabic explanation quality | Evaluate qualifier-to-proposition attachment separately from relation labels. Include unrelated/insufficient evidence and unresolved multi-clause writing, retain failures, compare fixed packets, then test the whole pipeline. No empirical religious accuracy claim without adjudication.  | #13/#18            |
 | 5     | Shared staging integration                          | Accept the dependency PRs into development, configure the explicitly selected staging API/proxy and provider readiness, then verify the same public UI end to end. Current local loopback research gates need a separately reviewed hosted staging configuration.                             | #14/#20/#69        |
@@ -47,8 +52,10 @@ retrieval remains a separate acceptance requirement.
 PR #59 supplies the foundation. Review the bounded follow-ups in dependency order:
 #70 expansion plan, #71 staging routing, #72 original-span claims/passages, #73
 layout/citation action, #74 batch compiler/corpus pilot, #75 source-quality guard
-and #76 substantive rewrite. Later claim/modality fixes require fresh checks and
-their own issue evidence. Preserve merge commits; no squash, rebase or force-push.
+and #76 substantive rewrite including its modality follow-up, then #77 claim
+recovery and #78 routing evidence/priority plan. New passage indexing is being
+implemented independently under #8; it needs its own review and isolated
+migration/retrieval evidence. Preserve merge commits; no squash, rebase or force-push.
 PRs and issue acceptance remain open until Saleh acts. CI success does not imply
 deployment or scientific acceptance.
 
