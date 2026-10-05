@@ -85,6 +85,11 @@ export function createClerkReviewerAuth(
   );
   const reviewerIds = new Set(csv(environment.CLERK_REVIEWER_USER_IDS));
   const accessMode = parseReviewerAccessMode(environment.CLERK_REVIEWER_ACCESS_MODE);
+  const productionDeployment =
+    environment.BASIRAH_DEPLOYMENT_ENVIRONMENT === 'production' ||
+    environment.RAILWAY_ENVIRONMENT_NAME === 'production';
+  if (productionDeployment && accessMode === 'authenticated')
+    throw new Error('Production reviewer access requires CLERK_REVIEWER_ACCESS_MODE=allowlist');
   const anyClerkValue = Boolean(
     publishableKey ||
     secretKey ||
