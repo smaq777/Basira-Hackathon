@@ -208,7 +208,7 @@ export function createApp(options: AppOptions = {}) {
       researchPreview: options.foundation?.researchPreview ?? false,
       maximumTextLength: MAX_DRAFT_LENGTH,
       draftRewrite: Boolean(options.rewrite),
-      draftRewriteMode: options.rewrite ? 'citation_and_layout_only' : null,
+      draftRewriteMode: options.rewrite?.mode ?? null,
     });
   });
   app.post('/api/v1/preflight', guestMutationRateLimit, (req, res, next) => {

@@ -1,7 +1,7 @@
 import { semanticBudgetConfiguration } from './semantic-budget.js';
 import { createApp } from './app.js';
 import { createRewriteService } from './rewrite.js';
-import { createRewriteGenerator } from './rewrite-provider.js';
+import { createAuthorRewriteGenerator, createAuthorRewriteVerifier } from './rewrite-provider.js';
 import { createDatabase, databaseTls, DatabaseUnavailable } from './database.js';
 import { Pool } from 'pg';
 import { createClerkReviewerAuth } from './reviewer-auth.js';
@@ -258,7 +258,10 @@ if (
 )
   throw new Error('REWRITE_REQUIRES_LOCAL_RESEARCH_PREVIEW');
 const rewrite = rewriteEnabled
-  ? createRewriteService(createRewriteGenerator(process.env.OPENROUTER_API_KEY ?? ''))
+  ? createRewriteService(createAuthorRewriteGenerator(process.env.OPENROUTER_API_KEY ?? ''), {
+      verifier: createAuthorRewriteVerifier(process.env.OPENROUTER_API_KEY ?? ''),
+      timeoutMs: 90_000,
+    })
   : undefined;
 const server = createApp({
   rewrite,
