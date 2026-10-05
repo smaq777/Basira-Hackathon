@@ -37,5 +37,7 @@ Previously committed migrations remain; do not delete them or drop shared roles.
 Disable the opt-in to restore strict runner behavior. After a successful bootstrap,
 retain its receipt and use reviewed forward migrations for further changes.
 
-Actual fresh/copy-role validation evidence is pending and must be recorded before
-owner acceptance. Default tests use synthetic clients and no external database.
+The [actual validation](../evidence/2026-10-05-copied-role-bootstrap.md) passed on
+an isolated PostgreSQL 18 cluster through current owner migration 0014. Fresh
+Neon and proposed cleaning 0015 chain parity remain separate acceptance checks.
+Default tests use synthetic clients and no external database.
