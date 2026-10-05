@@ -253,7 +253,7 @@ describe('owned foundation review web flow', () => {
     ).not.toBeNull();
     expect(window.location.hash).toBe(`#/result?revisionId=${REVISION_ID}`);
     expect(fetchMock.mock.calls.some(([path]) => path === '/api/v1/documents')).toBe(true);
-    expect(screen.getByRole('button', { name: /إرسال النص للمراجعة البشرية/ })).not.toBeNull();
+    expect(screen.getByRole('button', { name: /إرسال النص للمراجعة/ })).not.toBeNull();
     expect(screen.queryByText('اكتملت المقارنة')).toBeNull();
     expect(screen.queryByText('لذلك يجب إخفاء كل صدقة ولا يجوز إعلانها.')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'العودة وتعديل النص' }));
