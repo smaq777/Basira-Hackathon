@@ -142,3 +142,13 @@ Use `npm run check` and
 The latter uses synthetic offline records and is also in CI. Live provider
 evaluation, hosted migration and release remain separate scoped operator actions.
 See [local integration evidence](../evidence/2026-10-04-foundation-integration.md).
+
+## Hosted quotation alignment boundary
+
+The hosted adapter accepts raw quotations only at original token boundaries and
+requires a unique contiguous alignment across raw and existing orthographic
+candidates. Ambiguous occurrences remain unresolved with no selected source
+offsets. Unique quotations keep original UTF-16 spans and the established
+full/excerpt and exact/orthographic distinctions. This does not expand the
+normalization policy or source approval. See the
+[offline boundary evidence](../evidence/2026-10-05-hosted-quotation-boundaries.md).
