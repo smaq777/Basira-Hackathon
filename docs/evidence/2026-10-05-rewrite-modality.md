@@ -101,3 +101,28 @@ After the prompt grammar cleanup and consultation documentation, focused rewrite
 checks passed 3 files / 28 tests and documentation links passed again.
 Rollback is this follow-up commit; retained old receipts
 continue to describe their original schema and outcomes.
+
+## Independent integrity and UI recheck
+
+The lead audit bound the final provider module to the frozen protocol, compared
+raw final generation/verification text with validated artifacts, checked original
+author spans, immutable source hashes and exact citations, and recomputed cost.
+All integrity checks passed; this is not independent semantic adjudication.
+
+After integration, full checks passed 44 files / 594 tests. The current UI loaded
+retained supported report `e7ff2ea0-7d11-47e6-bcf5-f2f3cd4a6a23` and generated:
+
+> إذا أمر الوالدان بمعصية من معاصي الله، فلا يلزمنا طاعتهما فيها، ولكن يلزمنا مصاحبتهما في الدنيا بالمعروف فيما لا إثم فيه.
+
+The Ayah remained unchanged; the inserted citation visibly remained a research
+source. Expanded before/after showed the explicit modality and the copy action
+displayed its success message. Clipboard byte equality was not independently
+verified. This uses an existing supported report and tests historical-report
+compatibility plus current rewrite, not a fresh successful extraction.
+
+A fresh mixed 31:15 report `79fe5e29-01ba-4efb-b71d-5a0d8ec5dc96` had separately
+failed original-span selection validation and was retained without semantic
+assessment. It did not authorize substantive rewrite. Screenshots, public test
+text and report receipts remain external in
+`AI_Foundation/experiments/integration-lead-v1` and
+`AI_Foundation/experiments/broader-source-cache-2026-10-05`.
