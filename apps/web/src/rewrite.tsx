@@ -283,7 +283,8 @@ export function RewritePanel({ report }: { report: FoundationReport }) {
               <p>لم ينتج الاقتراح إضافة مناسبة؛ النص المعروض هو الأصل كما ورد، دون توثيق جديد.</p>
             )}
           {!!candidate.operations?.paragraphBreaks.length &&
-            !candidate.operations?.citations.length && (
+            !candidate.operations?.citations.length &&
+            !candidate.operations?.replacements?.length && (
               <p>اقتُرح ترتيب الفقرات فقط؛ لم تُضف مراجع جديدة.</p>
             )}
           <details>

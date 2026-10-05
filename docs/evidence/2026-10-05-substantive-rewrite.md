@@ -82,3 +82,9 @@ tests also remain applicable. Final `npm run check` passed: **42 test files / 57
 source tests**, typechecking, documentation links, bounded policy checks,
 formatting and production build. The existing Vite bundle-size warning remains
 advisory. These software checks do not establish calibrated semantic safety.
+
+Independent lead review repaired a misleading paragraph-only notice when wording
+replacements coexist with paragraph breaks, and excluded a supported commentary
+when its canonical parent is revoked or rejected. Event reconstruction now has
+an explicit type. Focused follow-up validation passed **4 files / 34 tests** plus
+TypeScript; the 575-test full check above describes the preceding implementation.

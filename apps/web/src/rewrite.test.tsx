@@ -39,7 +39,7 @@ it('shows substantive before/after wording and limits the claimed coverage to ch
     status: 'validated',
     text: replacementText,
     operations: {
-      paragraphBreaks: [],
+      paragraphBreaks: [3],
       citations: [],
       replacements: [
         { claimId: 'author', originalText, replacementText, evidenceKeys: ['source'] },
@@ -56,6 +56,7 @@ it('shows substantive before/after wording and limits the claimed coverage to ch
   await screen.findByRole('button', { name: 'نسخ النص المقترح' });
   expect(view.container.querySelector('del')?.textContent).toBe(originalText);
   expect(view.container.querySelector('ins')?.textContent).toBe(replacementText);
+  expect(screen.queryByText('اقتُرح ترتيب الفقرات فقط؛ لم تُضف مراجع جديدة.')).toBeNull();
   expect(
     screen.getByText(
       'حُسّنت العبارات المعروضة في المقارنة فقط. بقيت بقية العبارات، بما فيها غير المدعومة أو غير المراجعة، كما وردت.',

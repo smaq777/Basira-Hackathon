@@ -47,6 +47,7 @@ export function authorRewriteInput(report: FoundationReport) {
     for (const e of [...evidence])
       if (e.parentSnapshotKey) {
         const parent = report.intake.evidence.find((s) => s.snapshotKey === e.parentSnapshotKey);
+        if (!parent || ['revoked', 'rejected'].includes(parent.approvalStatus)) return [];
         if (parent && !evidence.some((s) => s.snapshotKey === parent.snapshotKey))
           evidence.push(parent);
       }
@@ -125,14 +126,10 @@ export function validateAuthorRewrite(report: FoundationReport, raw: unknown) {
     )
   )
     throw new RewriteError('REWRITE_INVALID_CANDIDATE');
-  const events = [
+  const events: Array<{ start: number; end: number; text: string }> = [
     ...changes.map((c) => ({ start: c.startOffset, end: c.endOffset, text: c.replacementText })),
-    ...inserts.entries(),
-  ]
-    .map((entry: any) =>
-      Array.isArray(entry) ? { start: entry[0], end: entry[0], text: entry[1] } : entry,
-    )
-    .sort((a, b) => a.start - b.start || a.end - b.end);
+    ...[...inserts.entries()].map(([offset, text]) => ({ start: offset, end: offset, text })),
+  ].sort((a, b) => a.start - b.start || a.end - b.end);
   let text = '',
     cursor = 0;
   for (const event of events) {

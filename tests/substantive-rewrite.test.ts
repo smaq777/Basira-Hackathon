@@ -115,6 +115,28 @@ function fixture() {
   return { report, operations, verification };
 }
 const settle = () => new Promise((r) => setTimeout(r, 10));
+it.each(['revoked', 'rejected'] as const)(
+  'excludes a supported commentary whose canonical parent is %s',
+  (approvalStatus) => {
+    const { report } = fixture(),
+      child = report.intake.evidence[0]!;
+    const parent = {
+      ...child,
+      snapshotKey: 'parent',
+      sourceId: 'parent',
+      sourceRole: 'quran_text' as const,
+      parentSnapshotKey: null,
+      approvalStatus,
+    };
+    child.sourceRole = 'tafsir_commentary';
+    child.parentSnapshotKey = 'parent';
+    report.intake.evidence.push(parent);
+    report.intake.segments[0]!.role = 'ayah';
+    report.intake.segments[0]!.sourceKeys = ['parent'];
+    report.intake.quotationFindings[0]!.evidenceKey = 'parent';
+    expect(authorRewriteInput(report).authorClaims).toEqual([]);
+  },
+);
 it('improves actual author wording and preserves exact quotation, exception, pending source label and unreviewed text', () => {
   const { report, operations } = fixture(),
     valid = validateAuthorRewrite(report, operations);
