@@ -22,10 +22,37 @@ There are up to fifteen claim search plans and three workers. Pool contention, c
 
 ## Evidence and limits
 
-Prior frozen passage diagnostics retained three composed-corpus arms with no cached parents despite valid direct rankings. Later read-only cold/warm checks delivered two cached parents and verified preferences (cold approximately 2.79–2.90 s). These observations are consistent with inadequate timing room but do not prove why the historical full UI report had zero cache candidates. The new diagnostics are intended to distinguish causes on a future actual UI run; no successful full UI cache/content delivery is claimed here.
+Prior frozen passage diagnostics retained three composed-corpus arms with no cached parents despite valid direct rankings. Later read-only cold/warm checks delivered two cached parents and verified preferences (cold approximately 2.79–2.90 s). These observations are consistent with inadequate timing room but do not prove why the historical full UI report had zero cache candidates. The new diagnostics distinguish causes on the selected actual UI run below; the cause of the historical full UI absence remains unknown.
 
 Cleaning validation on isolated child `br-little-pond-b2y5usie` passed the corrected schema and fourteen role/window probes. Eight paid joint Luna classification outcomes on four declared public originals were valid; removed block IDs were repeat-stable. Two parents removed eleven recognizable boilerplate blocks each. Corrective-footnote and conditional-text controls retained all source content. Parent 8880's topic label varied between worship and ethics. This selected eight-call diagnostic is not general classifier reliability, unseen accuracy or scholarly approval.
 
-First-repeat-only admission created four immutable content views and eight body windows on that child. Independent readback retained all sixteen raw parents and all eight older passage/vector records. Actual reader enrichment verified six hints for the cleaned parents; the two no-removal controls remained identical. This is adapter/isolated-database evidence, not runtime activation or a full UI delivery proof. Frozen source, requests, outcomes, migration failure and repair receipts remain external under `AI_Foundation/experiments/source-content-cleaning-2026-10-05`; issue #17 makes no additional paid calls.
+First-repeat-only admission created four immutable content views and eight body windows on that child. Independent readback retained all sixteen raw parents and all eight older passage/vector records. Actual reader enrichment verified six hints for the cleaned parents; the two no-removal controls remained identical. These receipts are adapter/isolated-database evidence; the separate selected local UI run is recorded below. Frozen source, requests, outcomes, migration failure and repair receipts remain external under `AI_Foundation/experiments/source-content-cleaning-2026-10-05`; issue #17 makes no additional paid calls.
 
-Offline regressions exercise slow success, hung cache/restore/provider work, caller abort, late-result exclusion, expired empty results, simultaneous query isolation, zero-row stage failure, retrieval expiry, assessment reserve and Arabic presentation. Existing actual-flow tests retain source-window bindings and citation delivery. Full check results are recorded with the implementation commit; actual integrated UI rechecking remains a separate lead task.
+Offline regressions exercise slow success, hung cache/restore/provider work, caller abort, late-result exclusion, expired empty results, simultaneous query isolation, zero-row stage failure, retrieval expiry, assessment reserve and Arabic presentation. Existing actual-flow tests retain source-window bindings and citation delivery. Full check results are recorded with the implementation commit; the selected integrated UI check is separately recorded below.
+
+## Audited selected local UI run
+
+Runtime/test source was frozen at `53c757f1d4e7f3ccbf5a8bc5b0f511d154998acb`,
+distinct from this later documentation commit. On the separate loopback preview
+8773 with isolated child `br-little-pond-b2y5usie`, report
+`fed992b6-9e99-49d5-aeb0-bd57b410c9b1` completed in 14.081 seconds with actual pinned
+Luna extraction and Sol assessment. All recorded cache stages succeeded: eight
+cached parent candidates, two selected and two restored. Retrieval took 3.158 s;
+cache search took 2.658 s. No gap discovery trace was recorded.
+
+Six preferred windows from cleaned 8880/8881 reached the assessor. Independent
+read-only audit recomputed every original UTF16 substring/hash, matched both
+content-selection proofs to the immutable first-repeat manifest, and verified the
+exact 8881 citation was inside an assessed window alongside Muyassar 31:15. The
+audit made no repeated model calls or SQL writes. Credentials-free external
+receipts `UI_REPORT_V1.json`, `UI_RUN_RECEIPT_V1.json` and
+`LEAD_UI_RESULT_AUDIT_V1.json` are retained under
+`AI_Foundation/experiments/cache-delivery-diagnostics-2026-10-05`.
+
+This establishes selected local full UI/model/cache/content-window delivery.
+It does not establish general retrieval relevance, source approval, deployment
+migration-chain parity or shared staging/production readiness. The thirteen source
+candidates included unrelated material and assessment consumed 14,490 input tokens.
+One scope field omitted negation while conditions/explanation preserved it; that
+is a separate calibration/preservation concern under #13/#18/#38. Durable compaction,
+representative coverage and the unknown historical failure cause remain open.
