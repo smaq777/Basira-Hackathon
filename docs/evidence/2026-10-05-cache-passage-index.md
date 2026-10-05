@@ -17,8 +17,11 @@ check parent availability, exact text, hashes and offsets.
 Only `openai/text-embedding-3-small`, 1,536 dimensions and
 `exact-contiguous-context-v1` vectors are accepted. Exact pgvector scan and lexical
 trigram ranks are fused with reciprocal ranks. Up to three preferred hits per parent
-and eight parent results compose with legacy results. Unindexed parents retain
-legacy eligibility; index failure retains legacy fallback. Runtime search reuses the
+and eight parent results compose with legacy results. Legacy parent order is
+preserved: matching indexed parents receive verified windows, while passage-only
+parents fill vacant slots without displacing legacy hits. This conservative design
+improves context delivery within selected parents; it does not claim improved parent
+discovery. Index failure retains legacy fallback. Runtime search reuses the
 existing query vector and never backfills document vectors.
 
 Per-claim preferences are report-local and bind claim ID/query hash/parent hash.
@@ -70,16 +73,42 @@ migration `0012` filters the empty row; applied `0011` remains unchanged. The in
 single-pool operator also failed because the owner cannot set the cache-writer role;
 the corrected operator uses separate reader/writer connections. All failures are
 retained. Temporary probe membership was rolled back and independently read back
-as unavailable. Functional SQL/least-privilege CLI and paid diagnostics await the new
-stable freeze. Fresh-database migration failed at copied role creation in `0008`;
+as unavailable. Twelve actual-role rollback probes passed, including zero-prefix
+and astral round trips, malformed bindings, reader insertion denial, writer mutation
+denial and expiry visibility. Separate least-privilege read-only and zero-embedding
+metadata CLI runs passed; four parents/eight exact windows were independently read
+back. Owner-only trigger/revocation tests were not completed and are not claimed. Fresh-database migration failed at copied role creation in `0008`;
 this separate [bootstrap issue #81](https://github.com/smaq777/Basira-Hackathon/issues/81)
 retains the empty database and historical SQL without modification.
 
-Frozen external `VALIDATION_PLAN_V1.json` remains unchanged. A separate final protocol
-will bind the actual child receipt and committed hashes. Comparison holds all 16
-eligible legacy parents constant while indexing only four selected originals. Partial
-coverage is a selected engineering diagnostic, not unseen accuracy, reviewer-labelled
-Recall@5 or owner acceptance.
+Frozen external `VALIDATION_PLAN_V1.json` remains unchanged. Final phase protocols
+bind the child `br-weathered-tooth-b2luwnxr`, committed module/migration hashes,
+provider configuration and immutable public inputs. `FINAL_PHASE2_PROTOCOL_V2.json`
+and `PHASE2_RESULTS_V2.json` in the external `cache-passage-index-2026-10-05`
+experiment retain 12 cells: six queries twice, with the same 16 eligible legacy parents
+and only four indexed originals. Eight document and twelve query attempts produced
+19 validated responses; recorded response cost was $0.00017984. The repeat-2
+weak-hadith query failed transport, has unknown billing and used lexical fallback;
+there was no automatic retry.
+
+The original passage-first composition caused a blocking regression: all four
+unindexed-riba controls moved the legacy rank-1 source to rank 5 and lost it from the
+composed top two. It must not be activated. The correction preserves legacy ranks
+and enriches verified windows; retained-vector replay is pending. Warm selected
+obedience cells delivered the full qualified middle paragraph that legacy delivery
+missed. Travel already delivered its corrective footnote under the baseline, so no
+benefit is claimed there. Conservative ranking forfeits the observed weak-hadith
+lexical parent-selection gain; unified comparable parent relevance remains future work.
+
+Three composed-corpus hybrid arms delivered no sources despite valid direct rankings.
+These remain delivery failures in the denominator, rather than successful semantic
+outcomes. The existing 3-second cache budget silently drops failures; surfaced
+outcomes and a configurable bounded budget are separate [issue #17](https://github.com/smaq777/Basira-Hackathon/issues/17).
+Some tail windows contain navigation fragments and can start inside a URL without
+`boundaryTruncated`; all eight are exact windows, not necessarily substantive article
+passages. Body cleaning/chunk boundary changes require a separately versioned design.
+Partial coverage is selected engineering evidence, not unseen accuracy, religious
+correctness, reviewer-labelled Recall@5, source approval or owner acceptance.
 
 Rollback switches `FOUNDATION_WEB_CACHE_PASSAGES_ENABLED=false`; retain applied
 migrations and immutable parents/vectors. Changed model/chunker representations need

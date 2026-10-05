@@ -94,6 +94,8 @@ async function run(wrongCitation = false) {
     }
     if (sql.startsWith('select evidence from') && sql.includes('snapshot_key=any'))
       return { rows: [{ evidence: source }] };
+    if (sql.startsWith('select evidence,word_similarity'))
+      return { rows: [{ evidence: source, lexical_hit: true, semantic_hit: false }] };
     return { rows: [] };
   });
   const pool = { connect: async () => ({ query, release: () => undefined }) } as unknown as Pool;

@@ -371,13 +371,32 @@ export function createResearchPageCache(options: {
       if (pages.status === 'rejected') throw pages.reason;
       const rows = passages.status === 'fulfilled' ? passages.value : [];
       const merged = new Map<string, SourceEvidence>();
-      for (const row of [...rows, ...pages.value]) {
+      // A partially populated passage index enriches context, but cannot displace
+      // the established parent ranking. Passage-only parents fill vacancies only.
+      for (const row of [...pages.value, ...rows]) {
         const prior = merged.get(row.snapshotKey);
-        if (!prior) merged.set(row.snapshotKey, row);
-        else
+        if (!prior) {
+          if (merged.size < 8) merged.set(row.snapshotKey, row);
+        } else if (
+          prior.originalSha256 === row.originalSha256 &&
+          prior.originalText === row.originalText &&
+          prior.sourceUrl === row.sourceUrl &&
+          prior.sourceId === row.sourceId &&
+          prior.sourceVersion === row.sourceVersion
+        )
           merged.set(row.snapshotKey, {
             ...prior,
             retrievalModes: [...new Set([...prior.retrievalModes, ...row.retrievalModes])],
+            provenance: {
+              ...prior.provenance,
+              ...Object.fromEntries(
+                Object.entries(row.provenance).filter(([key]) =>
+                  ['cachePassageHits', 'cachePassageQuerySha256', 'passageIndexCoverage'].includes(
+                    key,
+                  ),
+                ),
+              ),
+            },
           });
       }
       return [...merged.values()].slice(0, 8).map((row) =>

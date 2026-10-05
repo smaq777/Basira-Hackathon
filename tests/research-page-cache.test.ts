@@ -95,9 +95,70 @@ function fixture() {
     responseSha256: 'c'.repeat(64),
   }));
   const cache = createResearchPageCache({ readerPool, writerPool: readerPool, policy, classify });
-  return { cache, rows, query, classify };
+  return { cache, rows, query, classify, readerPool };
 }
 describe('public research page cache', () => {
+  it('preserves all eight legacy ranks and top-two unindexed title hits while enriching indexed parents', async () => {
+    const f = fixture();
+    const legacy = Array.from({ length: 8 }, (_, i) =>
+      evidence(i === 0 ? 'تعريف الربا وبيان أنواعه' : `Owned legacy parent ${i}`),
+    );
+    for (const row of legacy) f.rows.set(row.snapshotKey, { evidence: row });
+    const indexed = {
+      ...legacy[4]!,
+      retrievalModes: ['semantic' as const],
+      provenance: {
+        ...legacy[4]!.provenance,
+        cachePassageHits: [{ passageId: 'verified-middle-window' }],
+        cachePassageQuerySha256: sha256('query'),
+        passageIndexCoverage: 'selected',
+      },
+    };
+    const extra = evidence('Owned passage-only parent');
+    const cache = createResearchPageCache({
+      readerPool: f.readerPool,
+      writerPool: f.readerPool,
+      policy,
+      classify: f.classify,
+      passageIndex: { search: async () => [extra, indexed] },
+    });
+    const before = structuredClone(legacy);
+    const found = await cache.search('تعريف الربا وبيان أنواعه');
+    expect(found.map((e) => e.snapshotKey)).toEqual(legacy.map((e) => e.snapshotKey));
+    expect(found.slice(0, 2).map((e) => e.snapshotKey)).toEqual(
+      legacy.slice(0, 2).map((e) => e.snapshotKey),
+    );
+    expect(found[4]!.provenance.cachePassageHits).toEqual(indexed.provenance.cachePassageHits);
+    expect(found[4]!.retrievalModes).toEqual(['lexical', 'semantic']);
+    expect(found[4]!.originalText).toBe(legacy[4]!.originalText);
+    expect(legacy).toEqual(before);
+  });
+  it('appends passage-only parents only into vacancies and refuses mismatched enrichment', async () => {
+    const f = fixture(),
+      parent = evidence(),
+      extra = evidence('Owned extra parent');
+    f.rows.set(parent.snapshotKey, { evidence: parent });
+    const cache = createResearchPageCache({
+      readerPool: f.readerPool,
+      writerPool: f.readerPool,
+      policy,
+      classify: f.classify,
+      passageIndex: {
+        search: async () => [
+          {
+            ...parent,
+            sourceUrl: 'https://example.com/public/other',
+            provenance: { cachePassageHits: ['wrong'] },
+          },
+          extra,
+        ],
+      },
+    });
+    const found = await cache.search('family');
+    expect(found.map((e) => e.snapshotKey)).toEqual([parent.snapshotKey, extra.snapshotKey]);
+    expect(found[0]!.provenance.cachePassageHits).toBeUndefined();
+    expect(found[0]!.sourceUrl).toBe(parent.sourceUrl);
+  });
   it.each([
     'cachePassageHits',
     'cachePassageQuerySha256',
