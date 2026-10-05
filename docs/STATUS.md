@@ -12,6 +12,13 @@ This supersedes earlier inactive/62-passage local status below. Source approval,
 the planned 170-passage expansion, owner acceptance and shared staging deployment
 remain separate.
 
+**Optional citation/layout candidate (#38):** A default-off local research action
+now creates a separate candidate from the owned persisted report, preserves every
+original character, and adds only validated paragraph breaks and recorded
+citations. Copy reloads ownership/report/attempt binding and revalidates
+insertions. Storage is explicitly session-bound memory; source approval and
+substantive prose changes remain gated. See [evidence](evidence/2026-10-05-citation-layout-candidate.md).
+
 **Claim and passage follow-up (#11):** Semantic v1.7 binds model selections to a
 deterministic inventory of original author spans and sends bounded exact source
 passages with immutable hashes and UTF16 offsets, including late-page context.
@@ -19,13 +26,6 @@ Selection and support inference remain provisional; unreviewed candidate coverag
 is recorded. Sentence-cut evidence alone cannot establish supported/contradicted.
 Historical reports remain readable and full originals retain the existing durable
 packet budget. See [implementation evidence](evidence/2026-10-05-stable-claim-passages.md).
-
-**Optional citation/layout candidate (#38):** A default-off local research action
-now creates a separate candidate from the owned persisted report, preserves every
-original character, and adds only validated paragraph breaks and recorded
-citations. Copy reloads ownership/report/attempt binding and revalidates
-insertions. Storage is explicitly session-bound memory; source approval and
-substantive prose changes remain gated. See [evidence](evidence/2026-10-05-citation-layout-candidate.md).
 
 Draft PR #59 now connects the current UI to persisted review reports, local quotation lookup, live Tafsir context, OpenRouter claim assessment, and a persistent isolated Neon hybrid-retrieval corpus. Optional gap-triggered Firecrawl acquisition is controlled by `config/source-policy.json`; UI follow-up is assigned to Saleh in [#68](https://github.com/smaq777/Basira-Hackathon/issues/68). Features remain research-only/default-off and are not deployed or owner-accepted merely because local checks pass.
 

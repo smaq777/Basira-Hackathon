@@ -21,6 +21,13 @@ import { isSafeDraftText, MAX_DRAFT_LENGTH } from '../../../packages/contracts/s
 import type { ReviewStore } from './review-store.js';
 import { RewriteError, type RewriteService, type RewriteContext } from './rewrite.js';
 import { sha256 } from './foundation.js';
+import type { ReviewerDecision, TicketStore } from './ticket-store.js';
+import {
+  emailLookupHash,
+  encryptTicketContact,
+  normalizeEmail,
+  ticketCode,
+} from './ticket-crypto.js';
 
 const TextInput = z
   .object({
@@ -36,11 +43,52 @@ const ReviewInput = z.object({ revisionId: z.uuid() }).strict();
 const ReviewParams = z.object({ reviewId: z.uuid() }).strict();
 const RevisionParams = z.object({ revisionId: z.uuid() }).strict();
 const IdempotencyKey = z.uuid();
+const TicketCode = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^BR-[A-Z0-9]{12}$/u);
+const EmailAddress = z.email().max(254).transform(normalizeEmail);
+const TicketContactInput = z
+  .object({
+    name: z.string().trim().max(120).optional(),
+    email: EmailAddress.optional(),
+    notify: z.boolean().default(false),
+  })
+  .strict()
+  .refine((value) => !value.notify || Boolean(value.email), {
+    message: 'EMAIL_REQUIRED_FOR_NOTIFY',
+  });
+const TicketLookupInput = z.object({ ticketCode: TicketCode, email: EmailAddress }).strict();
+const ReviewerTicketParams = z.object({ ticketCode: TicketCode }).strict();
+const ReviewerResponseInput = z
+  .object({
+    decision: z.enum(['needs_context', 'bounded_revision', 'returned']),
+    text: z.string().trim().min(1).max(12_000),
+    publish: z.boolean().default(false),
+  })
+  .strict();
+const RetrievalApprovalInput = z
+  .object({
+    sourceReference: z.string().trim().min(1).max(500),
+    provenance: z.record(z.string(), z.unknown()),
+  })
+  .strict()
+  .refine((value) => Object.keys(value.provenance).length > 0, { message: 'PROVENANCE_REQUIRED' });
 const guestCookie = 'basirah_guest';
 
 function supportsExpiredGuestCleanup(migrationVersion?: string): boolean {
   const sequence = Number(migrationVersion?.match(/^(\d{4})_/u)?.[1] ?? 0);
   return sequence >= 5;
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === '23505'
+  );
 }
 
 function parseCookies(request: Request): Record<string, string> {
@@ -97,6 +145,12 @@ type AppOptions = {
   database?: BackendDatabase;
   production?: boolean;
   reviewerAuth?: ReviewerAuthGateway;
+  tickets?: {
+    store: TicketStore;
+    dataKey: string;
+    lookupPepper: string;
+    notifications?: { notify(): void };
+  };
   clerkFrontendApiOrigin?: string;
   rateLimits?: {
     sessionLimit?: number;
@@ -104,6 +158,8 @@ type AppOptions = {
     guestMutationLimit?: number;
     guestMutationWindowMs?: number;
     now?: () => number;
+    ticketLookupLimit?: number;
+    ticketLookupWindowMs?: number;
   };
 };
 
@@ -168,6 +224,12 @@ export function createApp(options: AppOptions = {}) {
     },
     now: options.rateLimits?.now,
   });
+  const ticketLookupRateLimit = fixedWindowRateLimit({
+    limit: options.rateLimits?.ticketLookupLimit ?? 8,
+    windowMs: options.rateLimits?.ticketLookupWindowMs ?? 10 * 60_000,
+    key: (request) => `ticket-lookup:${request.ip ?? request.socket.remoteAddress ?? 'unknown'}`,
+    now: options.rateLimits?.now,
+  });
   app.get('/health', (_req, res) => res.json({ status: 'ok', stage: 'mvp_backend' }));
   app.get('/ready', async (_req, res) => {
     const state = await database.readiness();
@@ -209,6 +271,10 @@ export function createApp(options: AppOptions = {}) {
       maximumTextLength: MAX_DRAFT_LENGTH,
       draftRewrite: Boolean(options.rewrite),
       draftRewriteMode: options.rewrite ? 'citation_and_layout_only' : null,
+      reviewTickets:
+        Boolean(options.tickets) &&
+        state.ready &&
+        Number(state.migrationVersion?.slice(0, 4)) >= 13,
     });
   });
   app.post('/api/v1/preflight', guestMutationRateLimit, (req, res, next) => {
@@ -233,6 +299,22 @@ export function createApp(options: AppOptions = {}) {
       return next(error);
     }
   });
+  const requireReviewer = async (request: Request, response: Response) => {
+    const access = await reviewerAuth.resolve(request);
+    if (access.state === 'unavailable') {
+      response.status(503).json({ code: 'REVIEWER_AUTH_UNAVAILABLE' });
+      return null;
+    }
+    if (access.state === 'unauthenticated') {
+      response.status(401).json({ code: 'REVIEWER_SIGN_IN_REQUIRED' });
+      return null;
+    }
+    if (access.state === 'forbidden') {
+      response.status(403).json({ code: 'REVIEWER_ACCESS_DENIED' });
+      return null;
+    }
+    return access.userId;
+  };
   app.post('/api/v1/sessions', sessionRateLimit, async (_req, res, next) => {
     try {
       if (!Number.isInteger(retentionHours) || retentionHours < 1 || retentionHours > 24)
@@ -427,6 +509,137 @@ export function createApp(options: AppOptions = {}) {
       return next(error);
     }
   });
+  app.post('/api/v1/reviews/:reviewId/tickets', guestMutationRateLimit, async (req, res, next) => {
+    try {
+      if (!options.tickets) return res.status(503).json({ code: 'TICKETS_UNAVAILABLE' });
+      const credentials = guestCredentials(req);
+      if (!credentials) return res.status(401).json({ code: 'INVALID_OR_EXPIRED_SESSION' });
+      const { reviewId } = ReviewParams.parse(req.params);
+      const contact = TicketContactInput.parse(req.body);
+      const encrypted = contact.email
+        ? encryptTicketContact(
+            { email: contact.email, name: contact.name },
+            options.tickets.dataKey,
+          )
+        : null;
+      const receipt = await options.tickets.store.create(
+        credentials.publicId,
+        credentials.ownershipSecret,
+        reviewId,
+        ticketCode(),
+        contact.email ? emailLookupHash(contact.email, options.tickets.lookupPepper) : null,
+        encrypted,
+        contact.notify,
+      );
+      if (!receipt) return res.status(404).json({ code: 'REVIEW_NOT_READY_FOR_TICKET' });
+      return res.status(201).json(receipt);
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.patch(
+    '/api/v1/tickets/:ticketCode/contact',
+    guestMutationRateLimit,
+    async (req, res, next) => {
+      try {
+        if (!options.tickets) return res.status(503).json({ code: 'TICKETS_UNAVAILABLE' });
+        const credentials = guestCredentials(req);
+        if (!credentials) return res.status(401).json({ code: 'INVALID_OR_EXPIRED_SESSION' });
+        const { ticketCode: code } = ReviewerTicketParams.parse(req.params);
+        const contact = TicketContactInput.extend({ email: EmailAddress }).parse(req.body);
+        const receipt = await options.tickets.store.updateContact(
+          credentials.publicId,
+          credentials.ownershipSecret,
+          code,
+          emailLookupHash(contact.email, options.tickets.lookupPepper),
+          encryptTicketContact(
+            { email: contact.email, name: contact.name },
+            options.tickets.dataKey,
+          ),
+          contact.notify,
+        );
+        if (!receipt) return res.status(404).json({ code: 'TICKET_NOT_FOUND' });
+        return res.json(receipt);
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+  app.post('/api/v1/ticket-lookup', ticketLookupRateLimit, async (req, res, next) => {
+    try {
+      if (!options.tickets) return res.status(503).json({ code: 'TICKETS_UNAVAILABLE' });
+      const input = TicketLookupInput.parse(req.body);
+      const result = await options.tickets.store.lookup(
+        input.ticketCode,
+        emailLookupHash(input.email, options.tickets.lookupPepper),
+      );
+      // Wrong ticket/email pairs intentionally use the same status and small response shape.
+      return res.json(result);
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.get('/api/v1/reviewer/tickets', async (req, res, next) => {
+    try {
+      if (!options.tickets) return res.status(503).json({ code: 'TICKETS_UNAVAILABLE' });
+      if (!(await requireReviewer(req, res))) return;
+      return res.json({ tickets: await options.tickets.store.list() });
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.get('/api/v1/reviewer/tickets/:ticketCode', async (req, res, next) => {
+    try {
+      if (!options.tickets) return res.status(503).json({ code: 'TICKETS_UNAVAILABLE' });
+      if (!(await requireReviewer(req, res))) return;
+      const { ticketCode: code } = ReviewerTicketParams.parse(req.params);
+      const ticket = await options.tickets.store.get(code);
+      if (!ticket) return res.status(404).json({ code: 'TICKET_NOT_FOUND' });
+      return res.json({ ticket });
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.post('/api/v1/reviewer/tickets/:ticketCode/responses', async (req, res, next) => {
+    try {
+      if (!options.tickets) return res.status(503).json({ code: 'TICKETS_UNAVAILABLE' });
+      const reviewerUserId = await requireReviewer(req, res);
+      if (!reviewerUserId) return;
+      const { ticketCode: code } = ReviewerTicketParams.parse(req.params);
+      const input = ReviewerResponseInput.parse(req.body);
+      const saved = await options.tickets.store.saveResponse(
+        code,
+        reviewerUserId,
+        input.decision as ReviewerDecision,
+        input.text,
+        input.publish,
+      );
+      if (!saved) return res.status(404).json({ code: 'TICKET_NOT_FOUND' });
+      if (input.publish) options.tickets.notifications?.notify();
+      return res.status(input.publish ? 201 : 200).json({ response: saved });
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.post('/api/v1/reviewer/tickets/:ticketCode/retrieval-approval', async (req, res, next) => {
+    try {
+      if (!options.tickets) return res.status(503).json({ code: 'TICKETS_UNAVAILABLE' });
+      const reviewerUserId = await requireReviewer(req, res);
+      if (!reviewerUserId) return;
+      const { ticketCode: code } = ReviewerTicketParams.parse(req.params);
+      const input = RetrievalApprovalInput.parse(req.body);
+      const approved = await options.tickets.store.approveForRetrieval(
+        code,
+        reviewerUserId,
+        input.sourceReference,
+        input.provenance,
+      );
+      if (!approved) return res.status(409).json({ code: 'PUBLISHED_RESPONSE_REQUIRED' });
+      return res.status(201).json({ approved: true });
+    } catch (error) {
+      return next(error);
+    }
+  });
   app.delete('/api/v1/reviews/:reviewId', async (req, res, next) => {
     try {
       const credentials = guestCredentials(req);
@@ -571,6 +784,8 @@ export function createApp(options: AppOptions = {}) {
       return res.status(401).json({ code: 'INVALID_OR_EXPIRED_SESSION' });
     if (error instanceof ResourceLimitError)
       return res.status(429).json({ code: 'RESOURCE_LIMIT_REACHED', resource: error.resource });
+    if (isUniqueConstraintError(error))
+      return res.status(409).json({ code: 'TICKET_ALREADY_PUBLISHED' });
     if (error instanceof SyntaxError) return res.status(400).json({ code: 'INVALID_JSON' });
     console.error('Request failed', error instanceof Error ? error.message : 'unknown error');
     return res.status(503).json({ code: 'SERVICE_UNAVAILABLE' });
