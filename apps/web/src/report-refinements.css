@@ -12,6 +12,15 @@
   border-color: #bcd8c9;
 }
 
+.foundation-report .foundation-uncertain-reference {
+  padding: 18px;
+  line-height: 1.9;
+}
+
+.foundation-report .foundation-uncertain-reference .button {
+  margin-top: 12px;
+}
+
 .foundation-report .foundation-compare-card--different {
   border-color: var(--line-strong);
 }

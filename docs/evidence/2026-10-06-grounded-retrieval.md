@@ -29,6 +29,12 @@ Prompt version: `evidence-support-v1.11`; semantic pipeline: `provisional-semant
 
 The legend now activates the existing role color classes and emphasizes the matching segments, with keyboard focus and an explicit absent-type message. Author prose stays uncolored. This does not invent classifications or alter the submitted text, comparison status, analysis or report actions.
 
+### Follow-up: explicit verse parentheses and uncertain comparisons
+
+The owner's anti-waste passage supplied Quran 7:31 in ordinary parentheses. The first live follow-up report (`1d3f49ab-360c-4afe-aac7-895d1d03f6c4`) returned the correct verse source but did not bind the quoted verse because hosted intake only recognized Arabic quotation/verse brackets. Parenthesized quotations now use the same explicit-locator adjacency, immutable offsets and comparison validation; arbitrary parentheses without an explicit source are not classified as Quran quotations. Uthmani joined vocative glyphs and leading standalone hamza-alef spelling are normalized for comparison only, without editing source or draft text.
+
+An unresolved quotation or unbound candidate no longer renders a reference passage in the comparison card as if it were evidence. The card preserves the draft, explains abstention and navigates with the existing scroll/highlight interaction to the existing human-review section. Ticket submission still requires the existing capability check and user action. Bound matching or contrary evidence remains visible; standalone source reading remains available without a match verdict. This change does not create new source coverage or claim a live hadith MCP integration.
+
 ## Verification and acceptance
 
 Targeted tests cover alias binding, wrong-topic removal, contradictory evidence retention, family context, failed relevance selection, web addition rejection, literal hadith matching/missing matches, and existing color activation. Full checks and live staging results will be recorded on issue #151 before acceptance.

@@ -111,15 +111,27 @@ type Token = { value: string; start: number; end: number };
 function comparisonTokens(text: string): Token[] {
   const tokens: Token[] = [];
   for (const match of text.matchAll(/[\p{L}\p{N}\u064b-\u065f\u0670ـ]+/gu)) {
-    const value = match[0]
-      .normalize('NFKD')
-      .replace(/\u0670/gu, 'ا')
-      .replace(/[\p{M}ـ\u06d6-\u06ed]/gu, '')
-      .replace(/[أإآٱ]/gu, 'ا')
-      .replace(/[ىئ]/gu, 'ي')
-      .replace(/ؤ/gu, 'و')
-      .toLowerCase();
-    if (value) tokens.push({ value, start: match.index, end: match.index + match[0].length });
+    // Uthmani vocative يا may be joined to the next word (يَـٰبَنِىٓ).
+    // Split only that visible glyph prefix, retaining immutable source offsets.
+    const vocative = /^ي[\u064b-\u065fـ]*\u0670[\p{M}ـ]*(?=[\p{L}])/u.exec(match[0]);
+    const parts = vocative
+      ? [
+          { raw: match[0].slice(0, vocative[0].length), start: match.index },
+          { raw: match[0].slice(vocative[0].length), start: match.index + vocative[0].length },
+        ]
+      : [{ raw: match[0], start: match.index }];
+    for (const part of parts) {
+      const value = part.raw
+        .normalize('NFKD')
+        .replace(/\u0670/gu, 'ا')
+        .replace(/[\p{M}ـ\u06d6-\u06ed]/gu, '')
+        .replace(/[أإآٱ]/gu, 'ا')
+        .replace(/^ءا/u, 'ا')
+        .replace(/[ىئ]/gu, 'ي')
+        .replace(/ؤ/gu, 'و')
+        .toLowerCase();
+      if (value) tokens.push({ value, start: part.start, end: part.start + part.raw.length });
+    }
   }
   return tokens;
 }
@@ -277,11 +289,13 @@ export function createHostedDraftAdapter(
           method: 'hosted_explicit_quran_reference',
           sourceKey: source.snapshotKey,
         });
-        const quotes = [...text.matchAll(/﴿([^﴿﴾]{2,2000})﴾|«([^«»]{2,2000})»/gu)]
+        const quotes = [
+          ...text.matchAll(/﴿([^﴿﴾]{2,2000})﴾|«([^«»]{2,2000})»|\(([^()]{2,2000})\)/gu),
+        ]
           .map((match) => ({
             startOffset: match.index + 1,
             endOffset: match.index + match[0].length - 1,
-            originalText: match[1] ?? match[2]!,
+            originalText: match[1] ?? match[2] ?? match[3]!,
           }))
           .filter(
             (quote) =>
