@@ -32,7 +32,7 @@ No architecture or documentation strategy can guarantee first place. Results mus
 
 Guide pages 31–33 specify an operational product rather than a conceptual prototype, PDF/PPT presentation, public GitHub repository, usable demonstration, operating instructions, source/tool/license documentation and a video of no more than two minutes. Protect user data and credentials. Confirm the final portal receipt after submitting.
 
-Current repository visibility is private by owner request. Public release requires an explicit owner-approved history/secrets/rights review. This foundation does not yet satisfy the working-product or final-submission requirements.
+The [repository is public](https://github.com/smaq777/Basira-Hackathon). Selected staging review and rewrite/copy acceptance is recorded in the [dated Judge Quickstart evidence](../evidence/2026-10-06-verified-judge-quickstart.md). Source approvals, scholarly reliability, broader impact evidence and the final portal receipt remain separate requirements; selected working flows do not establish final-submission acceptance.
 
 ## Source restrictions and practical consequences
 
