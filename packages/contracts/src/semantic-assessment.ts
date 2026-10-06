@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { SourceContentSelectionSchema } from './source-content.js';
 const CacheChunkerVersion = z.enum(['cache-sentence-context-v1', 'exact-content-block-context-v1']);
 
-export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.13';
-export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.13';
+export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.14';
+export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.14';
 
 const EvidenceKeys = z.array(z.string().min(1).max(160)).max(20);
 const Details = z.array(z.string().min(1).max(500)).max(6);

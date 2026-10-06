@@ -140,8 +140,8 @@ export async function runSubmissionAcceptance(args, dependencies = {}) {
       if (semantic?.trace?.retrieval && semantic.trace.retrieval.corpusVersion !== corpusVersion)
         throw new Error('RETRIEVAL_CORPUS_PIN_MISMATCH');
       if (
-        semantic?.trace?.promptVersion !== 'evidence-support-v1.13' ||
-        semantic?.trace?.pipelineVersion !== 'provisional-semantic-v1.13'
+        semantic?.trace?.promptVersion !== 'evidence-support-v1.14' ||
+        semantic?.trace?.pipelineVersion !== 'provisional-semantic-v1.14'
       )
         throw new Error('SEMANTIC_VERSION_MISMATCH');
       if (test.expected === 'no_assessment') {

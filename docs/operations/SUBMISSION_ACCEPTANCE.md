@@ -2,8 +2,8 @@
 
 Related to [issue #157](https://github.com/smaq777/Basira-Hackathon/issues/157).
 For tonight's bounded staging checks, retain semantic prompt
-`evidence-support-v1.13` and pipeline `provisional-semantic-v1.13`. Versions 1.10–1.12
-is historical compatibility, not the release target. The 175-passage corpus pin
+`evidence-support-v1.14` and pipeline `provisional-semantic-v1.14`. Versions 1.10–1.13
+are historical compatibility, not the release target. The 175-passage corpus pin
 is `7372242cf7f4960c2cba0a33d8670a04ce13413f9fab5536783d6a3671e3ad6f`.
 Neither a green transport test nor a successful deployment proves that fresh
 reports select this corpus.
@@ -40,6 +40,11 @@ evidence, not expert adjudication of general scholarly accuracy. Inspect the
 saved Arabic conditions, negations, exceptions, scope, citations and explanation
 together; JSON schema validity cannot prove semantic consistency.
 
+Version 1.14 uses server-owned exact passage selectors for assessment citations,
+with restricted choices when evidence is empty. See the
+[captured grounding failures and bounded provider acceptance](../evidence/2026-10-06-semantic-grounding-protocol.md).
+Those local frozen-packet results do not replace this fresh staging procedure.
+
 Empty off-topic evidence alone cannot pass acceptance. The harness also requires
 completed explicit or deterministic `not_applicable`, or `partial` with
 `no_claims_extracted` and successful extraction receipts. The latter is a valid
@@ -58,12 +63,12 @@ failed first outcomes along with successful ones; do not select only successes.
 ## Offline provider controls
 
 ```sh
-npx vitest run tests/semantic-assessment.test.ts tests/semantic-relevance.test.ts tests/semantic-spans.test.ts tests/semantic-report-binding.test.ts
+npx vitest run tests/semantic-assessment.test.ts tests/semantic-relevance.test.ts tests/semantic-spans.test.ts tests/semantic-report-binding.test.ts tests/semantic-grounding-protocol.test.ts tests/semantic-assessment-boundary.test.ts tests/semantic-passage-review.test.ts
 ```
 
 These deterministic fixtures exercise malformed/blocked responses, bounded
 timeouts, one distinct fallback, missing evidence, topic-only candidate rejection,
 verbatim citations, original condition spans and durable report binding. They
-make no network requests. Historical v1.10–1.12 reports must stay readable, while a
+make no network requests. Historical v1.10–1.13 reports must stay readable, while a
 mixed prompt/pipeline version pair remains invalid. Controlled provider failures
 belong in these offline tests; do not inject an outage into shared staging.

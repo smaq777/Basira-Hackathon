@@ -493,7 +493,7 @@ describe('bounded semantic assessment', () => {
     expect(prompt).toContain('Missing evidence does not establish contradiction');
     expect(prompt).toContain('naming the missing qualifier or antecedent and why it matters');
     expect(prompt).toContain('packet has no evidence');
-    expect(prompt).toContain('Prompt evidence-support-v1.13.');
+    expect(prompt).toContain('Prompt evidence-support-v1.14.');
     expect(prompt).toContain('Each scope item must be a self-contained Arabic statement');
     expect(prompt).toContain(
       'affirmation or negation and any material condition, exception or modality',
@@ -508,8 +508,8 @@ describe('bounded semantic assessment', () => {
     expect(prompt).not.toMatch(/scholar_explanation|book_excerpt/u);
     expect(result.scholarlyApproval).toBe(false);
     expect(result.trace).toMatchObject({
-      pipelineVersion: 'provisional-semantic-v1.13',
-      promptVersion: 'evidence-support-v1.13',
+      pipelineVersion: 'provisional-semantic-v1.14',
+      promptVersion: 'evidence-support-v1.14',
     });
     expect(intake).toEqual(before);
   });
