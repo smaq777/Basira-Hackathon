@@ -73,7 +73,7 @@ useful author improvement and exact UI copy remain necessary for live acceptance
 
 ## Validation and rollback
 
-The final Node 24 full check passed: 913 tests in 65 files, type checking,
+The initial budgeting change's Node 24 full check passed: 913 tests in 65 files, type checking,
 107 documentation files, repository policy, formatting and production build.
 The focused author and diagnostic-privacy run passed 27 tests. Coverage
 includes the two red-to-green length regressions, fresh-copy reconstruction,
@@ -83,7 +83,9 @@ observer failure containment and the existing preservation/ownership/cancellatio
 controls. Explicit cancellation, owner cancellation and service shutdown produce
 no misleading deadline receipt; a real timeout produces one deadline receipt
 and withholds text. Software checks do not establish scientific accuracy or
-live readiness.
+live readiness. The subsequent [charity investigation](2026-10-06-charity-rewrite-investigation.md)
+corrects attribution-only mode metadata and records the updated 915-test check;
+the historical rejected charity payloads remain unavailable.
 
 Rollback: disable the optional diagnostic flag; revert this bounded budgeting
 change if necessary. Disabling the existing staging rewrite flag withholds the

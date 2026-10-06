@@ -68,6 +68,11 @@ coverage. It explicitly says only displayed supported spans were improved and
 all remaining text was preserved. Ten-minute session-bound memory, ownership,
 idempotency, cancellation, default-off production controls and manual acceptance
 remain as described below. See [new evidence](../evidence/2026-10-05-substantive-rewrite.md).
+Validated candidate mode follows actual retained operations: an author-safe skip
+that adds only recorded citations is `citation_and_layout_only`, without implying
+an author replacement or independent wording-verifier call. Actual replacements
+require the full verifier path before the `supported_author_wording` result is
+available. See the [charity investigation](../evidence/2026-10-06-charity-rewrite-investigation.md).
 The [modality follow-up](../evidence/2026-10-05-rewrite-modality.md) retains a real
 UI false acceptance and its bounded diagnostic; earlier success did not establish
 reliable preservation across author wording.

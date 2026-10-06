@@ -118,6 +118,64 @@ function fixture() {
 }
 const settle = () => new Promise((r) => setTimeout(r, 10));
 
+it('labels a supported-author safe skip with valid citations as attribution rather than verified author wording', async () => {
+  const { report, operations } = fixture();
+  const claim = report.semanticAssessment!.claims[0]!;
+  // Complete owned editorial control: no additional unreviewed author span.
+  report.intake.originalText = report.intake.originalText.slice(0, claim.endOffset);
+  report.inputSha256 = report.intake.revisionSha256 = sha256(report.intake.originalText);
+  report.semanticAssessment!.trace.inputSha256 = report.inputSha256;
+  report.semanticAssessment!.trace.claimCoverage = {
+    inventoryVersion: 'original-span-v1',
+    candidates: [
+      {
+        candidateId: claim.id,
+        segmentId: claim.segmentId,
+        startOffset: claim.startOffset,
+        endOffset: claim.endOffset,
+      },
+    ],
+    excluded: [],
+    selectedIds: [claim.id],
+    unselectedIds: [],
+    claimLimitReached: false,
+  };
+  const generate = vi.fn(
+    async (_input: Parameters<ReturnType<typeof createAuthorRewriteGenerator>>[0]) => ({
+      ...operations,
+      replacements: [],
+    }),
+  );
+  const verifier = vi.fn(async () => {
+    throw new Error('There is no changed author wording to verify.');
+  });
+  const context = { report, attempt: 1 };
+  const reload = vi.fn(async () => context);
+  const service = createRewriteService(generate, { verifier, requireCompleteEvidence: true });
+  try {
+    const task = service.create('owner', 'safe-author-skip', context, reload);
+    await vi.waitFor(() => expect(service.get('owner', task.id, context).status).toBe('validated'));
+    const candidate = service.get('owner', task.id, context);
+    expect(candidate).toMatchObject({
+      status: 'validated',
+      mode: 'citation_and_layout_only',
+      operations: { replacements: [], citations: operations.citations },
+    });
+    expect(generate).toHaveBeenCalledOnce();
+    expect(generate.mock.calls[0]![0].authorClaims).toHaveLength(1);
+    expect(verifier).not.toHaveBeenCalled();
+    expect(reload).toHaveBeenCalledOnce();
+    expect(service.copy('owner', task.id, context)).toBe(candidate.text);
+    expect(candidate.text).toContain(claim.originalText);
+    expect(() => service.copy('other', task.id, context)).toThrow('REWRITE_NOT_FOUND');
+    expect(() => service.copy('owner', task.id, { ...context, attempt: 2 })).toThrow(
+      'REWRITE_STALE_REPORT',
+    );
+  } finally {
+    service.close();
+  }
+});
+
 it('uses room freed by an author replacement for its exact source citation', () => {
   const { report, operations } = fixture();
   const source = report.intake.evidence[0]!;

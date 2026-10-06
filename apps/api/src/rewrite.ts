@@ -437,7 +437,6 @@ export function createRewriteService(
             if (row.binding !== binding(after)) throw new RewriteError('REWRITE_STALE_REPORT');
             row.verification = { raw, hash };
           }
-          if (quotationOnly) candidate.mode = 'citation_and_layout_only';
           return valid;
         }),
         new Promise<never>((_resolve, reject) => {
@@ -449,6 +448,11 @@ export function createRewriteService(
           if (candidate.status !== 'pending' || !records.has(candidate.id)) return;
           candidate.text = valid.text;
           candidate.operations = valid.operations;
+          // Describe the retained changes, rather than the configured capability:
+          // a safe author skip with exact citations has no new wording to verify.
+          candidate.mode = valid.operations.replacements?.length
+            ? 'supported_author_wording'
+            : 'citation_and_layout_only';
           if (valid.budgetLimited)
             candidate.unresolved = [
               'لم تُضف بعض الفواصل أو المراجع لضيق المساحة ضمن حد ٣٠٠٠ حرف؛ لم نختصر الأصل.',

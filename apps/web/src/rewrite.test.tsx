@@ -97,6 +97,34 @@ it('shows substantive before/after wording and limits the claimed coverage to ch
   ).not.toBeNull();
 });
 
+it('explains a citation-only safe author skip without claiming an accepted wording change', async () => {
+  const user = userEvent.setup();
+  const ready = {
+    ...candidate,
+    status: 'validated',
+    text: report.intake.originalText + ' [مرجع اختباري]',
+    operations: {
+      replacements: [],
+      paragraphBreaks: [],
+      citations: [{ offset: 3, evidenceKey: 'source' }],
+    },
+  };
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
+    String(input) === '/api/v1/capabilities'
+      ? json({ draftRewrite: true, draftRewriteMode: 'supported_author_wording' })
+      : json({ candidate: ready }),
+  );
+  const view = render(<RewritePanel report={report} />);
+  await user.click(await screen.findByRole('button', { name: 'تحسين الصياغة وإضافة التوثيق' }));
+  await screen.findByRole('button', { name: 'نسخ النص المقترح' });
+  expect(
+    screen.getByText('لم تنتج صياغة بديلة اجتازت الفحوص؛ بقيت ألفاظ الكاتب كما وردت.'),
+  ).not.toBeNull();
+  expect(view.container.querySelector('del')).toBeNull();
+  expect(view.container.querySelector('ins')).toBeNull();
+  expect(screen.queryByText(/حُسّنت العبارات المعروضة/)).toBeNull();
+});
+
 it('offers copy only after validation and requests a fresh server copy check before clipboard access', async () => {
   const user = userEvent.setup();
   const clipboard = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
