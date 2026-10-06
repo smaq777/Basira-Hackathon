@@ -21,3 +21,23 @@ This is the bundled project catalogue, not a live audit of a deployment's option
 ## Acceptance and rollback
 
 Owner acceptance and deployment remain separate. After deployment, confirm the authenticated reviewer sources page lists the same catalogue as the public sources page. No database migration is required. Revert this UI commit to roll back.
+
+## Owner-approved presentation and source links
+
+The owner accepted the reorganized local presentation and authorized Railway staging deployment. The existing Cairo type, navy/teal palette and RTL shell are retained. Seven references are grouped into Quran/tafsir, hadith and theology cards; six selected websites retain their selection-basis labels. Section navigation moves focus without replacing the SPA hash route. All methodological explanations remain available through native expandable sections. The shared component serves both public and reviewer routes. The annotated homepage partner heading and official link are centered; the accepted seven-logo marquee is preserved.
+
+Each text-reference card now links to retained provenance. A read-only lookup of source editions in the active pinned submission snapshot confirmed Tanzil, the King Fahd Complex publisher, the Tafsir MCP endpoint, the pinned hadith dataset and the exact Shamela excerpt page. The lookup used the existing corpus reader and its existing research runtime role; no data, roles or approval states changed. The first query without the runtime role returned SQL42501; the existing reader transaction pattern was then used. A passage-version filter returned only two editions, so the final query used the application's immutable snapshot membership instead.
+
+| Reference                  | Link and basis                                                                                                                                                                                                                    |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Quran                      | Stored Tanzil Uthmani XML download URL, including its recorded query parameters.                                                                                                                                                  |
+| Al-Tafsir al-Muyassar      | `https://qurancomplex.gov.sa/quran-dev/`, recorded publisher URL.                                                                                                                                                                 |
+| Al-Saadi                   | `https://github.com/tafsircenter/tafsir-mcp`, the project documented in `docs/api/PROVIDERS.md` and used by `apps/api/src/tafsir-mcp.ts`; labelled as the retrieval project, rather than sending readers to the MCP API endpoint. |
+| Bukhari, Muslim, Abu Dawud | Stored `Watheq9/IslamicEval2026/Corpora/six_hadith_books.json` at revision `8ca8abb8a0f0d96a5ab07d48108e35b7e02d236e`; explicitly labelled as the pinned dataset used.                                                            |
+| Mahasin al-Tawhid          | Stored `https://shamela.ws/book/30015/195`, the exact retained excerpt page.                                                                                                                                                      |
+
+Upstream browser retrieval confirmed the Tafsir project, pinned GitHub dataset page and Shamela excerpt. The publisher request timed out and the Tanzil XML request was not rendered by that retrieval tool; these remain provenance-confirmed links, not claims of a current uptime check. No substitute URLs were invented.
+
+Focused validation after the link update: typecheck and 38 tests across the catalogue, application and source-publication suites passed. Browser inspection confirmed seven reference links, six website links, section-focus navigation with `#/sources` preserved, and expandable MCP explanation. At the observed 400 CSS-pixel viewport, cards form one column with no horizontal overflow; at desktop they use the existing two-column card layout. The partner heading, eyebrow and official link share the same horizontal center. Full checks and staging evidence are recorded on issue #199 after integration.
+
+Rollback remains a revert of the presentation change; no database migration is needed. The owner retains issue closure after acceptance.
