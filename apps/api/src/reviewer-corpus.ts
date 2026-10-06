@@ -48,7 +48,7 @@ export function reviewerCorpusConnection(environment: NodeJS.ProcessEnv) {
 export async function initializeReviewerCorpus(environment: NodeJS.ProcessEnv) {
   const connection = reviewerCorpusConnection(environment);
   if (!connection) return undefined;
-  const corpusVersion = environment.FOUNDATION_CORPUS_VERSION?.trim();
+  const corpusVersion = reviewerCorpusVersion(environment);
   if (!corpusVersion) throw new Error('REVIEWER_CORPUS_VERSION_REQUIRED');
   const pool = new Pool(connection);
   try {
@@ -67,6 +67,18 @@ export async function initializeReviewerCorpus(environment: NodeJS.ProcessEnv) {
     await pool.end();
     throw error;
   }
+}
+
+/** Approved additions never change the frozen submission snapshot. */
+export function reviewerCorpusVersion(environment: NodeJS.ProcessEnv): string | undefined {
+  const version = environment.REVIEWER_CORPUS_VERSION?.trim();
+  if (!version) return undefined;
+  if (
+    !/^[a-f0-9]{64}$/u.test(environment.FOUNDATION_CORPUS_VERSION ?? '') ||
+    version !== `reviewed-${environment.FOUNDATION_CORPUS_VERSION}`
+  )
+    throw new Error('REVIEWER_CORPUS_OVERLAY_INVALID');
+  return version;
 }
 
 export type ReviewerCorpus = {

@@ -318,6 +318,12 @@ it('creates an immutable first revision for the owned guest', async () => {
   });
   expect(response.status).toBe(201);
   expect(await response.json()).toMatchObject({ version: 1 });
+  const cookie = response.headers.get('set-cookie') ?? '';
+  expect(cookie).toContain(ownedCookie);
+  expect(cookie).toContain('Max-Age=86400');
+  expect(cookie).toContain('HttpOnly');
+  expect(cookie).toContain('Secure');
+  expect(cookie).toContain('SameSite=Strict');
 });
 
 it('creates an owned review run without claiming verification', async () => {

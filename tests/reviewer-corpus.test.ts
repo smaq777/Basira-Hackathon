@@ -3,6 +3,7 @@ import {
   createReviewerCorpus,
   reviewerCorpusConnection,
   reviewerCorpusAccessMode,
+  reviewerCorpusVersion,
 } from '../apps/api/src/reviewer-corpus.js';
 import type { Pool } from 'pg';
 
@@ -10,6 +11,23 @@ const reader = 'postgresql://reader:synthetic@ep-qa.eu-central-1.aws.neon.tech/c
 const curator =
   'postgresql://curator:synthetic@ep-qa-pooler.eu-central-1.aws.neon.tech/corpus?sslmode=require';
 describe('separate reviewer source capability', () => {
+  it('requires a separately named overlay bound to the frozen base corpus', () => {
+    const base = 'a'.repeat(64);
+    expect(reviewerCorpusVersion({ FOUNDATION_CORPUS_VERSION: base })).toBeUndefined();
+    expect(
+      reviewerCorpusVersion({
+        FOUNDATION_CORPUS_VERSION: base,
+        REVIEWER_CORPUS_VERSION: `reviewed-${base}`,
+      }),
+    ).toBe(`reviewed-${base}`);
+    for (const version of [base, `reviewed-${'b'.repeat(64)}`, 'arbitrary'])
+      expect(() =>
+        reviewerCorpusVersion({
+          FOUNDATION_CORPUS_VERSION: base,
+          REVIEWER_CORPUS_VERSION: version,
+        }),
+      ).toThrow('REVIEWER_CORPUS_OVERLAY_INVALID');
+  });
   it('allows authenticated curation only on explicitly identified staging', () => {
     expect(reviewerCorpusAccessMode({})).toBe('allowlist');
     expect(

@@ -10,10 +10,11 @@ and production are excluded from this delivery.
 
 ## Review, publication and source approval
 
-**6 October diagnostic (#191):** the current staging curator fails the preserved
-same-target/distinct-login binding check. Source publication is unavailable;
-do not retarget that deferred connection or modify the pinned submission corpus
-without a separately authorized corpus release. The protected ticket response's
+**6 October diagnostic (#191, repair #193):** the previous curator targeted a
+different endpoint, and the active 175-passage database lacked source approval
+migration 0017. The owner separately authorized a bounded repair, keeping the
+binding guard and frozen submission corpus intact. See [repair evidence](../evidence/2026-10-06-evidence-persistence-repair.md).
+The protected ticket response's
 `sourcePublicationAvailable` boolean and the selector's empty-state guidance
 expose this boundary. See [controls and diagnostic evidence](../evidence/2026-10-06-reviewer-source-controls.md).
 
@@ -45,7 +46,10 @@ expose this boundary. See [controls and diagnostic evidence](../evidence/2026-10
   source publication honestly while ordinary analysis/review remains available.
 - Approved original hadith/book/scholar excerpts use an immutable content-derived
   identity, preserving original text separately from search normalization. They
-  become members of the configured corpus for lexical retrieval. No automatic
+  become members of `REVIEWER_CORPUS_VERSION=reviewed-<FOUNDATION_CORPUS_VERSION>`
+  for exact/lexical retrieval. Base readiness, embeddings and the submission pin
+  remain unchanged. Retrieved additions identify the reviewed layer and corpus
+  version in provenance; existing relevance/meaning gates still apply. No automatic
   embedding backfill is claimed. This editor cannot replace canonical Quran text
   or automatically insert tafsir rows.
 - A revoked edition cannot be revived by this source-approval operation. A
@@ -89,6 +93,22 @@ Delivery to a mailbox server does **not** guarantee inbox placement. User inbox
 confirmation (including spam/junk) remains part of the live acceptance test.
 
 ## Data and migration boundaries
+
+Successful owned document/revision saves and review submissions renew the same
+live guest session for `GUEST_RETENTION_HOURS` (1–24 hours) from the save, and
+refresh the same secure HttpOnly cookie. Reading a report does not extend retention.
+Renewal runs inside the save transaction under existing RLS; expired/deleted
+sessions cannot be revived. Already absent historical reports cannot be recovered
+from missing rows; the exact deletion cause remains unproved.
+
+`scripts/repair-reviewer-staging.mjs` is the scoped issue #193 operator procedure.
+First rehearse on an expiring child of the active research branch. `inspect` checks
+binding/schema/counts read-only. Owner-authorized `apply` installs only corpus
+source-approval migration 0017 if missing and creates a new least-privilege login,
+without rotating the previous login. The old writer URL is retained in a private
+Railway rollback variable. Writer/overlay variables update with deploys skipped;
+original counts/hashes are checked. Deploy accepted source with its full SHA guard
+aligned afterward. No production, ingestion or embedding backfill is included.
 
 Apply checked-in owner migrations only after isolated rehearsal and checksum/drift
 checks. Runtime receives scoped function execution, not table writes or ownership.

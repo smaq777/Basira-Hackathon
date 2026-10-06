@@ -1,5 +1,11 @@
 # Current delivery status
 
+**Persistence repair (#193), 6 October:** owner-authorized active staging writer
+repair preserves the frozen corpus through a distinct reviewed exact/lexical layer.
+Successful owned saves renew live guest retention. Isolated source approval/readback
+and rollback-only lifetime controls passed; final deployment and online publication
+receipts remain necessary. See [repair evidence](evidence/2026-10-06-evidence-persistence-repair.md).
+
 **Reviewer controls (#191), 6 October:** the empty/cramped source-publication
 selector now shares server eligibility gates, and the protected ticket endpoint
 reports writer availability. Absent email consent is distinguished from queued,
