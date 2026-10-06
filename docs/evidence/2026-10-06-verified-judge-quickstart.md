@@ -2,13 +2,13 @@
 
 Related to [#27](https://github.com/smaq777/Basira-Hackathon/issues/27), [#165](https://github.com/smaq777/Basira-Hackathon/issues/165), [#169](https://github.com/smaq777/Basira-Hackathon/issues/169) and [#176](https://github.com/smaq777/Basira-Hackathon/issues/176). This page supports the [Judge Quickstart](../hackathon/JUDGE_QUICKSTART.md), without publishing guest cookies, provider credentials, private drafts or raw model payloads.
 
-**Last evidence reconciliation: 6 October 2026, 14:56 UTC / 17:56 Riyadh.** Recovery restored readiness and a useful website author rewrite, but the fresh six-case submission gate passed only 2/6. See the [recovery and first-outcome receipt](2026-10-06-staging-recovery-and-ticket-return.md). Historical successes below must not be substituted for the failed fresh gate. The final accepted/deployed ticket-return release identity is recorded on [issue169](https://github.com/smaq777/Basira-Hackathon/issues/169), separately from these tested source receipts.
+**Last evidence reconciliation: 6 October 2026, 15:55 UTC / 18:55 Riyadh.** Accepted version 1.14 on `f29b3145` passed all six fresh bounded staging cases, a first useful website author rewrite, exact validated copying, cancellation and original reload. The approved test ticket also has a stored and provider-confirmed delivered email receipt. See the [fresh acceptance and limits](2026-10-06-staging-1.14-acceptance.md); final documentation-only deployment identity is recorded on [issue169](https://github.com/smaq777/Basira-Hackathon/issues/169). Earlier failures below are retained historical outcomes, not the current acceptance gate or a claim of general scholarly accuracy.
 
-## Recovered deployment, incomplete fresh acceptance
+## Historical version 1.13 recovery, incomplete acceptance
 
 Deployment `0e1c44ad-1fcf-454d-b61f-2cfcd9f63fc9`, source `0434cf45a5134fc592d3978ec5976fa6e533198e`, reached SUCCESS. Health, readiness and capabilities returned HTTP 200. The observed startup failure on the prior deployment was `HOSTED_DEMO_ENVIRONMENT_MISMATCH`; the configured declaration still named sticky-menu source `8c8cce0`. The declaration was aligned to accepted source without disabling its guard. Both existing private Gemini keys were present; the backup flag was enabled without replacing keys. A bounded synthetic Gemini request returned HTTP 200 / `gemini-2.5-flash`.
 
-Fresh source retrieval returned Quran 7:31 plus Moyassar and Saadi. Actual primary relevance timeouts exercised Google Gemini backup without injected failure. Supported negation and supported charity conditions passed; contradicted negation and wedding abstention failed exact citation validation, contradicted condition failed primary response validation, and the off-topic case timed out. All first outcomes were retained; there was no retry-to-green or validation weakening. Full submission acceptance is **not achieved**.
+Fresh source retrieval returned Quran 7:31 plus Moyassar and Saadi. Actual primary relevance timeouts exercised Google Gemini backup without injected failure. Supported negation and supported charity conditions passed; contradicted negation and wedding abstention failed exact citation validation, contradicted condition failed primary response validation, and the off-topic case timed out. All first outcomes were retained; there was no retry-to-green or validation weakening. That historical release did **not** achieve full submission acceptance; the separate version 1.14 repair and first acceptance are recorded above.
 
 A fresh rough charity report `895e6814-a728-4fca-bab1-f439b49935ba` produced a first validated author edit and exact copy, retaining the quote and hiding/poor-recipient conditions without importing `من إظهارها`. Cancellation hid text/copy controls and report reload preserved the submitted original. This is selected complete-flow evidence, not general reliability.
 
@@ -16,7 +16,7 @@ A fresh rough charity report `895e6814-a728-4fca-bab1-f439b49935ba` produced a f
 
 GitHub deployment `6886068041`, source `cb8e8e068418386f48b6fe426f4e72ed180d0949`, recorded success at 14:03:59 UTC then failure at 14:04:08 UTC. `/health`, `/ready` and `/api/v1/capabilities` each timed out after 12 seconds. The [owner restoration handoff](https://github.com/smaq777/Basira-Hackathon/issues/169#issuecomment-6018113908) preserves these first outcomes. Startup logs were unavailable to this audit; the current failure cause is unproved. The older SHA-declaration mismatch was confirmed on an earlier outage and must not be assumed to explain this one.
 
-The later recovery above supersedes this availability failure, not the retained first outcomes. Require the final deployment receipt and HTTP 200 readiness before running live judge examples; the full semantic gate remains incomplete.
+The later recoveries supersede this availability failure, not the retained first outcomes. Require the latest deployment receipt and HTTP 200 readiness before running live judge examples; the version 1.14 selected gate does not establish continuous uptime or general accuracy.
 
 ## Accepted restored staging
 
