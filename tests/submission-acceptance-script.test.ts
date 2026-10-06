@@ -65,11 +65,13 @@ function harness(
         intake: { corpusVersion: CORPUS, originalText: text, evidence: [] },
         semanticAssessment: {
           status: offTopic ? 'partial' : 'completed',
+          errorCode: offTopic ? 'no_claims_extracted' : null,
           claims: offTopic ? [] : [{ id: 'claim-owned' }],
           assessments: offTopic ? [] : [{ status: 'supported' }],
           trace: {
             promptVersion: 'evidence-support-v1.13',
             pipelineVersion: 'provisional-semantic-v1.13',
+            requests: [{ stage: 'extraction', outcome: 'success', httpStatus: 200 }],
             ...(!offTopic ? { retrieval: { corpusVersion: CORPUS } } : {}),
           },
         },
@@ -236,8 +238,58 @@ describe('bounded submission acceptance harness', () => {
   it('accepts explicit off-topic abstention without evidence or citations', async () => {
     const run = harness({
       mutate(report) {
+        report.semanticAssessment.status = 'completed';
+        report.semanticAssessment.errorCode = null;
         report.semanticAssessment.claims = [{ id: 'off-topic', evidenceKeys: [] }];
         report.semanticAssessment.assessments = [{ status: 'not_applicable', citations: [] }];
+      },
+    });
+    expect(
+      (await runSubmissionAcceptance(['--live', '--case=off-topic'], run.dependencies)).exitCode,
+    ).toBe(0);
+  });
+
+  it.each([
+    ['unavailable', 'gateway_blocked'],
+    ['disabled', null],
+    ['partial', 'timeout'],
+    ['partial', 'invalid_claims'],
+  ])('does not count empty %s/%s as live off-topic acceptance', async (status, errorCode) => {
+    const run = harness({
+      mutate(report) {
+        report.semanticAssessment.status = status;
+        report.semanticAssessment.errorCode = errorCode;
+        report.semanticAssessment.trace.requests = [
+          { stage: 'extraction', outcome: 'gateway_blocked', httpStatus: 403 },
+        ];
+      },
+    });
+    const result = await runSubmissionAcceptance(['--live', '--case=off-topic'], run.dependencies);
+    expect(result.exitCode).toBe(1);
+    expect(result.rows[0]!.failure).toBe('OFF_TOPIC_SEMANTIC_UNAVAILABLE');
+    expect([...run.writes.keys()].some((path) => path.endsWith('off-topic-report.json'))).toBe(
+      true,
+    );
+    expect(run.calls.filter((row) => row.path === '/api/v1/reviews')).toHaveLength(1);
+  });
+
+  it('requires a successful extraction receipt for inconclusive empty selection', async () => {
+    const run = harness({
+      mutate(report) {
+        report.semanticAssessment.trace.requests = [];
+      },
+    });
+    const result = await runSubmissionAcceptance(['--live', '--case=off-topic'], run.dependencies);
+    expect(result.exitCode).toBe(1);
+    expect(result.rows[0]!.failure).toBe('OFF_TOPIC_SEMANTIC_UNAVAILABLE');
+  });
+
+  it('accepts deterministic not-applicable without inventing a model receipt', async () => {
+    const run = harness({
+      mutate(report) {
+        report.semanticAssessment.status = 'not_applicable';
+        report.semanticAssessment.errorCode = null;
+        report.semanticAssessment.trace.requests = [];
       },
     });
     expect(

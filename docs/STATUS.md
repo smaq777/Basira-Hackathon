@@ -1,5 +1,19 @@
 # Current delivery status
 
+**Independent submission check (#165/#169), 6 October:** Saleh's accepted
+development `9838bc285065c7e6301baf5ae2800c85950f9d80` is deployed on Railway
+staging with the175-passage corpus and semantic1.13. Five fresh selected semantic
+cases completed with exact bindings, durable reload and anonymous denial; the
+off-topic case hit a provider403 and safely returned no evidence. The harness
+previously counted that empty failure as a pass; this follow-up corrects the
+acceptance gate and retains the first receipt. A separate Foundation model probe
+reported an exhausted key limit; Saleh must inspect his staging provider account
+under [#169](https://github.com/smaq777/Basira-Hackathon/issues/169). Useful
+supported-author generation/verification/copy remains unproved under #157.
+See [independent evidence](evidence/2026-10-06-independent-submission-acceptance.md).
+Reviewer/publication/email and mobile remain deferred. Entries below are dated
+historical checkpoints, not the current deployed version.
+
 **Submission blockers (#157/#8), 6 October morning:** The deployed development
 revision observed in the audit is `156e539e8df8c2b95861a652a839f8e7f7fa9126`.
 Railway and selected MCP/model requests work, and semantic 1.11 is active, but

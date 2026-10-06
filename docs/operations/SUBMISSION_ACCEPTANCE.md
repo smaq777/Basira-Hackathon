@@ -40,6 +40,15 @@ evidence, not expert adjudication of general scholarly accuracy. Inspect the
 saved Arabic conditions, negations, exceptions, scope, citations and explanation
 together; JSON schema validity cannot prove semantic consistency.
 
+Empty off-topic evidence alone cannot pass acceptance. The harness also requires
+completed explicit or deterministic `not_applicable`, or `partial` with
+`no_claims_extracted` and successful extraction receipts. The latter is a valid
+inconclusive empty selection, not a completed classification. Unavailable,
+disabled, malformed or provider-error outcomes fail even if they contain zero
+citations. A403 must be retained and handed to Saleh for account-owned diagnosis;
+do not retry an exhausted key or change credentials/model safeguards to obtain
+a green run. See [the independent first outcomes](../evidence/2026-10-06-independent-submission-acceptance.md).
+
 For rewrite acceptance, use the supported cases with the current UI. Verify that
 the original quotation, conjunction, condition and modality survive, cancellation
 reveals no copyable candidate, and server copy equals the validated candidate.

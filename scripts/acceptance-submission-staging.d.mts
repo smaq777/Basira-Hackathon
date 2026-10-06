@@ -4,6 +4,15 @@ export type AcceptanceReceiptRow = {
   passed: boolean;
   failure?: string;
   reviewId?: string;
+  elapsedMs?: number;
+  semanticStatus?: string;
+  semanticErrorCode?: string | null;
+  modelRequests?: {
+    stage: string;
+    outcome: string;
+    httpStatus: number | null;
+    durationMs: number;
+  }[];
 };
 export function runSubmissionAcceptance(
   args: string[],

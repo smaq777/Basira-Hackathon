@@ -90,6 +90,7 @@ export async function runSubmissionAcceptance(args, dependencies = {}) {
     return { status: response.status, value };
   }
   for (const test of selected) {
+    const startedAt = now();
     const row = { case: test.name, expected: test.expected, passed: false };
     try {
       // Separate expiring sessions avoid making one case depend on another's guest quota.
@@ -120,6 +121,13 @@ export async function runSubmissionAcceptance(args, dependencies = {}) {
         promptVersion: semantic?.trace?.promptVersion,
         pipelineVersion: semantic?.trace?.pipelineVersion,
         semanticStatus: semantic?.status,
+        semanticErrorCode: semantic?.errorCode,
+        modelRequests: semantic?.trace?.requests?.map((request) => ({
+          stage: request.stage,
+          outcome: request.outcome,
+          httpStatus: request.httpStatus,
+          durationMs: request.durationMs,
+        })),
         findings: semantic?.assessments,
       });
       if (
@@ -137,6 +145,19 @@ export async function runSubmissionAcceptance(args, dependencies = {}) {
       )
         throw new Error('SEMANTIC_VERSION_MISMATCH');
       if (test.expected === 'no_assessment') {
+        const requests = semantic.trace.requests ?? [];
+        const validEmptySelection =
+          semantic.status === 'partial' &&
+          semantic.errorCode === 'no_claims_extracted' &&
+          !semantic.claims.length &&
+          !semantic.assessments.length &&
+          requests.some((request) => request.stage === 'extraction') &&
+          requests.every((request) => request.outcome === 'success');
+        if (
+          !validEmptySelection &&
+          !(['completed', 'not_applicable'].includes(semantic.status) && !semantic.errorCode)
+        )
+          throw new Error('OFF_TOPIC_SEMANTIC_UNAVAILABLE');
         if (
           report.intake.evidence.length ||
           semantic.claims.some((claim) => claim.evidenceKeys?.length) ||
@@ -161,6 +182,7 @@ export async function runSubmissionAcceptance(args, dependencies = {}) {
     } catch (error) {
       row.failure = error.message;
     }
+    row.elapsedMs = now() - startedAt;
     rows.push(row);
     await save(
       resolve(output, 'receipt.json'),
