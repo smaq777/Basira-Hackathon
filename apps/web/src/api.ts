@@ -478,11 +478,17 @@ export async function updateReviewTicketContact(
   );
 }
 
+import {
+  EditorialReviewSchema,
+  type EditorialReview,
+} from '../../../packages/contracts/src/editorial-review.js';
+
 export type TicketLookup = {
   found: boolean;
   ticketCode?: string;
   status?: TicketReceipt['status'];
   report?: FoundationReport;
+  editorial?: EditorialReview | null;
   submission?: { revisionId: string; originalText: string };
   response?: { decision: string; text: string; publishedAt: string } | null;
 };
@@ -495,6 +501,7 @@ export async function lookupReviewTicket(code: string, email: string): Promise<T
   if (typeof value !== 'object' || value === null || !('found' in value))
     throw new BasirahApiError('INVALID_RESPONSE', 0);
   const result = value as TicketLookup;
+  if (result.editorial) result.editorial = EditorialReviewSchema.parse(result.editorial);
   if (typeof result.found !== 'boolean') throw new BasirahApiError('INVALID_RESPONSE', 0);
   if (result.found && result.report) {
     const parsed = FoundationReportSchema.safeParse(result.report);
@@ -509,6 +516,7 @@ export type ReviewerTicketSummary = {
   status: TicketReceipt['status'];
   createdAt: string;
   notifyOptIn: boolean;
+  priority?: 'high' | 'medium' | 'low';
 };
 
 export type ReviewerTicket = ReviewerTicketSummary & {
@@ -520,8 +528,81 @@ export type ReviewerTicket = ReviewerTicketSummary & {
     text: string;
     published: boolean;
     createdAt: string;
+    editorial?: EditorialReview | null;
+  }>;
+  notifications?: Array<{
+    status: string;
+    attemptCount: number;
+    sentAt: string | null;
+    errorCode: string | null;
+  }>;
+  emailDeliveries?: Array<{
+    kind: 'receipt' | 'review';
+    version: number | null;
+    messageId: string;
+    event: string;
+    occurredAt: string | null;
+    acceptedAt: string;
+  }>;
+  sourceApprovals?: Array<{
+    version: number;
+    evidenceId: string;
+    snapshotKey: string;
+    createdAt: string;
   }>;
 };
+
+export type ReviewerTicketPage = {
+  tickets: ReviewerTicketSummary[];
+  total: number;
+  counts: { pending: number; inReview: number; published: number; total: number };
+};
+export async function getReviewerTicketPage(
+  page: number,
+  status = 'all',
+  query = '',
+): Promise<ReviewerTicketPage> {
+  const value = await requestJson(
+    `/api/v1/reviewer/tickets?page=${page}&size=10&status=${encodeURIComponent(status)}&query=${encodeURIComponent(query)}`,
+    { method: 'GET' },
+  );
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('tickets' in value) ||
+    !('total' in value) ||
+    !('counts' in value)
+  )
+    throw new BasirahApiError('INVALID_RESPONSE', 0);
+  return value as ReviewerTicketPage;
+}
+export async function archiveReviewerTicket(code: string, restore = false): Promise<void> {
+  await requestJson(
+    `/api/v1/reviewer/tickets/${encodeURIComponent(code)}${restore ? '/restore' : ''}`,
+    { method: restore ? 'POST' : 'DELETE' },
+  );
+}
+export async function approveReviewerSource(
+  code: string,
+  input: { version: number; evidenceId: string; rightsRecord: string; confirmed: true },
+): Promise<{ addedToRetrieval: true; auditRecorded: boolean; snapshotKey: string }> {
+  const value = await requestJson(
+    `/api/v1/reviewer/tickets/${encodeURIComponent(code)}/source-approval`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('addedToRetrieval' in value) ||
+    value.addedToRetrieval !== true ||
+    !('snapshotKey' in value) ||
+    typeof value.snapshotKey !== 'string' ||
+    !('auditRecorded' in value) ||
+    typeof value.auditRecorded !== 'boolean'
+  )
+    throw new BasirahApiError('INVALID_RESPONSE', 0);
+  return value as { addedToRetrieval: true; auditRecorded: boolean; snapshotKey: string };
+}
 
 export async function listReviewerTickets(): Promise<ReviewerTicketSummary[]> {
   const value = await requestJson('/api/v1/reviewer/tickets', { method: 'GET' });
@@ -557,6 +638,10 @@ export async function getReviewerTicket(code: string): Promise<ReviewerTicket> {
   return {
     ...(ticket as ReviewerTicket),
     report: report === null ? null : report.data,
+    responses: ticket.responses.map((row) => ({
+      ...row,
+      editorial: row.editorial == null ? null : EditorialReviewSchema.parse(row.editorial),
+    })),
   };
 }
 
@@ -566,6 +651,8 @@ export async function saveReviewerResponse(
     decision: 'needs_context' | 'bounded_revision' | 'returned';
     text: string;
     publish: boolean;
+    editorial?: EditorialReview;
+    expectedVersion?: number;
   },
 ): Promise<void> {
   await requestJson(`/api/v1/reviewer/tickets/${encodeURIComponent(code)}/responses`, {

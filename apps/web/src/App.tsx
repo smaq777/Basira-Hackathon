@@ -3,13 +3,10 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Archive } from '@phosphor-icons/react/Archive';
 import { ArrowLeft } from '@phosphor-icons/react/ArrowLeft';
 import { ArrowUp } from '@phosphor-icons/react/ArrowUp';
-import { Bell } from '@phosphor-icons/react/Bell';
 import { BookOpen } from '@phosphor-icons/react/BookOpen';
-import { CalendarBlank } from '@phosphor-icons/react/CalendarBlank';
 import { CaretDown } from '@phosphor-icons/react/CaretDown';
 import { CaretLeft } from '@phosphor-icons/react/CaretLeft';
 import { CaretUp } from '@phosphor-icons/react/CaretUp';
-import { ChartBar } from '@phosphor-icons/react/ChartBar';
 import { Check } from '@phosphor-icons/react/Check';
 import { CheckCircle } from '@phosphor-icons/react/CheckCircle';
 import { CircleNotch } from '@phosphor-icons/react/CircleNotch';
@@ -21,7 +18,6 @@ import { DownloadSimple } from '@phosphor-icons/react/DownloadSimple';
 import { Eye } from '@phosphor-icons/react/Eye';
 import { FileText } from '@phosphor-icons/react/FileText';
 import { Funnel } from '@phosphor-icons/react/Funnel';
-import { GearSix } from '@phosphor-icons/react/GearSix';
 import { House } from '@phosphor-icons/react/House';
 import { Info } from '@phosphor-icons/react/Info';
 import { ListChecks } from '@phosphor-icons/react/ListChecks';
@@ -49,12 +45,14 @@ import {
   createOwnedReview,
   getOwnedReview,
   getReviewerTicket,
-  listReviewerTickets,
+  getReviewerTicketPage,
+  archiveReviewerTicket,
   persistDraftForAnalysis,
   requireFoundationReview,
   lookupReviewTicket,
   requestDraftPreflight,
   saveReviewerResponse,
+  approveReviewerSource,
   updateReviewTicketContact,
   type DraftAnalysisReceipt,
   type PreflightAnnotation,
@@ -67,13 +65,21 @@ import {
   type ReviewerTicketSummary,
 } from './api.js';
 import { FoundationReportContent, FoundationResultScreen } from './foundation-report.js';
+import {
+  EditorialReviewSchema,
+  initialEditorialReview,
+  type EditorialReview,
+} from '../../../packages/contracts/src/editorial-review.js';
+import { EditorialReviewEditor, ReviewedReportContent } from './editorial-review.js';
+import { SourceInformation } from './source-information.js';
 import type { FoundationReport } from '../../../packages/contracts/src/foundation.js';
 import { ReviewerAccessBoundary, ReviewerAuthUnavailable } from './reviewer-auth.js';
 import { answerReviewQuestion, VOICE_GREETING, type VoiceTone } from './voice.js';
 import { MAX_DRAFT_LENGTH, isSafeDraftText } from '../../../packages/contracts/src/draft-text.js';
 import { compactDraftPreview } from './text-preview.js';
 
-type PublicRoute = 'home' | 'analysis' | 'result' | 'unresolved' | 'ticket' | 'follow-up';
+type PublicRoute =
+  'home' | 'analysis' | 'result' | 'unresolved' | 'ticket' | 'follow-up' | 'sources';
 type ReviewerRoute = 'dashboard' | 'queue' | 'detail' | 'sources';
 type Route = PublicRoute | `reviewer-${ReviewerRoute}`;
 
@@ -153,6 +159,7 @@ function routeFromHash(): Route {
     unresolved: 'unresolved',
     ticket: 'ticket',
     'follow-up': 'follow-up',
+    sources: 'sources',
     'reviewer/dashboard': 'reviewer-dashboard',
     'reviewer/queue': 'reviewer-queue',
     'reviewer/detail': 'reviewer-detail',
@@ -900,7 +907,7 @@ function PublicFooter() {
             نراجع النصوص بالرجوع إلى القرآن الكريم، وكتب التفسير والحديث، وشروح العلماء، ونُظهر
             المرجع المستخدم وحدود دلالته داخل النتيجة.
           </p>
-          <a href="#sources">كيف نعرض المصادر في النتيجة</a>
+          <a href="#/sources">كيف نعرض المصادر في النتيجة</a>
         </div>
       </div>
       <div className="footer-bottom page-shell">
@@ -1841,8 +1848,12 @@ function TicketScreen({
       });
       setReceipt(updated);
       setSaved(true);
-    } catch {
-      setError('تعذر حفظ بيانات المتابعة. تحقق من البريد وحاول مرة أخرى.');
+    } catch (failure) {
+      setError(
+        failure instanceof BasirahApiError && failure.code === 'TICKET_CONTACT_SAVED_EMAIL_FAILED'
+          ? 'حُفظ بريد المتابعة، لكن إرسال تأكيد الاستلام تعثر. رقم التذكرة صالح؛ جرّب الإرسال مجددًا.'
+          : 'تعذر حفظ بيانات المتابعة. تحقق من البريد وحاول مرة أخرى.',
+      );
     } finally {
       setSaving(false);
     }
@@ -1881,36 +1892,7 @@ function TicketScreen({
           </>
         )}
         {receipt && (
-          <section className="ticket-grid">
-            <article className="ticket-card">
-              <span className="icon-disc">
-                <FileText size={30} />
-              </span>
-              <h2>تفاصيل الطلب</h2>
-              <StatusPill tone="success">نسخة النص ١</StatusPill>
-              <p>
-                <CalendarBlank size={19} /> {new Date(receipt.createdAt).toLocaleString('ar-SA')}
-              </p>
-              <button className="button button--outline">
-                <Eye size={20} /> عرض النص المرسل
-              </button>
-              <button className="button button--ghost">
-                <DownloadSimple size={20} /> تنزيل ملف المراجعة
-              </button>
-              <hr />
-              <h3>الملفات المرفقة في طلب المراجعة</h3>
-              <ul>
-                <li>
-                  <FileText /> النص والعبارات المؤكدة
-                </li>
-                <li>
-                  <FileText /> المراجع والمقاطع المتاحة
-                </li>
-                <li>
-                  <FileText /> أسباب عدم الحسم
-                </li>
-              </ul>
-            </article>
+          <section className="ticket-followup-form">
             <article className="ticket-card follow-card">
               <span className="icon-disc">
                 <UsersThree size={30} />
@@ -2019,7 +2001,22 @@ function FollowUpScreen({ onHome }: { onHome: () => void }) {
             <StatusPill tone={result.status === 'published' ? 'success' : 'warning'}>
               {result.status === 'published' ? 'اكتملت المراجعة' : 'قيد المراجعة البشرية'}
             </StatusPill>
-            {result.report && <FoundationReportContent report={result.report} />}
+            {result.editorial && result.submission && (
+              <ReviewedReportContent
+                review={result.editorial}
+                originalText={result.submission.originalText}
+                baseline={initialEditorialReview(result.report ?? null)}
+              />
+            )}
+            {result.report &&
+              (result.editorial ? (
+                <details>
+                  <summary>التقرير الآلي الأصلي قبل المراجعة</summary>
+                  <FoundationReportContent report={result.report} />
+                </details>
+              ) : (
+                <FoundationReportContent report={result.report} />
+              ))}
             {!result.report && result.submission && (
               <article className="reviewer-panel">
                 <h2>النص المرسل للمراجعة</h2>
@@ -2099,16 +2096,11 @@ export function ReviewerShell({
               >
                 <Icon size={22} weight={route === item.route ? 'fill' : undefined} />
                 <span>{item.label}</span>
-                {item.route === 'queue' && <b>2</b>}
               </button>
             );
           })}
         </nav>
         <div className="sidebar-bottom">
-          <button>
-            <GearSix size={22} />
-            <span>الإعدادات</span>
-          </button>
           <button onClick={() => navigate('home')}>
             <House size={22} />
             <span>العودة للواجهة العامة</span>
@@ -2142,10 +2134,6 @@ export function ReviewerShell({
           </div>
           <div className="topbar-actions">
             <span className="demo-badge">بيانات التذاكر المحمية</span>
-            <button className="icon-button" aria-label="الإشعارات">
-              <Bell size={23} />
-              <i />
-            </button>
           </div>
         </header>
         {route === 'dashboard' && <ReviewerDashboard navigate={navigate} />}
@@ -2161,15 +2149,17 @@ export function ReviewerShell({
 
 function ReviewerDashboard({ navigate }: { navigate: (route: Route, reference?: string) => void }) {
   const [tickets, setTickets] = useState<ReviewerTicketSummary[]>([]);
+  const [counts, setCounts] = useState({ pending: 0, inReview: 0, published: 0, total: 0 });
   const [error, setError] = useState(false);
   useEffect(() => {
-    void listReviewerTickets()
-      .then(setTickets)
+    void getReviewerTicketPage(1)
+      .then((value) => {
+        setTickets(value.tickets);
+        setCounts(value.counts);
+      })
       .catch(() => setError(true));
   }, []);
-  const pending = tickets.filter((ticket) => ticket.status === 'pending').length;
-  const inReview = tickets.filter((ticket) => ticket.status === 'in_review').length;
-  const published = tickets.filter((ticket) => ticket.status === 'published').length;
+  const { pending, inReview, published } = counts;
   const items: CaseListItem[] = tickets.slice(0, 3).map((ticket) => ({
     id: ticket.ticketCode,
     title: 'طلب مراجعة بشرية مرتبط بتقرير محفوظ',
@@ -2181,7 +2171,7 @@ function ReviewerDashboard({ navigate }: { navigate: (route: Route, reference?: 
         : ticket.status === 'in_review'
           ? 'قيد المراجعة'
           : 'جديد',
-    priority: 'متوسط',
+    priority: ticket.priority === 'high' ? 'عالٍ' : ticket.priority === 'low' ? 'منخفض' : 'متوسط',
   }));
   return (
     <main className="reviewer-main page-enter">
@@ -2215,7 +2205,7 @@ function ReviewerDashboard({ navigate }: { navigate: (route: Route, reference?: 
           <span>
             <CheckCircle size={23} />
           </span>
-          <p>مكتملة هذا الأسبوع</p>
+          <p>المراجعات المنشورة</p>
           <strong>{published}</strong>
           <small>ردود منشورة</small>
         </article>
@@ -2224,7 +2214,7 @@ function ReviewerDashboard({ navigate }: { navigate: (route: Route, reference?: 
             <Archive size={23} />
           </span>
           <p>إجمالي الحالات</p>
-          <strong>{tickets.length}</strong>
+          <strong>{counts.total}</strong>
           <small>طلبات مفتوحة ومحفوظة</small>
         </article>
       </section>
@@ -2246,30 +2236,15 @@ function ReviewerDashboard({ navigate }: { navigate: (route: Route, reference?: 
           )}
         </article>
         <article className="reviewer-panel activity-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>نشاط الأسبوع</h2>
-              <p>تقدم المراجعات التجريبية.</p>
-            </div>
-            <ChartBar size={25} />
-          </div>
-          <div className="mini-chart" aria-label="ثمان مراجعات مكتملة">
-            <i style={{ height: '42%' }} />
-            <i style={{ height: '60%' }} />
-            <i style={{ height: '48%' }} />
-            <i style={{ height: '80%' }} />
-            <i style={{ height: '66%' }} />
-            <i style={{ height: '92%' }} />
-            <i style={{ height: '72%' }} />
-          </div>
-          <div className="activity-summary">
-            <span>
-              <b>8</b> مكتملة
-            </span>
-            <span>
-              <b>18 د</b> متوسط الوقت
-            </span>
-          </div>
+          <h2>كيف تُرتب الأولوية؟</h2>
+          <p>
+            عالٍ: التقرير يحوي اختلافًا لفظيًا في نقل. متوسط: طلب لم يُنشر بعد، يحتاج مراجعة أو
+            استكمال دليل. منخفض: مراجعة منشورة.
+          </p>
+          <p>
+            داخل كل فئة يأتي الأقدم أولًا. هذه أولوية تحريرية، وليست حكمًا شرعيًا أو تقديرًا لخطورة
+            النص.
+          </p>
         </article>
       </section>
     </main>
@@ -2332,14 +2307,36 @@ function ReviewerQueue({ navigate }: { navigate: (route: Route, reference?: stri
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [tickets, setTickets] = useState<ReviewerTicketSummary[]>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const requestSequence = useRef(0);
   const refresh = useCallback(() => {
+    const sequence = ++requestSequence.current;
     setLoading(true);
     setLoadError(false);
-    void listReviewerTickets()
-      .then(setTickets)
-      .catch(() => setLoadError(true))
-      .finally(() => setLoading(false));
-  }, []);
+    void getReviewerTicketPage(
+      page,
+      (
+        { الكل: 'all', جديد: 'pending', 'قيد المراجعة': 'in_review', مكتمل: 'published' } as Record<
+          string,
+          string
+        >
+      )[filter],
+      query,
+    )
+      .then((value) => {
+        if (sequence === requestSequence.current) {
+          setTickets(value.tickets);
+          setTotal(value.total);
+        }
+      })
+      .catch(() => {
+        if (sequence === requestSequence.current) setLoadError(true);
+      })
+      .finally(() => {
+        if (sequence === requestSequence.current) setLoading(false);
+      });
+  }, [page, filter, query]);
   useEffect(refresh, [refresh]);
   const items = useMemo<CaseListItem[]>(
     () =>
@@ -2354,7 +2351,8 @@ function ReviewerQueue({ navigate }: { navigate: (route: Route, reference?: stri
             : ticket.status === 'in_review'
               ? 'قيد المراجعة'
               : 'جديد',
-        priority: 'متوسط',
+        priority:
+          ticket.priority === 'high' ? 'عالٍ' : ticket.priority === 'low' ? 'منخفض' : 'متوسط',
       })),
     [tickets],
   );
@@ -2375,7 +2373,10 @@ function ReviewerQueue({ navigate }: { navigate: (route: Route, reference?: stri
           <MagnifyingGlass size={20} />
           <input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(1);
+            }}
             placeholder="ابحث برقم الطلب أو موضوعه"
           />
         </div>
@@ -2384,7 +2385,10 @@ function ReviewerQueue({ navigate }: { navigate: (route: Route, reference?: stri
           {['الكل', 'جديد', 'قيد المراجعة', 'مكتمل'].map((item) => (
             <button
               className={filter === item ? 'active' : ''}
-              onClick={() => setFilter(item)}
+              onClick={() => {
+                setFilter(item);
+                setPage(1);
+              }}
               key={item}
             >
               {item}
@@ -2399,16 +2403,34 @@ function ReviewerQueue({ navigate }: { navigate: (route: Route, reference?: stri
         <div className="panel-heading">
           <div>
             <h2>كل الطلبات</h2>
-            <p>{filtered.length} طلبات ضمن العرض الحالي</p>
+            <p>
+              {total} طلبات · الصفحة {page} من {Math.max(1, Math.ceil(total / 10))}
+            </p>
           </div>
         </div>
         {loadError ? (
           <ErrorState onRetry={refresh} />
-        ) : loading && tickets.length > 0 ? (
+        ) : loading ? (
           <LoadingState />
         ) : (
           <CaseList items={filtered} onOpen={(code) => navigate('reviewer-detail', code)} />
         )}
+        <nav className="editorial-pagination" aria-label="صفحات طلبات المراجعة">
+          <button
+            className="button button--outline"
+            disabled={loading || page === 1}
+            onClick={() => setPage((value) => value - 1)}
+          >
+            السابق
+          </button>
+          <button
+            className="button button--outline"
+            disabled={loading || page * 10 >= total}
+            onClick={() => setPage((value) => value + 1)}
+          >
+            التالي
+          </button>
+        </nav>
       </section>
     </main>
   );
@@ -2451,6 +2473,12 @@ function ReviewerDetail({
     'needs_context',
   );
   const [note, setNote] = useState('');
+  const [editorial, setEditorial] = useState<EditorialReview>(initialEditorialReview(null));
+  const [confirmPublish, setConfirmPublish] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const [sourceId, setSourceId] = useState('');
+  const [sourceRights, setSourceRights] = useState('');
+  const [confirmSource, setConfirmSource] = useState(false);
   const [loading, setLoading] = useState(Boolean(ticketCode));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -2463,7 +2491,8 @@ function ReviewerDetail({
       .then((value) => {
         setTicket(value);
         const latest = value.responses.at(-1);
-        if (latest && !latest.published) {
+        setEditorial(latest?.editorial ?? initialEditorialReview(value.report));
+        if (latest) {
           setDecision(latest.decision);
           setNote(latest.text);
         }
@@ -2473,21 +2502,37 @@ function ReviewerDetail({
   }, [ticketCode]);
   useEffect(load, [load]);
 
-  const save = async (publish: boolean) => {
+  const save = async () => {
     if (!ticketCode || !note.trim() || saving) return;
     setSaving(true);
     setError('');
     setMessage('');
     try {
-      await saveReviewerResponse(ticketCode, { decision, text: note, publish });
+      const parsed = EditorialReviewSchema.safeParse(editorial);
+      if (!parsed.success) {
+        setError(
+          'أكمل بيانات المصادر. السجل المحسوم يحتاج دليلًا وتعليلًا، والروابط يجب أن تكون HTTPS.',
+        );
+        return;
+      }
+      await saveReviewerResponse(ticketCode, {
+        decision,
+        text: note,
+        publish: true,
+        editorial: parsed.data,
+        expectedVersion: ticket?.responses.at(-1)?.version ?? 0,
+      });
+      setConfirmPublish(false);
       setMessage(
-        publish
-          ? 'تم نشر رد المراجع وإدراج الإشعار في طابور الإرسال.'
-          : 'تم حفظ نسخة جديدة من المسودة.',
+        'تم تحديث التقرير ونشر المراجعة للمستخدم. تظهر حالة البريد أدناه؛ نشر الدليل إلى RAG له تأكيد مستقل.',
       );
       load();
-    } catch {
-      setError('تعذر حفظ القرار. لم يُنشر أي رد ولم يُرسل أي إشعار.');
+    } catch (failure) {
+      setError(
+        failure instanceof BasirahApiError && failure.code === 'REVIEW_VERSION_CONFLICT'
+          ? 'توجد نسخة أحدث. حدّث الصفحة قبل الحفظ لتجنب الكتابة فوقها.'
+          : 'تعذر حفظ القرار. تحقق من النسخ المحفوظة قبل إعادة المحاولة.',
+      );
     } finally {
       setSaving(false);
     }
@@ -2520,8 +2565,16 @@ function ReviewerDetail({
                 <p>{ticket.submission.originalText}</p>
               </div>
             </article>
+            <EditorialReviewEditor
+              value={editorial}
+              onChange={setEditorial}
+              disabled={saving || ticket.status === 'closed'}
+            />
             {ticket.report ? (
-              <FoundationReportContent report={ticket.report} />
+              <details className="reviewer-panel">
+                <summary>التقرير الآلي الأصلي — محفوظ للمقارنة</summary>
+                <FoundationReportContent report={ticket.report} />
+              </details>
             ) : (
               <article className="reviewer-panel">
                 <h2>أُحيل مباشرة للمراجع</h2>
@@ -2532,8 +2585,11 @@ function ReviewerDetail({
           <aside className="decision-panel reviewer-panel">
             <div className="panel-heading">
               <div>
-                <h2>رد المراجع</h2>
-                <p>احفظ مسودات مستقلة، ثم انشر الرد النهائي مرة واحدة.</p>
+                <h2>ملاحظات المراجع وتسليم التقرير</h2>
+                <p>
+                  حدّث التقرير وانشر الملاحظات للمستخدم مباشرة. تُحفظ نسخة مؤرخة لكل تحديث؛ لا توجد
+                  خطوة مسودة.
+                </p>
               </div>
               <ListChecks size={24} />
             </div>
@@ -2560,7 +2616,7 @@ function ReviewerDetail({
               ))}
             </div>
             <label className="note-field">
-              ملاحظة المراجع
+              ملاحظة المراجع ونصيحته للمستخدم
               <textarea
                 rows={9}
                 value={note}
@@ -2569,23 +2625,243 @@ function ReviewerDetail({
               />
             </label>
             <button
-              className="button button--ghost"
-              disabled={!note.trim() || saving || ticket.status === 'published'}
-              onClick={() => void save(false)}
-            >
-              حفظ كمسودة
-            </button>
-            <button
               className="button button--primary"
-              disabled={!note.trim() || saving || ticket.status === 'published'}
-              onClick={() => void save(true)}
+              disabled={!note.trim() || saving || ticket.status === 'closed'}
+              onClick={() => setConfirmPublish(true)}
             >
-              <Check size={20} /> نشر الرد النهائي
+              <Check size={20} /> تحديث التقرير ونشر المراجعة
             </button>
+            {confirmPublish && (
+              <div className="analysis-error" role="alert">
+                <p>
+                  سيظهر التقرير المعدل للمستخدم، ويُدرج إشعار بالبريد إن فعّل المتابعة. هل تريد
+                  النشر؟
+                </p>
+                <button
+                  className="button button--primary"
+                  disabled={saving}
+                  onClick={() => void save()}
+                >
+                  تأكيد نشر التقرير
+                </button>
+                <button className="button button--outline" onClick={() => setConfirmPublish(false)}>
+                  إلغاء
+                </button>
+              </div>
+            )}
+            <h3>حالة إشعار البريد</h3>
+            {ticket.notifications?.length ? (
+              ticket.notifications.map((notice, index) => (
+                <p key={index}>
+                  {(
+                    {
+                      sent: 'قُبل للإرسال من مزود البريد',
+                      pending: 'في طابور الإرسال',
+                      sending: 'جار الإرسال',
+                      failed: 'تعذر الإرسال — يحتاج متابعة',
+                    } as Record<string, string>
+                  )[notice.status] ?? notice.status}{' '}
+                  · المحاولات: {notice.attemptCount}
+                </p>
+              ))
+            ) : (
+              <p>لا يوجد إشعار منشور بعد.</p>
+            )}
+            {ticket.emailDeliveries?.map((delivery) => (
+              <details key={delivery.messageId}>
+                <summary>
+                  {delivery.kind === 'receipt'
+                    ? 'رسالة استلام التذكرة'
+                    : `تقرير المراجعة · نسخة ${delivery.version}`}{' '}
+                  —{' '}
+                  {(
+                    {
+                      accepted: 'قبلها مزود البريد؛ لم يُثبت التسليم بعد',
+                      delivered: 'تسلمها خادم بريد المستلم',
+                      deferred: 'تأخر التسليم',
+                      hardBounces: 'رفض خادم المستلم الرسالة',
+                      softBounces: 'تعثر التسليم',
+                      blocked: 'حظر مزود البريد الرسالة',
+                      invalid: 'عنوان غير صالح',
+                      error: 'خطأ لدى مزود البريد',
+                    } as Record<string, string>
+                  )[delivery.event] ?? delivery.event}
+                </summary>
+                <p>
+                  آخر إثبات:{' '}
+                  {new Date(delivery.occurredAt ?? delivery.acceptedAt).toLocaleString('ar-SA')}
+                </p>
+                <p>
+                  معرّف مزود البريد: <code dir="ltr">{delivery.messageId}</code>
+                </p>
+                <p>
+                  التسليم إلى خادم البريد لا يضمن ظهور الرسالة في صندوق الوارد؛ راجع البريد غير
+                  المرغوب عند الحاجة.
+                </p>
+              </details>
+            ))}
+            <details>
+              <summary>سجل النسخ ({ticket.responses.length})</summary>
+              {ticket.responses.map((row) => (
+                <p key={row.version}>
+                  نسخة {row.version} · {row.published ? 'منشورة' : 'مسودة'} ·{' '}
+                  {new Date(row.createdAt).toLocaleString('ar-SA')}
+                </p>
+              ))}
+            </details>
+            <button
+              className="button button--outline"
+              disabled={saving}
+              onClick={() => setConfirmArchive(true)}
+            >
+              {ticket.status === 'closed' ? 'استعادة التذكرة' : 'حذف التذكرة من القائمة'}
+            </button>
+            {confirmArchive && (
+              <div role="alert">
+                <p>
+                  الحذف قابل للاستعادة، ويخفي التذكرة عن المتابعة العامة دون إتلاف النص أو سجل
+                  المراجعة.
+                </p>
+                <button
+                  className="button button--outline"
+                  disabled={saving}
+                  onClick={() => {
+                    if (!ticketCode) return;
+                    setSaving(true);
+                    void archiveReviewerTicket(ticketCode, ticket.status === 'closed')
+                      .then(() => {
+                        setConfirmArchive(false);
+                        load();
+                      })
+                      .catch(() => setError('تعذر تغيير حالة التذكرة.'))
+                      .finally(() => setSaving(false));
+                  }}
+                >
+                  تأكيد {ticket.status === 'closed' ? 'الاستعادة' : 'الحذف'}
+                </button>
+                <button className="button button--outline" onClick={() => setConfirmArchive(false)}>
+                  إلغاء
+                </button>
+              </div>
+            )}
             <p className="decision-note">
               <Lock size={17} /> النشر يُشعر المستخدم إن اختار البريد، لكنه لا يعتمد الرد تلقائيًا
               كمصدر RAG.
             </p>
+            <section aria-label="نشر الأدلة الموثقة إلى RAG">
+              <h3>نشر دليل موثّق إلى RAG</h3>
+              <p>
+                للمراجع المخوّل باعتماد المصادر: انشر التقرير أولًا، ثم اختر أصلًا موثّقًا مرتبطًا
+                بسجل محسوم. لا تُنشر الملاحظات أو نص المستخدم كمصدر، ولا يُستبدل نص القرآن المعتمد.
+              </p>
+              <label>
+                الدليل من النسخة المنشورة
+                <select
+                  value={sourceId}
+                  disabled={saving || ticket.status !== 'published'}
+                  onChange={(event) => {
+                    setSourceId(event.target.value);
+                    setConfirmSource(false);
+                  }}
+                >
+                  <option value="">اختر الدليل</option>
+                  {ticket.responses
+                    .filter((row) => row.published)
+                    .at(-1)
+                    ?.editorial?.evidence.filter((source) =>
+                      ['hadith_matn', 'book_excerpt', 'scholar_explanation'].includes(
+                        source.sourceRole,
+                      ),
+                    )
+                    .map((source) => (
+                      <option key={source.id} value={source.id}>
+                        {source.work} — {source.reference}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                حقوق الاستخدام والترخيص
+                <textarea
+                  value={sourceRights}
+                  maxLength={2000}
+                  disabled={saving}
+                  onChange={(event) => setSourceRights(event.target.value)}
+                  placeholder="اذكر الترخيص أو أساس الإذن بنشر أصل المصدر"
+                />
+              </label>
+              <button
+                className="button button--outline"
+                disabled={
+                  saving || !sourceId || !sourceRights.trim() || ticket.status !== 'published'
+                }
+                onClick={() => setConfirmSource(true)}
+              >
+                اعتماد الدليل ونشره إلى RAG
+              </button>
+              {confirmSource && (
+                <div role="alert">
+                  <p>
+                    تؤكد أنك تحققت من أصل المصدر ونسبته وحقوق إعادة استخدامه، وليس صياغة آلية أو
+                    نصًا خاصًا بالمستخدم؟
+                  </p>
+                  <button
+                    className="button button--primary"
+                    disabled={saving}
+                    onClick={() => {
+                      if (!ticketCode) return;
+                      const version = ticket.responses
+                        .filter((row) => row.published)
+                        .at(-1)?.version;
+                      if (!version) return;
+                      setSaving(true);
+                      setError('');
+                      void approveReviewerSource(ticketCode, {
+                        version,
+                        evidenceId: sourceId,
+                        rightsRecord: sourceRights,
+                        confirmed: true,
+                      })
+                        .then((receipt) => {
+                          setMessage(
+                            receipt.auditRecorded
+                              ? 'تم نشر الدليل إلى RAG وتسجيل إثبات النشر.'
+                              : 'تم نشر الدليل إلى RAG، لكن تسجيل الإيصال تعثر. أعد تأكيد المصدر نفسه لإكمال التسجيل دون تكرار النص.',
+                          );
+                          setConfirmSource(false);
+                          load();
+                        })
+                        .catch((failure) =>
+                          setError(
+                            failure instanceof BasirahApiError &&
+                              failure.code === 'SOURCE_CURATOR_REQUIRED'
+                              ? 'نشر المصادر إلى RAG يتطلب صلاحية اعتماد المصادر.'
+                              : 'تعذر تأكيد نشر الدليل إلى RAG. تحقق من المصدر والنسخة المنشورة والاتصال.',
+                          ),
+                        )
+                        .finally(() => setSaving(false));
+                    }}
+                  >
+                    تأكيد نشر الدليل
+                  </button>
+                  <button
+                    className="button button--outline"
+                    onClick={() => setConfirmSource(false)}
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              )}
+              {ticket.sourceApprovals?.map((approval) => (
+                <p
+                  className="status-badge status-badge--ready"
+                  key={`${approval.version}-${approval.evidenceId}`}
+                >
+                  نُشر إلى RAG · نسخة {approval.version} · {approval.evidenceId} ·{' '}
+                  {new Date(approval.createdAt).toLocaleString('ar-SA')}
+                </p>
+              ))}
+            </section>
           </aside>
         </div>
       )}
@@ -2594,60 +2870,12 @@ function ReviewerDetail({
 }
 
 function ReviewerSources() {
-  const [query, setQuery] = useState('');
-  const sources = [
-    'القرآن الكريم — Tanzil Uthmani v1.1',
-    'تفسير الميسر — سجل المصدر التجريبي',
-    'حزمة الخلاف الفقهي — بانتظار الاعتماد',
-  ].filter((item) => item.includes(query));
   return (
     <main className="reviewer-main page-enter">
-      <section className="queue-toolbar">
-        <div className="search-field">
-          <MagnifyingGlass size={20} />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="ابحث في سجل المصادر"
-          />
-        </div>
-        <button className="button button--primary">
-          <Database size={20} /> إضافة مصدر للمراجعة
-        </button>
-      </section>
-      <section className="reviewer-panel">
-        <div className="panel-heading">
-          <div>
-            <h2>سجل المصادر</h2>
-            <p>مصادر تجريبية؛ الاعتماد العلمي والترخيص غير مكتملين.</p>
-          </div>
-        </div>
-        {sources.length ? (
-          <div className="source-list">
-            {sources.map((source, index) => (
-              <article key={source}>
-                <span>
-                  <BookOpen size={23} />
-                </span>
-                <div>
-                  <strong>{source}</strong>
-                  <small>
-                    {index === 0 ? 'نشط في العرض التجريبي' : 'لا يستخدم في النتائج الحالية'}
-                  </small>
-                </div>
-                <StatusPill tone={index === 0 ? 'success' : 'neutral'}>
-                  {index === 0 ? 'متاح' : 'مسودة'}
-                </StatusPill>
-                <button className="icon-button" aria-label="عرض">
-                  <Eye size={20} />
-                </button>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <EmptyState />
-        )}
-      </section>
+      <p>
+        تضاف الأدلة إلى التقرير داخل الطلب المرتبط بها. لا يوجد سجل تجريبي ثابت يمثل مصدرًا معتمدًا.
+      </p>
+      <SourceInformation />
     </main>
   );
 }
@@ -2694,6 +2922,16 @@ export default function App({ clerkConfigured = false }: { clerkConfigured?: boo
     setUnavailableReceipt(receipt);
     window.location.hash = `${pathFor('result')}?revisionId=${encodeURIComponent(receipt.revisionId)}`;
   }, []);
+
+  if (route === 'sources')
+    return (
+      <div className="app-page">
+        <BackHeader onHome={() => navigate('home')} />
+        <main className="page-shell ticket-main page-enter">
+          <SourceInformation />
+        </main>
+      </div>
+    );
 
   if (route.startsWith('reviewer-')) {
     if (!clerkConfigured) return <ReviewerAuthUnavailable onHome={() => navigate('home')} />;

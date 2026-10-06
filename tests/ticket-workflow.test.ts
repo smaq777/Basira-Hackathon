@@ -307,7 +307,11 @@ it('returns a conflict instead of a service error when a response is already pub
 });
 
 it('sends Brevo mail without reflecting unescaped contact HTML', async () => {
-  const request = vi.fn<typeof fetch>().mockResolvedValue(new Response('{}', { status: 201 }));
+  const request = vi
+    .fn<typeof fetch>()
+    .mockImplementation(
+      async () => new Response('{"messageId":"<synthetic@provider.example>"}', { status: 201 }),
+    );
   const mailer = createBrevoMailer({
     apiKey: 'secret-key',
     senderEmail: 'review@example.com',

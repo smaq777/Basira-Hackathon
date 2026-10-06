@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import { z } from 'zod';
 import { databaseTls } from './database.js';
+import type { EditorialReview } from '../../../packages/contracts/src/editorial-review.js';
 
 const TicketReceiptSchema = z
   .object({
@@ -31,6 +32,8 @@ export type NotificationClaim = {
   ticketCode: string;
   contactCiphertext: Buffer;
   responseText: string;
+  responseVersion?: number;
+  editorial?: unknown;
 };
 
 export interface TicketStore {
@@ -62,6 +65,20 @@ export interface TicketStore {
   ): Promise<TicketReceipt | null>;
   lookup(ticketCode: string, emailHash: Buffer): Promise<Record<string, unknown>>;
   list(): Promise<unknown[]>;
+  page?(
+    offset: number,
+    size: number,
+    status: string,
+    query: string,
+  ): Promise<Record<string, unknown>>;
+  archive?(code: string, actor: string, restore: boolean): Promise<boolean>;
+  recordSourceReceipt?(
+    code: string,
+    version: number,
+    evidenceId: string,
+    snapshotKey: string,
+    actor: string,
+  ): Promise<boolean>;
   get(ticketCode: string): Promise<Record<string, unknown> | null>;
   saveResponse(
     ticketCode: string,
@@ -69,6 +86,7 @@ export interface TicketStore {
     decision: ReviewerDecision,
     text: string,
     publish: boolean,
+    editorial?: { expectedVersion: number; report: EditorialReview },
   ): Promise<z.infer<typeof ReviewerResponseSchema> | null>;
   approveForRetrieval(
     ticketCode: string,
@@ -78,6 +96,13 @@ export interface TicketStore {
   ): Promise<boolean>;
   claimNotifications(limit: number): Promise<NotificationClaim[]>;
   completeNotification(id: number, sent: boolean, errorCode?: string): Promise<boolean>;
+  recordEmailReceipt?(
+    code: string,
+    notificationId: number | null,
+    messageId: string,
+  ): Promise<boolean>;
+  pendingEmailDeliveries?(limit: number): Promise<{ id: number; messageId: string }[]>;
+  recordEmailDelivery?(id: number, event: string, occurredAt: string | null): Promise<boolean>;
   close(): Promise<void>;
 }
 
@@ -133,6 +158,20 @@ export function createTicketStore(connectionString: string): TicketStore {
     application_name: 'basirah-ticket-api',
   });
   return {
+    async page(offset, size, status, query) {
+      const result = await pool.query<{ value: Record<string, unknown> }>(
+        'select basirah_api.review_ticket_page($1,$2,$3,$4) as value',
+        [offset, size, status, query],
+      );
+      return result.rows[0]!.value;
+    },
+    async archive(code, actor, restore) {
+      const result = await pool.query<{ value: boolean }>(
+        'select basirah_api.archive_review_ticket($1,$2,$3) as value',
+        [code, actor, restore],
+      );
+      return result.rows[0]?.value ?? false;
+    },
     async create(sessionId, secret, reviewId, code, hash, ciphertext, notify) {
       const result = await pool.query<{ value: unknown }>(
         'select basirah_api.create_review_ticket($1::uuid,$2,$3::uuid,$4,$5,$6,$7) as value',
@@ -175,15 +214,42 @@ export function createTicketStore(connectionString: string): TicketStore {
         'select basirah_api.get_review_ticket($1) as value',
         [code],
       );
-      return result.rows[0]?.value ?? null;
+      const ticket = result.rows[0]?.value;
+      if (!ticket) return null;
+      const delivery = await pool.query<{ value: unknown }>(
+        'select basirah_api.ticket_email_deliveries($1) as value',
+        [code],
+      );
+      return { ...ticket, emailDeliveries: delivery.rows[0]?.value ?? [] };
     },
-    async saveResponse(code, reviewer, decision, text, publish) {
+    async saveResponse(code, reviewer, decision, text, publish, editorial) {
       const result = await pool.query<{ value: unknown }>(
-        'select basirah_api.save_review_ticket_response($1,$2,$3,$4,$5) as value',
-        [code, reviewer, decision, text, publish],
+        editorial
+          ? 'select basirah_api.save_editorial_review($1,$2,$3,$4,$5,$6,$7::jsonb) as value'
+          : 'select basirah_api.save_review_ticket_response($1,$2,$3,$4,$5) as value',
+        editorial
+          ? [
+              code,
+              reviewer,
+              decision,
+              text,
+              publish,
+              editorial.expectedVersion,
+              JSON.stringify(editorial.report),
+            ]
+          : [code, reviewer, decision, text, publish],
       );
       const value = result.rows[0]?.value;
-      return value == null ? null : ReviewerResponseSchema.parse(value);
+      if (value == null) return null;
+      const { editorial: _editorial, ...receipt } = value as Record<string, unknown>;
+      return ReviewerResponseSchema.parse(receipt);
+    },
+    async recordSourceReceipt(code, version, evidenceId, snapshotKey, actor) {
+      const result = await pool.query<{ value: boolean }>(
+        'select basirah_api.record_reviewed_source_receipt($1,$2,$3,$4,$5) as value',
+        [code, version, evidenceId, snapshotKey, actor],
+      );
+      return result.rows[0]?.value === true;
     },
     async approveForRetrieval(code, reviewer, sourceReference, provenance) {
       const result = await pool.query<{ value: boolean }>(
@@ -198,18 +264,43 @@ export function createTicketStore(connectionString: string): TicketStore {
         ticket_code: string;
         contact_ciphertext: Buffer;
         response_text: string;
-      }>('select * from basirah_api.claim_review_notifications($1)', [limit]);
+        response_version: number;
+        editorial: unknown;
+      }>('select * from basirah_api.claim_editorial_notifications($1)', [limit]);
       return result.rows.map((row) => ({
         notificationId: Number(row.notification_id),
         ticketCode: row.ticket_code,
         contactCiphertext: row.contact_ciphertext,
         responseText: row.response_text,
+        responseVersion: row.response_version,
+        editorial: row.editorial,
       }));
     },
     async completeNotification(id, sent, errorCode) {
       const result = await pool.query<{ value: boolean }>(
         'select basirah_api.complete_review_notification($1,$2,$3) as value',
         [id, sent, errorCode ?? null],
+      );
+      return result.rows[0]?.value === true;
+    },
+    async recordEmailReceipt(code, notificationId, messageId) {
+      const result = await pool.query<{ value: boolean }>(
+        'select basirah_api.record_email_receipt($1,$2,$3) as value',
+        [code, notificationId, messageId],
+      );
+      return result.rows[0]?.value === true;
+    },
+    async pendingEmailDeliveries(limit) {
+      const result = await pool.query<{ id: string; message_id: string }>(
+        'select * from basirah_api.pending_email_deliveries($1)',
+        [limit],
+      );
+      return result.rows.map((row) => ({ id: Number(row.id), messageId: row.message_id }));
+    },
+    async recordEmailDelivery(id, event, occurredAt) {
+      const result = await pool.query<{ value: boolean }>(
+        'select basirah_api.record_email_delivery($1,$2,$3::timestamptz) as value',
+        [id, event, occurredAt],
       );
       return result.rows[0]?.value === true;
     },

@@ -12,11 +12,13 @@ import {
 } from './reviewer-auth.js';
 import { buildDemoPreflight, PreflightInputSchema } from './preflight.js';
 import { FoundationReportSchema } from '../../../packages/contracts/src/foundation.js';
+import { EditorialReviewSchema } from '../../../packages/contracts/src/editorial-review.js';
 import { isSafeDraftText, MAX_DRAFT_LENGTH } from '../../../packages/contracts/src/draft-text.js';
 import type { ReviewStore } from './review-store.js';
 import { RewriteError, type RewriteService, type RewriteContext } from './rewrite.js';
 import { sha256 } from './foundation.js';
 import type { ReviewerDecision, TicketStore } from './ticket-store.js';
+import type { ReviewerCorpus } from './reviewer-corpus.js';
 import {
   emailLookupHash,
   encryptTicketContact,
@@ -61,8 +63,13 @@ const ReviewerResponseInput = z
     decision: z.enum(['needs_context', 'bounded_revision', 'returned']),
     text: z.string().trim().min(1).max(12_000),
     publish: z.boolean().default(false),
+    editorial: EditorialReviewSchema.optional(),
+    expectedVersion: z.number().int().nonnegative().optional(),
   })
-  .strict();
+  .strict()
+  .refine((value) => !value.editorial || value.publish, {
+    message: 'EDITORIAL_REVIEW_PUBLISH_REQUIRED',
+  });
 const RetrievalApprovalInput = z
   .object({
     sourceReference: z.string().trim().min(1).max(500),
@@ -127,6 +134,11 @@ function setGuestCookie(
 }
 
 type AppOptions = {
+  reviewerCorpus?: {
+    store: ReviewerCorpus;
+    allowedUserIds: readonly string[];
+    accessMode?: 'allowlist' | 'authenticated';
+  };
   rewrite?: RewriteService;
   foundation?: {
     worker: { notify(): void };
@@ -206,6 +218,7 @@ export function createApp(options: AppOptions = {}) {
     next();
   });
   app.use('/api/v1/reviewer', reviewerAuth.middleware);
+  app.use('/api/v1/reviewer', express.json({ limit: '512kb', type: 'application/json' }));
   app.use(express.json({ limit: '32kb', type: 'application/json' }));
   const sessionRateLimit = fixedWindowRateLimit({
     limit: options.rateLimits?.sessionLimit ?? 12,
@@ -631,6 +644,24 @@ export function createApp(options: AppOptions = {}) {
     try {
       if (!options.tickets) return res.status(503).json({ code: 'TICKETS_UNAVAILABLE' });
       if (!(await requireReviewer(req, res))) return;
+      if ('page' in req.query && options.tickets.store.page) {
+        const query = z
+          .object({
+            page: z.coerce.number().int().min(1).max(100000),
+            size: z.coerce.number().int().min(1).max(50).default(10),
+            status: z.enum(['all', 'pending', 'in_review', 'published']).default('all'),
+            query: z.string().max(40).default(''),
+          })
+          .parse(req.query);
+        return res.json(
+          await options.tickets.store.page(
+            (query.page - 1) * query.size,
+            query.size,
+            query.status,
+            query.query,
+          ),
+        );
+      }
       return res.json({ tickets: await options.tickets.store.list() });
     } catch (error) {
       return next(error);
@@ -661,6 +692,9 @@ export function createApp(options: AppOptions = {}) {
         input.decision as ReviewerDecision,
         input.text,
         input.publish,
+        ...(input.editorial
+          ? [{ expectedVersion: input.expectedVersion ?? 0, report: input.editorial }]
+          : []),
       );
       if (!saved) return res.status(404).json({ code: 'TICKET_NOT_FOUND' });
       if (input.publish) options.tickets.notifications?.notify();
@@ -683,7 +717,110 @@ export function createApp(options: AppOptions = {}) {
         input.provenance,
       );
       if (!approved) return res.status(409).json({ code: 'PUBLISHED_RESPONSE_REQUIRED' });
-      return res.status(201).json({ approved: true });
+      // A legacy candidate is an audit record, not a corpus publication.
+      return res.status(201).json({ candidateRecorded: true, addedToRetrieval: false });
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.post('/api/v1/reviewer/tickets/:ticketCode/source-approval', async (req, res, next) => {
+    try {
+      const actor = await requireReviewer(req, res);
+      if (!actor) return;
+      if (!options.reviewerCorpus || !options.tickets?.store.recordSourceReceipt)
+        return res.status(503).json({ code: 'REVIEWER_CORPUS_UNAVAILABLE' });
+      if (
+        options.reviewerCorpus.accessMode !== 'authenticated' &&
+        !options.reviewerCorpus.allowedUserIds.includes(actor)
+      )
+        return res.status(403).json({ code: 'SOURCE_CURATOR_REQUIRED' });
+      const { ticketCode: code } = ReviewerTicketParams.parse(req.params);
+      const input = z
+        .object({
+          version: z.number().int().positive(),
+          evidenceId: z.string().min(1).max(100),
+          rightsRecord: z.string().trim().min(1).max(2000),
+          confirmed: z.literal(true),
+        })
+        .strict()
+        .parse(req.body);
+      const ticket = await options.tickets.store.get(code);
+      const responses = ticket?.responses as
+        Array<{ version: number; published: boolean; editorial?: unknown }> | undefined;
+      const latest = responses?.filter((row) => row.published).at(-1);
+      if (ticket?.status === 'closed' || latest?.version !== input.version)
+        return res.status(409).json({ code: 'PUBLISHED_REVIEW_VERSION_REQUIRED' });
+      const review = EditorialReviewSchema.parse(latest.editorial);
+      const source = review.evidence.find((row) => row.id === input.evidenceId);
+      if (
+        !source ||
+        !review.records.some(
+          (row) =>
+            ['matched', 'different', 'supported', 'contradicted'].includes(row.status) &&
+            row.evidenceIds.includes(source.id),
+        )
+      )
+        return res.status(422).json({ code: 'RESOLVED_LINKED_EVIDENCE_REQUIRED' });
+      if (
+        !['hadith_matn', 'book_excerpt', 'scholar_explanation'].includes(source.sourceRole) ||
+        !source.author.trim() ||
+        !source.edition.trim() ||
+        !source.sourceUrl.startsWith('https://') ||
+        source.reference.length > 300
+      )
+        return res.status(422).json({ code: 'REVIEWED_SOURCE_PROVENANCE_REQUIRED' });
+      const receipt = await options.reviewerCorpus.store.approve({
+        actor,
+        ticketCode: code,
+        version: input.version,
+        source,
+        rightsRecord: input.rightsRecord,
+      });
+      // Separate databases cannot share a transaction. The source insertion is
+      // idempotent; retry only the receipt if the report database is unavailable.
+      let auditRecorded = false;
+      try {
+        auditRecorded = await options.tickets.store.recordSourceReceipt(
+          code,
+          input.version,
+          source.id,
+          receipt.snapshotKey,
+          actor,
+        );
+      } catch {
+        /* retain honest corpus success */
+      }
+      return res
+        .status(auditRecorded ? 201 : 202)
+        .json({ addedToRetrieval: true, auditRecorded, ...receipt });
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.delete('/api/v1/reviewer/tickets/:ticketCode', async (req, res, next) => {
+    try {
+      if (!options.tickets?.store.archive)
+        return res.status(503).json({ code: 'TICKETS_UNAVAILABLE' });
+      const actor = await requireReviewer(req, res);
+      if (!actor) return;
+      const { ticketCode: code } = ReviewerTicketParams.parse(req.params);
+      if (!(await options.tickets.store.archive(code, actor, false)))
+        return res.status(404).json({ code: 'TICKET_NOT_FOUND' });
+      return res.json({ archived: true });
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.post('/api/v1/reviewer/tickets/:ticketCode/restore', async (req, res, next) => {
+    try {
+      if (!options.tickets?.store.archive)
+        return res.status(503).json({ code: 'TICKETS_UNAVAILABLE' });
+      const actor = await requireReviewer(req, res);
+      if (!actor) return;
+      const { ticketCode: code } = ReviewerTicketParams.parse(req.params);
+      if (!(await options.tickets.store.archive(code, actor, true)))
+        return res.status(404).json({ code: 'TICKET_NOT_FOUND' });
+      return res.json({ restored: true });
     } catch (error) {
       return next(error);
     }
@@ -828,6 +965,8 @@ export function createApp(options: AppOptions = {}) {
     if (error instanceof z.ZodError)
       return res.status(400).json({ code: 'INVALID_REQUEST', issues: error.issues });
     if (error instanceof RewriteError) return res.status(error.status).json({ code: error.code });
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '40001')
+      return res.status(409).json({ code: 'REVIEW_VERSION_CONFLICT' });
     if (error instanceof OwnershipError)
       return res.status(401).json({ code: 'INVALID_OR_EXPIRED_SESSION' });
     if (isUniqueConstraintError(error))

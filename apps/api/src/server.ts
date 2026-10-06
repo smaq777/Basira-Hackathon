@@ -36,6 +36,7 @@ import {
   QUERY_EMBEDDING_DIMENSIONS,
 } from './query-embedding.js';
 import { createTicketStore } from './ticket-store.js';
+import { initializeReviewerCorpus, reviewerCorpusAccessMode } from './reviewer-corpus.js';
 import { createBrevoMailer, createTicketNotificationWorker } from './ticket-notifications.js';
 
 const port = Number(process.env.PORT ?? 3000);
@@ -364,8 +365,25 @@ const rewrite = rewriteEnabled
       requireCompleteEvidence: foundation?.runtimeMode === 'hosted_demo',
     })
   : undefined;
+const corpusAccessMode = reviewerCorpusAccessMode(process.env);
+const reviewerCorpus = foundation?.corpusPool
+  ? await initializeReviewerCorpus(process.env).catch(() => {
+      console.warn('REVIEWER_CORPUS_UNAVAILABLE');
+      return undefined;
+    })
+  : undefined;
 const server = createApp({
   rewrite,
+  reviewerCorpus: reviewerCorpus
+    ? {
+        store: reviewerCorpus.store,
+        accessMode: corpusAccessMode,
+        allowedUserIds: (process.env.CLERK_REVIEWER_USER_IDS ?? '')
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean),
+      }
+    : undefined,
   database,
   reviewerAuth,
   clerkFrontendApiOrigin,
@@ -393,6 +411,7 @@ async function closeResources() {
     foundation?.reports.close(),
     foundation?.corpusPool?.end(),
     foundation?.webCachePool?.end(),
+    reviewerCorpus?.close(),
     notificationWorker?.stop(),
     ticketStore?.close(),
     database.close(),
