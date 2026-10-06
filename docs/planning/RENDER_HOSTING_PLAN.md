@@ -40,12 +40,14 @@ existing background review worker from the same origin. Keep one instance and
 one Node process because rewrite candidates and some rate limits are in memory.
 Do not use a free sleeping service for the submission demonstration.
 
-The initial budget proposal is approximately $7/month for the smallest paid
-compute instance, subject to the account owner's confirmation of Render's current
-pricing and checkout. This is not a capacity guarantee: measure memory and
+Ahmed confirmed his Render account and $7/month for one service. Verify the
+actual checkout fits that compute budget before any later provisioning; do not
+upgrade or add paid services without separate authorization. This is not a
+capacity guarantee: measure memory and
 concurrency before acceptance. Neon, AI usage and any retained Railway database
-charges are separate. Render ownership and the one-month duration are confirmed;
-service provisioning, checkout and the final compute plan remain deferred.
+charges are separate. Render ownership, compute budget and the one-month duration
+are confirmed; service provisioning and checkout remain deferred by the
+planning-only instruction.
 See [Render pricing](https://render.com/pricing) and
 [free-service limits](https://render.com/docs/free).
 
@@ -128,7 +130,7 @@ rewrite candidates; avoid deployment during generation/copy. A new hostname
 creates a separate guest cookie, so previous guest reports are not automatically
 accessible there. Do not promise seamless guest-session transfer.
 
-Before provisioning, verify access to Ahmed's Render account, the final budget
+Before provisioning, verify access to Ahmed's Render account, the $7/month budget
 and Saleh-confirmed private connection availability. Before deployment, obtain acceptance of the application
 changes and record the exact development merge SHA. Before switching the shared
 demo link, retain the old URL and accepted deployment as the rollback target.
