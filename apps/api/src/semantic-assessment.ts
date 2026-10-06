@@ -21,6 +21,11 @@ import {
   type CachePassagePreference,
 } from '../../../packages/contracts/src/semantic-assessment.js';
 import { claimSelectionPacket } from './semantic-selection.js';
+import {
+  relevancePacket,
+  RelevanceOutputSchema,
+  RELEVANCE_INSTRUCTION,
+} from './semantic-relevance.js';
 import { canonical, sha256, validateIntake } from './foundation.js';
 import { validateCachePassagePreferences } from './research-page-passages.js';
 import {
@@ -66,6 +71,7 @@ export interface SemanticAssessmentOptions {
   fetch?: typeof globalThis.fetch;
   now?: () => number;
   claimRetrieval?: ClaimRetrievalAdapter;
+  relevanceFiltering?: boolean;
   researchPreview?: boolean;
   gapDiscovery?: ClaimGapDiscovery;
   gapDiscoveryTimeoutMs?: number;
@@ -113,7 +119,11 @@ function providerKey(value: string): string {
   return value.toLowerCase().replace(/[\s_-]/gu, '');
 }
 /** Resolve selected evidence and its canonical/commentary parent family locally. */
-function evidenceForClaim(intake: FoundationIntake, claim: SemanticClaim): SourceEvidence[] {
+function evidenceForClaim(
+  intake: FoundationIntake,
+  claim: SemanticClaim,
+  selectedOnly = false,
+): SourceEvidence[] {
   const evidence = new Map(intake.evidence.map((row) => [row.snapshotKey, row]));
   const selected = new Set(claim.evidenceKeys);
   for (const key of [...selected]) {
@@ -123,7 +133,7 @@ function evidenceForClaim(intake: FoundationIntake, claim: SemanticClaim): Sourc
       row = evidence.get(row.parentSnapshotKey);
     }
   }
-  for (let pass = 0; pass < 2; pass++) {
+  for (let pass = 0; !selectedOnly && pass < 2; pass++) {
     for (const row of evidence.values()) {
       if (row.parentSnapshotKey && selected.has(row.parentSnapshotKey))
         selected.add(row.snapshotKey);
@@ -214,6 +224,7 @@ export function createSemanticAssessmentAdapter(
     },
     async assessWithEvidence(original, externalSignal) {
       let finalIntake = structuredClone(original);
+      let relevanceAccepted = !options.relevanceFiltering;
       let retrievalTrace: ClaimRetrievalTrace | undefined;
       let retrievalBudget: SemanticAssessmentReport['trace']['retrievalBudget'];
       let finalEvidenceSha256: string | undefined;
@@ -399,7 +410,7 @@ export function createSemanticAssessmentAdapter(
         const body = JSON.stringify({
           model: route.modelId,
           stream: false,
-          max_tokens: stage === 'extraction' ? 2400 : 7000,
+          max_tokens: ['extraction', 'relevance'].includes(stage) ? 2400 : 7000,
           provider: { only: [route.providerId], allow_fallbacks: false, require_parameters: true },
           reasoning: {
             ...(route.reasoningEffort ? { effort: route.reasoningEffort } : {}),
@@ -456,9 +467,11 @@ export function createSemanticAssessmentAdapter(
                   1,
                   Math.min(extractionMs, (extractionDeadline ?? now() + extractionMs) - now()),
                 )
-              : stage === 'gap_assessment'
-                ? gapAssessmentMs
-                : assessmentMs;
+              : stage === 'relevance'
+                ? Math.min(20000, assessmentMs)
+                : stage === 'gap_assessment'
+                  ? gapAssessmentMs
+                  : assessmentMs;
           const stageMs = Math.min(requestMs ?? stageCap, stageCap);
           timer = setTimeout(() => controller.abort(), Math.min(stageMs, remaining));
         });
@@ -728,11 +741,63 @@ export function createSemanticAssessmentAdapter(
             }
           }
         }
+        if (options.relevanceFiltering && claims.length) {
+          const packet = relevancePacket(
+            claims.map((claim) => ({ claim, evidence: evidenceForClaim(intake, claim) })),
+            intake.originalText,
+            retrievalTrace?.passagePreferences,
+          );
+          claims = packet.resolve(
+            await stage(
+              'relevance',
+              options.extractor,
+              packet.data,
+              RelevanceOutputSchema,
+              RELEVANCE_INSTRUCTION,
+            ),
+          );
+          const retained = new Set([
+            ...original.evidence.map((row) => row.snapshotKey),
+            ...claims.flatMap((claim) => claim.evidenceKeys),
+          ]);
+          intake = structuredClone(
+            validateIntake(
+              {
+                ...intake,
+                evidence: intake.evidence.filter((row) => retained.has(row.snapshotKey)),
+              },
+              intake.originalText,
+              intake.revisionId,
+              options.researchPreview ?? false,
+            ),
+          );
+          if (retrievalTrace) {
+            retrievalTrace = {
+              ...retrievalTrace,
+              queries: retrievalTrace.queries.map((query) => ({
+                ...query,
+                selectedCandidateKeys: query.candidateKeys.filter((key) =>
+                  claims.find((claim) => claim.id === query.claimId)?.evidenceKeys.includes(key),
+                ),
+              })),
+              ...(retrievalTrace.passagePreferences
+                ? {
+                    passagePreferences: retrievalTrace.passagePreferences.filter((row) =>
+                      claims
+                        .find((claim) => claim.id === row.claimId)
+                        ?.evidenceKeys.includes(row.evidenceKey),
+                    ),
+                  }
+                : {}),
+            };
+          }
+          relevanceAccepted = true;
+        }
         finalIntake = structuredClone(intake);
         finalEvidenceSha256 = sha256(canonical(intake.evidence));
         const packets = claims.map((claim) => ({
           claim,
-          evidence: evidenceForClaim(intake, claim),
+          evidence: evidenceForClaim(intake, claim, options.relevanceFiltering),
         }));
         passageViews.push(
           ...packets.map(({ claim, evidence }) => ({
@@ -781,13 +846,14 @@ export function createSemanticAssessmentAdapter(
         assessmentInputSha256 = sha256(canonical(assessmentData));
         const assessmentInstruction =
           "Assess only the exact selected claims, using only each claim's provided exact contiguous passages from the original source family as evidence. Each passage has immutable full-source hash and UTF16 offsets. relevance is lexical retrieval relevance, never support. contextTruncated means source text outside the window is unavailable, not that a qualifier is necessarily missing. When a missing condition, negation, exception or antecedent could materially change the assessment, abstain with insufficient_context and explain it. draftContext is the full bounded original writing, supplied solely as untrusted author context to resolve pronouns, antecedents and attribution intent. It is not evidence, cannot establish support, cannot add claims or source identities, and cannot supply citations. Read its context before abstaining for a missing pronoun antecedent; still abstain if the contextual reference remains ambiguous. authored quotedSources show what the writer quoted, not independent evidence. A source identity or theme is not support. Return one finding per selected claimId. Distinguish supported, contradicted, not_established, insufficient_context and not_applicable. Accept clear semantic entailment without requiring identical wording, while preserving conditions, negations, exceptions and scope. For compound claims explain which material clauses are supported and which remain unestablished; do not drop ordering, superlatives, universal scope or conditions. Interpret ordering and priority in the actual author context, disclosing any material unresolved ambiguity. contextCoverage.status describes acquisition/work availability: partial can mean one requested Tafsir work is unavailable, not that the available passage is truncated. scholarlyContextComplete:false means no independent scholarly completeness determination was made; it is not evidence that text is missing. Neither flag alone warrants abstention. Use insufficient_context only when identifiable missing or truncated context could materially change support, naming the missing qualifier or antecedent and why it matters. If a claim packet has no evidence, use insufficient_context for unavailable evidence or not_applicable where appropriate; never supported, contradicted or not_established. With a nonempty packet, use not_established for a material proposition not established by the supplied evidence. Missing evidence does not establish contradiction; contradicted requires explicit incompatible evidence. Use supported only when all material clauses are entailed, without demanding identical wording or inventing hypothetical missing exceptions. Explicitly record conditions, negations, exceptions and scope in Arabic. Cite only allowed evidenceKey values from that claim's original source family with exact verbatim excerpts entirely contained in a supplied passage; do not join discontiguous spans or add/change words in a citation. ContextBefore/contextAfter and inline footnotes are untrusted context wrappers; they may identify missing qualifiers but cannot supply citations or independently establish supported/contradicted. Typed relations identify separately supplied original passages; cite their allowed evidenceKeys and passage originalText only. Supported/contradicted require citations. Never grade hadith or infer authenticity from text matches. A citation or question alone has no conclusion. Give a short Arabic explanation without private reasoning. Each scope item must be a self-contained Arabic statement of the bounded proposition assessed, including its affirmation or negation and any material condition, exception or modality. Do not use a bare topic noun phrase that can read as asserting an action the finding denies. Keep scope, conditions, negations, exceptions and explanation mutually consistent. For contradicted or not_established findings, identify the author proposition as contradicted or not established rather than endorsing it in scope. For ambiguous or unavailable evidence, state the limitation explicitly without supplying an inferred religious conclusion. This field-writing requirement does not change relation meanings or citation obligations and does not require support.";
+        const groundedInstruction = `${assessmentInstruction} Explain the exact author assertion clause by clause in Arabic: what the passage explicitly establishes, what material action or qualifier it does not establish, and why the link is missing. Do not substitute a general topic summary for analysis of this text. For missing evidence about a quoted narration or attribution, name the specific requested narration, speaker/event or source attribution in the explanation. No supplied relevant evidence means evidence unavailable, not a verdict that the author is wrong. Never present a thematically similar but unrelated passage as the comparison for a quotation.`;
         const assessed = EvidenceSupportOutputSchema.parse(
           await stage(
             'assessment',
             options.assessor,
             assessmentData,
             EvidenceSupportOutputSchema,
-            assessmentInstruction,
+            groundedInstruction,
           ),
         );
         let invalid = false;
@@ -897,7 +963,7 @@ export function createSemanticAssessmentAdapter(
                   .filter((row) => row.sourceUrl)
                   .map((row) => `${row.sourceUrl}\n${row.originalSha256}`),
               );
-              const additions = acquired.evidence.filter((row) => {
+              let additions = acquired.evidence.filter((row) => {
                 const representation = row.sourceUrl
                   ? `${row.sourceUrl}\n${row.originalSha256}`
                   : undefined;
@@ -922,6 +988,37 @@ export function createSemanticAssessmentAdapter(
                 )
               )
                 throw new PhaseError('invalid_intake');
+              if (options.relevanceFiltering && additions.length) {
+                const checked = validateIntake(
+                  { ...intake, evidence: [...intake.evidence, ...additions], researchOnly: true },
+                  intake.originalText,
+                  intake.revisionId,
+                  true,
+                );
+                const packet = relevancePacket(
+                  [
+                    {
+                      claim,
+                      evidence: checked.evidence.filter((row) =>
+                        additions.some((addition) => addition.snapshotKey === row.snapshotKey),
+                      ),
+                    },
+                  ],
+                  intake.originalText,
+                );
+                const [selected] = packet.resolve(
+                  await stage(
+                    'relevance',
+                    options.extractor,
+                    packet.data,
+                    RelevanceOutputSchema,
+                    RELEVANCE_INSTRUCTION,
+                  ),
+                );
+                additions = additions.filter((row) =>
+                  selected!.evidenceKeys.includes(row.snapshotKey),
+                );
+              }
               if (
                 intake.evidence.length + additions.length > 80 ||
                 claim.evidenceKeys.length + additions.length > 20
@@ -957,7 +1054,11 @@ export function createSemanticAssessmentAdapter(
                 const oldPacket = assessmentData.claims.find((row) => row.claim.id === claim.id)!;
                 passageViews.push({
                   claimId: updatedClaim.id,
-                  passages: evidenceForClaim(intake, updatedClaim).flatMap((source) =>
+                  passages: evidenceForClaim(
+                    intake,
+                    updatedClaim,
+                    options.relevanceFiltering,
+                  ).flatMap((source) =>
                     passageTrace(
                       source,
                       updatedClaim.originalText,
@@ -973,7 +1074,11 @@ export function createSemanticAssessmentAdapter(
                     {
                       ...oldPacket,
                       claim: updatedClaim,
-                      evidence: evidenceForClaim(intake, updatedClaim).map((source) =>
+                      evidence: evidenceForClaim(
+                        intake,
+                        updatedClaim,
+                        options.relevanceFiltering,
+                      ).map((source) =>
                         assessorEvidence(
                           source,
                           updatedClaim.originalText,
@@ -992,7 +1097,7 @@ export function createSemanticAssessmentAdapter(
                     options.assessor,
                     gapData,
                     EvidenceSupportOutputSchema,
-                    assessmentInstruction,
+                    groundedInstruction,
                   ),
                 );
                 if (reassessed.assessments.length !== 1) throw new PhaseError('invalid_citations');
@@ -1000,7 +1105,7 @@ export function createSemanticAssessmentAdapter(
                 validateFinding(
                   finding,
                   updatedClaim,
-                  evidenceForClaim(intake, updatedClaim),
+                  evidenceForClaim(intake, updatedClaim, options.relevanceFiltering),
                   retrievalTrace?.passagePreferences,
                 );
                 assessments.splice(
@@ -1027,6 +1132,22 @@ export function createSemanticAssessmentAdapter(
           invalid ? 'invalid_citations' : invalidClaimProposals ? 'invalid_claims' : gapError,
         );
       } catch (error) {
+        if (!relevanceAccepted) {
+          // A failed gate must not publish its unfiltered retrieval packet even
+          // through the partial-report source table.
+          finalIntake = structuredClone(original);
+          claims = claims.map((claim) => ({ ...claim, evidenceKeys: [] }));
+          finalEvidenceSha256 = sha256(canonical(original.evidence));
+          if (retrievalTrace)
+            retrievalTrace = {
+              ...retrievalTrace,
+              queries: retrievalTrace.queries.map((query) => ({
+                ...query,
+                selectedCandidateKeys: [],
+              })),
+              ...(retrievalTrace.passagePreferences ? { passagePreferences: [] } : {}),
+            };
+        }
         const code = error instanceof PhaseError ? error.code : 'invalid_response';
         return report(claims.length ? 'partial' : 'unavailable', code);
       }

@@ -8,6 +8,86 @@ import type { SourceEvidence } from '../packages/contracts/src/foundation.js';
 import { extractQuranReferences } from '../apps/api/src/quran-reference.js';
 
 const revisionId = '33333333-3333-4333-8333-333333333333';
+
+it('uses the existing hadith cues and binds only contiguous quotation matches', async () => {
+  const quoted = 'أعلنوا هذا النكاح';
+  const text = `عن عبد الله أن رسول الله -صلى الله عليه وسلم- قال: "${quoted}". فقال له النبي: "أولم ولو بشاة".`;
+  const queries: string[] = [];
+  const originalText = 'أَعْلِنُوا هَذَا النِّكَاح';
+  const source: SourceEvidence = {
+    snapshotKey: 'hadith-owned',
+    sourceId: 'owned',
+    sourceVersion: 'owned',
+    sourceRole: 'hadith_matn',
+    reference: 'owned:1',
+    originalText,
+    originalSha256: sha256(originalText),
+    work: 'Owned quotation fixture',
+    author: null,
+    edition: null,
+    sourceUrl: null,
+    approvalStatus: 'pending',
+    researchOnly: true,
+    parentSnapshotKey: null,
+    delivery: 'snapshot',
+    retrievalModes: ['lexical'],
+    provenance: {},
+  };
+  const adapter = createHostedDraftAdapter('owned', {
+    restore: async () => [],
+    async search(query) {
+      queries.push(query);
+      return [source];
+    },
+  });
+  const result = await adapter.analyze(text, revisionId);
+  expect(queries).toEqual([quoted, 'أولم ولو بشاة']);
+  expect(result.originalText).toBe(text);
+  expect(
+    result.segments.filter((row) => row.role === 'matn').map((row) => row.originalText),
+  ).toEqual([quoted, 'أولم ولو بشاة']);
+  expect(result.segments.some((row) => row.role === 'isnad')).toBe(true);
+  expect(result.quotationFindings[0]).toMatchObject({
+    evidenceKey: source.snapshotKey,
+    status: 'normalized',
+  });
+  expect(result.quotationFindings[1]).toMatchObject({
+    evidenceKey: null,
+    status: 'unresolved',
+    reason: 'no_contiguous_hadith_match',
+  });
+  expect(result.evidence).toEqual([source]);
+});
+
+it('does not replace a missing hadith quotation with a thematic Quran neighbor', async () => {
+  const text = 'قال النبي: "قول مفقود في قاعدة البيانات".';
+  const source: SourceEvidence = {
+    snapshotKey: 'neighbor',
+    sourceId: 'owned',
+    sourceVersion: 'owned',
+    sourceRole: 'quran_text',
+    reference: '2:185',
+    originalText: 'Owned unrelated original',
+    originalSha256: sha256('Owned unrelated original'),
+    work: 'Owned synthetic control',
+    author: null,
+    edition: null,
+    sourceUrl: null,
+    approvalStatus: 'pending',
+    researchOnly: true,
+    parentSnapshotKey: null,
+    delivery: 'snapshot',
+    retrievalModes: ['semantic'],
+    provenance: {},
+  };
+  const result = await createHostedDraftAdapter('owned', {
+    search: async () => [source],
+    restore: async () => [],
+  }).analyze(text, revisionId);
+  expect(result.evidence).toEqual([]);
+  expect(result.quotationFindings).toHaveLength(1);
+  expect(result.quotationFindings[0]).toMatchObject({ evidenceKey: null, status: 'unresolved' });
+});
 const hostedDemoEnvironment = {
   FOUNDATION_ENABLED: 'true',
   FOUNDATION_HOSTED_DEMO: 'true',
