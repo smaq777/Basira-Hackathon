@@ -4,7 +4,7 @@ Related to [issue #157](https://github.com/smaq777/Basira-Hackathon/issues/157)
 and [corpus issue #8](https://github.com/smaq777/Basira-Hackathon/issues/8).
 Owner activation is tracked in [issue #162](https://github.com/smaq777/Basira-Hackathon/issues/162).
 Railway belongs to Saleh's account. Ahmed's workspace has no access to this
-project; the changes below are an owner handoff, not a completed activation.
+project; the instructions below describe activation, not proof of live acceptance.
 Use only the existing **staging** API service:
 
 | Resource                   | Exact target                                                       |
@@ -13,7 +13,7 @@ Use only the existing **staging** API service:
 | API service                | `4d15a8f1-0028-42d6-adfa-cef07e55a9bc`                             |
 | Staging environment        | `97179b92-48b1-412f-95ff-1901bb826458`                             |
 | Public URL                 | <https://api-staging-42bc.up.railway.app/>                         |
-| Existing Neon endpoint     | `ep-fancy-base-b2o8zdbw` (pooled or direct)                        |
+| Submission Neon endpoint   | `ep-fancy-base-b2o8zdbw` (pooled or direct)                        |
 | Research database / reader | `basirah_research` / `basirah_corpus_reader`                       |
 | Submission snapshot        | `7372242cf7f4960c2cba0a33d8670a04ce13413f9fab5536783d6a3671e3ad6f` |
 | Historical snapshot        | `794bad24b4fc8e774529a86f8c7669459ab2e8bc061910717c931bcab20a79ff` |
@@ -21,8 +21,21 @@ Use only the existing **staging** API service:
 The submission snapshot already contains 175 passages and 175 embeddings in
 `openai/text-embedding-3-small`, 1536 dimensions. No migration, new branch,
 backfill, source approval or credential rotation is needed for this switch.
+The owner's activation preflight found staging still bound to the older preview
+endpoint `ep-quiet-rain-b26xkxhg`, which contains only the 86-passage snapshot.
+Do not change only the corpus pin on that endpoint. Retarget the staging corpus
+reader to the existing research reader on the submission endpoint, using the
+authenticated Neon connection-string command and Railway stdin (never print or
+commit the credential). Preserve the old connection privately for rollback.
+
 Keep the hosted-demo profile, existing report/worker database identities,
 provider flags and corpus TLS settings. Sources remain pending research material.
+The separate reviewer curator still targets the old preview. Its same-database
+guard deliberately disables source publication after the reader switch; ordinary
+reviewer report editing is independent. Reviewer/source-publication acceptance
+remains deferred. Do not bypass the guard or retarget a writer credential without
+separate role/schema verification. No web-cache writer or flags were configured
+at owner preflight; if these are added later, verify their database binding first.
 
 ## Read-only preflight
 
@@ -47,7 +60,8 @@ Railway's raw variable list or copy credentials into issues, logs or this repo.
    that SHA. A feature-branch SHA is not the deployed development merge SHA.
 2. In Saleh's authenticated Railway project, confirm the service source is
    `smaq777/Basira-Hackathon`, branch `development`, environment `staging`.
-   Set `FOUNDATION_CORPUS_VERSION` to the submission snapshot. The previous
+   Verify `FOUNDATION_CORPUS_DATABASE_URL` selects the submission endpoint and
+   passes the read-only preflight. Set `FOUNDATION_CORPUS_VERSION` to the submission snapshot. The previous
    ingestion handoff's `SOURCE_CORPUS_VERSION` name was incorrect for this API.
    If an explicit `CORPUS_VERSION` exists, update it to the same snapshot:
    startup rejects conflicting corpus declarations.
@@ -91,6 +105,7 @@ Retain first failures and receipts; successful unit tests do not establish these
 fresh online outcomes. Controlled provider failure remains an offline test.
 Reviewer/publication/email acceptance is deferred by the user's instruction.
 
+If the reader was retargeted, restore the prior reader connection as well.
 Rollback the corpus selection to the historical hash (and matching explicit
 `CORPUS_VERSION`, if set), preserving the source SHA declaration, and redeploy.
 For rewrite trouble, disable the staging rewrite flag or revert the accepted
