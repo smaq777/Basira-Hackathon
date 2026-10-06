@@ -454,6 +454,13 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
     flashTimer.current = window.setTimeout(() => setFlashSection(null), 1_400);
   };
   const overrideIsCandidate = !!selected && !!source && !comparisonIsBound;
+  const canShowComparisonEvidence = selected
+    ? comparisonIsBound && selected.group !== 'unresolved'
+    : !!selectedClaim &&
+      !!selectedCitation &&
+      selectedAssessment?.status !== 'insufficient_context' &&
+      selectedAssessment?.status !== 'not_applicable' &&
+      selectedCitation.evidenceKey === source?.snapshotKey;
   const selectedContexts = source
     ? collections.context.filter(
         (row) => row.parentSnapshotKey === source.snapshotKey || row.reference === source.reference,
@@ -520,6 +527,22 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
         ? 'المصدر المعروض مرشح للقراءة، ولم تثبت مطابقته للنقل المحدد.'
         : unresolvedExplanation(selected)
     : 'اختر نقلًا من النص أو من ملخص النتائج لعرض الفرق وتفسيره.';
+
+  const uncertainReference = (
+    <div className="foundation-uncertain-reference">
+      <p>لم تُحسم مطابقة هذه العبارة بمصدر مرجعي. لم نعرض نصًا مرشحًا بوصفه دليلًا عليها.</p>
+      <p>يبقى نصك الأصلي كما هو؛ يمكنك طلب مراجعة بشرية للتحقق من النقل أو الاستدلال.</p>
+      {shouldOfferHumanReview(report) && (
+        <button
+          type="button"
+          className="button button--outline"
+          onClick={() => navigateTo('review')}
+        >
+          طلب مراجعة بشرية
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div className="foundation-report-shell">
@@ -668,7 +691,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
                       </p>
                     </div>
                   </header>
-                  {source && comparisonText ? (
+                  {canShowComparisonEvidence && source && comparisonText ? (
                     <>
                       {overrideIsCandidate && (
                         <p className="foundation-candidate-notice">مصدر مرشح لم تثبت مطابقته.</p>
@@ -684,7 +707,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
                       </blockquote>
                     </>
                   ) : (
-                    <p>راجع النسبة أو افتح أحد المصادر المرشحة أدناه.</p>
+                    uncertainReference
                   )}
                 </article>
               </div>
@@ -741,7 +764,9 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
                     <p>{source ? sourceCitation(source, intake.evidence) : 'لم يتحدد مصدر بعد'}</p>
                   </div>
                 </header>
-                {source && comparisonText ? (
+                {(canShowComparisonEvidence || (!selectedClaim && source)) &&
+                source &&
+                comparisonText ? (
                   <>
                     <p className="foundation-compare-caption">{comparisonText.label}</p>
                     <blockquote>
@@ -751,9 +776,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
                     {!selectedClaim && <p>هذا المصدر متاح للقراءة؛ لم تثبت مطابقته لنقل محدد.</p>}
                   </>
                 ) : (
-                  <p>
-                    لم يرد شاهد مرتبط بهذه المقارنة في التقرير. يمكنك مراجعة المصادر المتاحة أدناه.
-                  </p>
+                  uncertainReference
                 )}
               </article>
             </div>

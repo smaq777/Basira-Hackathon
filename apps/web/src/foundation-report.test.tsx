@@ -754,13 +754,36 @@ describe('readable report comparison refinements', () => {
     ).toBe('نص جديد');
     expect(
       comparison.querySelector('.foundation-compare-card--reference blockquote')?.textContent,
-    ).toBe('عبارة المصدر المرشح المختلف');
+    ).toBeUndefined();
+    expect(comparison.textContent).not.toContain('عبارة المصدر المرشح المختلف');
+    expect(screen.getByRole('button', { name: 'طلب مراجعة بشرية' })).not.toBeNull();
     expect(view.container.querySelector('.foundation-highlight--active')?.textContent).toBe(
       'نص جديد',
     );
     fireEvent.click(screen.getByRole('button', { name: 'إظهار مقارنة: نص جديد' }));
     expect(analysis.textContent).toContain('اختلاف في ألفاظ النقل');
     expect(comparison.querySelectorAll('.foundation-word-difference')).toHaveLength(2);
+  });
+
+  it('withholds unresolved reference passages, preserves the draft and navigates to existing review', async () => {
+    const report = foundationReportFixture();
+    report.intake.quotationFindings[0]!.status = 'unresolved';
+    const reviewTarget = document.createElement('section');
+    reviewTarget.id = 'report-review';
+    const scroll = vi.fn();
+    reviewTarget.scrollIntoView = scroll;
+    document.body.appendChild(reviewTarget);
+    const view = render(<FoundationReportContent report={report} />);
+    const comparison = screen.getByRole('region', { name: 'مقارنة النقل المحدد' });
+    expect(
+      comparison.querySelector('.foundation-compare-card--draft blockquote')?.textContent,
+    ).toBe(SYNTHETIC_QUOTE);
+    expect(comparison.querySelector('.foundation-compare-card--reference blockquote')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'طلب مراجعة بشرية' }));
+    await waitFor(() => expect(scroll).toHaveBeenCalledOnce());
+    expect(reviewTarget.classList.contains('is-focus-pulse')).toBe(true);
+    view.unmount();
+    reviewTarget.remove();
   });
 
   it('uses a green reference card and reserves the red draft card for actual word differences', () => {

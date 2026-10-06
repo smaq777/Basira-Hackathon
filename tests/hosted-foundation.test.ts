@@ -389,7 +389,7 @@ it('compares an explicitly cited Quran quotation against the pinned hosted origi
   expect(intake.warnings).toEqual([]);
 });
 
-async function hostedComparison(quote: string, original: string) {
+async function hostedComparison(quote: string, original: string, delimiters = '﴿﴾') {
   const source: SourceEvidence = {
     snapshotKey: 'synthetic-boundary:31:15',
     sourceId: 'synthetic-boundary',
@@ -417,7 +417,7 @@ async function hostedComparison(quote: string, original: string) {
       return [];
     },
   });
-  const text = `🙂 قال تعالى: ﴿${quote}﴾ [لقمان: 31:15].`;
+  const text = `🙂 قال تعالى: ${delimiters[0]}${quote}${delimiters[1]} [لقمان: 31:15].`;
   try {
     const intake = await adapter.analyze(text, revisionId);
     expect(intake.originalText).toBe(text);
@@ -433,6 +433,29 @@ async function hostedComparison(quote: string, original: string) {
     await adapter.close();
   }
 }
+
+it('compares parenthesized quotations beside an explicit Quran locator using original offsets', async () => {
+  expect(await hostedComparison('قول اصطناعي واضح', 'قول اصطناعي واضح', '()')).toMatchObject({
+    status: 'exact',
+    matchedStart: 0,
+    comparison: { fidelity: 'exact', basis: 'canonical' },
+  });
+  const intake = await createHostedDraftAdapter('owned').analyze(
+    'قال الكاتب (قول اصطناعي واضح).',
+    revisionId,
+  );
+  expect(intake.quotationFindings).toEqual([]);
+});
+
+it('preserves Quran typography offsets for a joined vocative and standalone hamza-alef spelling', async () => {
+  const source = 'يَـٰبَنِىٓ ءَادَمَ';
+  expect(await hostedComparison('يا بني آدم', source)).toMatchObject({
+    status: 'normalized',
+    matchedStart: 0,
+    matchedEnd: source.length,
+    comparison: { fidelity: 'orthographic', extent: 'full', basis: 'typography' },
+  });
+});
 
 it.each([
   ['صَاحِبْهُم', 'وَصَاحِبْهُمَا فِى ٱلدُّنْيَا مَعْرُوفًا'],
