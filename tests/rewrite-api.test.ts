@@ -91,10 +91,15 @@ it('binds POST/read/copy to database-owned review/revision and rejects tampered 
   expect(response.status).toBe(202);
   const { candidate } = await response.json();
   await new Promise((resolve) => setTimeout(resolve, 10));
-  expect((await fetch(`${base}/${candidate.id}`, { headers })).status).toBe(200);
+  const read = await fetch(`${base}/${candidate.id}`, { headers });
+  expect(read.status).toBe(200);
+  const displayed = (await read.json()).candidate.text;
   const copy = await fetch(`${base}/${candidate.id}/copy`, { method: 'POST', headers, body: '{}' });
   expect(copy.status).toBe(200);
-  expect((await copy.json()).text).toContain('مصدر بحثي غير معتمد');
+  const copied = (await copy.json()).text;
+  expect(copied).toBe(displayed);
+  expect(copied).toContain('\n\nReferences\n1. ');
+  expect(copied).toContain('مصدر بحثي غير معتمد');
   expect(
     (
       await fetch(`${base}/${candidate.id}`, {

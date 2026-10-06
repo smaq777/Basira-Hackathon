@@ -125,6 +125,40 @@ it('explains a citation-only safe author skip without claiming an accepted wordi
   expect(screen.queryByText(/حُسّنت العبارات المعروضة/)).toBeNull();
 });
 
+it('displays and copies the same complete rewrite with its numbered References list', async () => {
+  const user = userEvent.setup();
+  const clipboard = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+  const original = report.intake.originalText;
+  const ready = {
+    ...candidate,
+    status: 'validated',
+    text:
+      original +
+      ' [1]\n\nReferences\n1. مرجع اختباري أول\n2. مرجع اختباري ثان — مصدر بحثي غير معتمد',
+    operations: {
+      paragraphBreaks: [],
+      citations: [{ offset: original.length, evidenceKey: 'source' }],
+    },
+  };
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    if (String(input) === '/api/v1/capabilities')
+      return json({ draftRewrite: true, draftRewriteMode: 'citation_and_layout_only' });
+    if (String(input).endsWith('/copy')) return json({ text: ready.text });
+    return json({ candidate: ready });
+  });
+  const view = render(<RewritePanel report={report} />);
+  await user.click(await screen.findByRole('button', { name: 'تنسيق النص وإضافة التوثيق' }));
+  const copyButton = await screen.findByRole('button', { name: 'نسخ النص المقترح' });
+  expect(view.container.querySelector('h3')?.nextElementSibling?.textContent).toBe(ready.text);
+  expect(
+    screen.getByText('يتضمن النص المعروض والمنسوخ قسم References بالمصادر المستخدمة فقط.'),
+  ).not.toBeNull();
+  await user.click(copyButton);
+  await screen.findByText('نُسخ النص المقترح مع التوثيق.');
+  expect(clipboard).toHaveBeenCalledExactlyOnceWith(ready.text);
+  expect(report.intake.originalText).toBe(original);
+});
+
 it('offers copy only after validation and requests a fresh server copy check before clipboard access', async () => {
   const user = userEvent.setup();
   const clipboard = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();

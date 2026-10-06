@@ -130,6 +130,7 @@ export function validateAuthorRewrite(report: FoundationReport, raw: unknown) {
     report,
     { paragraphBreaks: operations.paragraphBreaks, citations: operations.citations },
     baseLength,
+    changes.flatMap((change) => change.evidenceKeys),
   );
   // Inserts are expressed in original offsets; never insert inside a replacement.
   const inserts = new Map(
@@ -151,7 +152,7 @@ export function validateAuthorRewrite(report: FoundationReport, raw: unknown) {
     text += input.originalText.slice(cursor, event.start) + event.text;
     cursor = event.end;
   }
-  text += input.originalText.slice(cursor);
+  text += input.originalText.slice(cursor) + layout.referenceText;
   if (text.length > MAX_DRAFT_LENGTH)
     throw new RewriteError('REWRITE_INVALID_CANDIDATE', 409, 'candidate_length');
   if (!text.trim() || !isSafeDraftText(text))

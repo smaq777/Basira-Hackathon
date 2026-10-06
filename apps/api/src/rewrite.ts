@@ -139,11 +139,27 @@ export function rewriteInput(report: FoundationReport) {
   };
 }
 
-/** Validate insertions in original offsets against a server-computed final prose length. */
+/** Bibliography entries come only from report-bound allowed sources, never model prose. */
+function referenceList(input: ReturnType<typeof rewriteInput>, keys: string[]) {
+  if (!keys.length) return '';
+  return (
+    '\n\nReferences\n' +
+    keys
+      .map((key, index) => {
+        const source = input.allowedCitations.find((row) => row.evidenceKey === key);
+        if (!source) throw new RewriteError('REWRITE_INVALID_CANDIDATE', 409, 'citation_binding');
+        return `${index + 1}. ${source.reference}${source.pending ? ' — مصدر بحثي غير معتمد' : ''}`;
+      })
+      .join('\n')
+  );
+}
+
+/** Reserve the whole reference list before optional original-offset insertions. */
 export function validateRewriteInsertions(
   report: FoundationReport,
   raw: unknown,
   baseLength = report.intake.originalText.length,
+  requiredEvidenceKeys: string[] = [],
 ) {
   try {
     validateIntake(report.intake, report.intake.originalText, report.revisionId, true);
@@ -168,7 +184,10 @@ export function validateRewriteInsertions(
     throw new RewriteError('REWRITE_INVALID_CANDIDATE', 409, 'candidate_length');
   const insertions = new Map<number, string[]>();
   const retained: RewriteOperations = { paragraphBreaks: [], citations: [] };
-  let remaining = MAX_DRAFT_LENGTH - baseLength;
+  const references = [...new Set(requiredEvidenceKeys)];
+  let referenceText = referenceList(input, references);
+  let remaining = MAX_DRAFT_LENGTH - baseLength - referenceText.length;
+  if (remaining < 0) throw new RewriteError('REWRITE_INVALID_CANDIDATE', 409, 'candidate_length');
   const append = (at: number, text: string) =>
     insertions.set(at, [...(insertions.get(at) ?? []), text]);
   if (new Set(operations.paragraphBreaks).size !== operations.paragraphBreaks.length)
@@ -194,15 +213,23 @@ export function validateRewriteInsertions(
     if (protectedRanges(report).some((s) => offset > s.start && offset < s.end))
       throw new RewriteError('REWRITE_INVALID_CANDIDATE', 409, 'protected_insertion');
     cited.add(key);
-    const addition = ` [${allowed.reference}${allowed.pending ? ' — مصدر بحثي غير معتمد' : ''}]`;
-    if (addition.length <= remaining) {
+    const nextReferences = references.includes(citation.evidenceKey)
+      ? references
+      : [...references, citation.evidenceKey];
+    const nextReferenceText = referenceList(input, nextReferences);
+    const addition = ` [${nextReferences.indexOf(citation.evidenceKey) + 1}]`;
+    const cost = addition.length + nextReferenceText.length - referenceText.length;
+    if (cost <= remaining) {
       append(offset, addition);
-      remaining -= addition.length;
+      remaining -= cost;
+      if (!references.includes(citation.evidenceKey)) references.push(citation.evidenceKey);
+      referenceText = nextReferenceText;
       retained.citations.push(citation);
     }
   }
   return {
     insertions,
+    referenceText,
     operations: retained,
     budgetLimited: canonical(retained) !== canonical(operations),
   };
@@ -217,7 +244,7 @@ export function validateRewrite(report: FoundationReport, raw: unknown) {
     text += input.originalText.slice(cursor, offset) + additions.join('');
     cursor = offset;
   }
-  text += input.originalText.slice(cursor);
+  text += input.originalText.slice(cursor) + layout.referenceText;
   if (
     !text.trim() ||
     text.length > MAX_DRAFT_LENGTH ||
@@ -237,14 +264,23 @@ export function validateRewrite(report: FoundationReport, raw: unknown) {
 function quotationCitationOperations(input: ReturnType<typeof rewriteInput>): RewriteOperations {
   const citations: RewriteOperations['citations'] = [];
   const offsets = new Set<number>();
+  const references: string[] = [];
   let remaining = input.remainingUtf16Units;
+  let referenceText = '';
   for (const citation of input.allowedCitations) {
     if (offsets.has(citation.offset)) continue;
-    const addition = ` [${citation.reference}${citation.pending ? ' — مصدر بحثي غير معتمد' : ''}]`;
-    if (addition.length > remaining) continue;
+    const nextReferences = references.includes(citation.evidenceKey)
+      ? references
+      : [...references, citation.evidenceKey];
+    const nextReferenceText = referenceList(input, nextReferences);
+    const marker = ` [${nextReferences.indexOf(citation.evidenceKey) + 1}]`;
+    const cost = marker.length + nextReferenceText.length - referenceText.length;
+    if (cost > remaining) continue;
     citations.push({ offset: citation.offset, evidenceKey: citation.evidenceKey });
     offsets.add(citation.offset);
-    remaining -= addition.length;
+    remaining -= cost;
+    if (!references.includes(citation.evidenceKey)) references.push(citation.evidenceKey);
+    referenceText = nextReferenceText;
     if (citations.length === 12) break;
   }
   return { replacements: [], paragraphBreaks: [], citations };
