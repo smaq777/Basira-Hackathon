@@ -152,8 +152,10 @@ it('attributes a complete faithful quotation without author-generation or verifi
   });
   expect(candidate.operations!.citations).toHaveLength(1);
   const allowed = rewriteInput(report).allowedCitations[0]!;
-  const addition = ` [${allowed.reference}${allowed.pending ? ' — مصدر بحثي غير معتمد' : ''}]`;
-  expect(candidate.text!.replace(addition, '')).toBe(report.intake.originalText);
+  expect(candidate.text!.split('\n\nReferences\n')[0]!.replace(' [1]', '')).toBe(
+    report.intake.originalText,
+  );
+  expect(candidate.text).toContain(`\n\nReferences\n1. ${allowed.reference}`);
   expect(reload).toHaveBeenCalledOnce();
   expect(generate).not.toHaveBeenCalled();
   expect(verifier).not.toHaveBeenCalled();
@@ -163,6 +165,47 @@ it('attributes a complete faithful quotation without author-generation or verifi
     'REWRITE_STALE_REPORT',
   );
   service.close();
+});
+
+it('tries a shorter allowed source at the same quotation offset when the first reference cannot fit', async () => {
+  const report = completeQuotationFixture();
+  report.intake.evidence[0]!.work = 'ا'.repeat(150);
+  const shorter = structuredClone(report.intake.evidence[0]!);
+  shorter.snapshotKey = 'shorter-source';
+  shorter.work = 'قصير';
+  shorter.reference = '1';
+  report.intake.evidence.push(shorter);
+  report.intake.segments[0]!.sourceKeys.push(shorter.snapshotKey);
+  report.intake.quotationFindings.push({
+    ...report.intake.quotationFindings[0]!,
+    evidenceKey: shorter.snapshotKey,
+  });
+  report.intake.originalText += ' '.repeat(2920 - report.intake.originalText.length);
+  report.inputSha256 = report.intake.revisionSha256 = sha256(report.intake.originalText);
+  report.semanticAssessment!.trace.inputSha256 = report.inputSha256;
+  const context = { report, attempt: 1 };
+  const generate = vi.fn(),
+    verifier = vi.fn();
+  const service = createRewriteService(generate, { verifier, requireCompleteEvidence: true });
+  try {
+    const task = service.create('owner', 'shorter-reference', context, async () => context);
+    await settle();
+    const candidate = service.get('owner', task.id, context);
+    expect(candidate.status).toBe('validated');
+    expect(candidate.operations!.citations).toEqual([
+      {
+        offset: rewriteInput(report).allowedCitations[1]!.offset,
+        evidenceKey: shorter.snapshotKey,
+      },
+    ]);
+    expect(candidate.text).toContain('\n\nReferences\n1. قصير — 1');
+    expect(candidate.text!.length).toBeLessThanOrEqual(3000);
+    expect(service.copy('owner', task.id, context)).toBe(candidate.text);
+    expect(generate).not.toHaveBeenCalled();
+    expect(verifier).not.toHaveBeenCalled();
+  } finally {
+    service.close();
+  }
 });
 
 it('still withholds quotation-only output when attribution cannot fit or the report becomes stale', async () => {
@@ -216,12 +259,13 @@ it('preserves all original letters, quotes, qualifiers, literal markup and emoji
     paragraphBreaks: [],
     citations: [{ offset: citation.offset, evidenceKey: citation.evidenceKey }],
   });
+  expect(result.text).toContain(`«${SYNTHETIC_QUOTE}» [1]`);
   expect(result.text).toContain(
-    `«${SYNTHETIC_QUOTE}» [كتاب اصطناعي للاختبار — مرجع اختبار برمجي — مصدر بحثي غير معتمد]`,
+    '\n\nReferences\n1. كتاب اصطناعي للاختبار — مرجع اختبار برمجي — مصدر بحثي غير معتمد',
   );
-  expect(
-    result.text.replace(' [كتاب اصطناعي للاختبار — مرجع اختبار برمجي — مصدر بحثي غير معتمد]', ''),
-  ).toBe(report.intake.originalText);
+  expect(result.text.split('\n\nReferences\n')[0]!.replace(' [1]', '')).toBe(
+    report.intake.originalText,
+  );
   report.intake.originalText = '🙂 لا يجوز ذلك إلا بشرط، وليس دائمًا. <img src=x> ثم مثال آخر.';
   report.inputSha256 = report.intake.revisionSha256 = sha256(report.intake.originalText);
   report.intake.segments = [];

@@ -118,6 +118,37 @@ function fixture() {
 }
 const settle = () => new Promise((r) => setTimeout(r, 10));
 
+it('lists every source used by a validated author replacement once under References', () => {
+  const { report, operations } = fixture();
+  const second = structuredClone(report.intake.evidence[0]!);
+  second.snapshotKey = 'second-source';
+  second.work = 'مصدر ثان للاختبار';
+  second.reference = '2';
+  report.intake.evidence.push(second);
+  const unused = structuredClone(second);
+  unused.snapshotKey = 'unused-source';
+  unused.work = 'مصدر غير مستخدم';
+  report.intake.evidence.push(unused);
+  report.semanticAssessment!.claims[0]!.evidenceKeys.push(second.snapshotKey);
+  report.semanticAssessment!.assessments[0]!.citations.push({
+    evidenceKey: second.snapshotKey,
+    excerpt: 'يجب حفظ الحقوق إلا إذا تعذر ذلك.',
+  });
+  operations.replacements[0]!.evidenceKeys.push(second.snapshotKey);
+  const quoteCitation = rewriteInput(report).allowedCitations[0]!;
+  operations.citations.push({ offset: quoteCitation.offset, evidenceKey: 'source' });
+  const valid = validateAuthorRewrite(report, operations);
+  expect(valid.text).toContain('«مقتطف تجريبي» [1]');
+  expect(valid.text).toContain(`${operations.replacements[0]!.replacementText} [1]`);
+  const references = valid.text.split('\n\nReferences\n');
+  expect(references).toHaveLength(2);
+  expect(references[1]!.split('\n')).toHaveLength(2);
+  expect(references[1]).toMatch(/^1\. /u);
+  expect(references[1]).toContain('\n2. مصدر ثان للاختبار');
+  expect(references[1]).toContain('مصدر بحثي غير معتمد');
+  expect(valid.text).not.toContain('مصدر غير مستخدم');
+});
+
 it('labels a supported-author safe skip with valid citations as attribution rather than verified author wording', async () => {
   const { report, operations } = fixture();
   const claim = report.semanticAssessment!.claims[0]!;
@@ -185,12 +216,13 @@ it('uses room freed by an author replacement for its exact source citation', () 
   source.reference = '1';
   source.approvalStatus = 'approved';
   source.researchOnly = false;
-  report.intake.originalText += 'ا'.repeat(3000 - report.intake.originalText.length);
+  report.intake.originalText += 'ا'.repeat(2980 - report.intake.originalText.length);
   report.inputSha256 = report.intake.revisionSha256 = sha256(report.intake.originalText);
   report.semanticAssessment!.trace.inputSha256 = report.inputSha256;
   const valid = validateAuthorRewrite(report, operations);
   expect(valid.operations.citations).toEqual(operations.citations);
-  expect(valid.text).toContain(' [حقوق — 1]');
+  expect(valid.text).toContain(' [1]');
+  expect(valid.text).toContain('\n\nReferences\n1. حقوق — 1');
   expect(valid.text.length).toBeLessThanOrEqual(3000);
   expect(valid.text).toContain(operations.replacements[0]!.replacementText);
 });
@@ -203,7 +235,7 @@ it('reconstructs the same replacement-aware citation budget during fresh server 
   source.reference = '1';
   source.approvalStatus = 'approved';
   source.researchOnly = false;
-  report.intake.originalText += 'ا'.repeat(3000 - report.intake.originalText.length);
+  report.intake.originalText += 'ا'.repeat(2980 - report.intake.originalText.length);
   report.inputSha256 = report.intake.revisionSha256 = sha256(report.intake.originalText);
   report.semanticAssessment!.trace.inputSha256 = report.inputSha256;
   const context = { report, attempt: 1 };
@@ -216,7 +248,8 @@ it('reconstructs the same replacement-aware citation budget during fresh server 
   expect(candidate.status).toBe('validated');
   expect(candidate.operations!.citations).toHaveLength(1);
   expect(service.copy('owner', task.id, context)).toBe(candidate.text);
-  expect(candidate.text).toContain(' [حقوق — 1]');
+  expect(candidate.text).toContain(' [1]');
+  expect(candidate.text).toContain('\n\nReferences\n1. حقوق — 1');
   service.close();
 });
 
@@ -227,8 +260,11 @@ it('omits an optional citation that no longer fits after an author expansion rat
   const allowed = rewriteInput(report).allowedCitations.find(
     (c) => c.offset === operations.citations[0]!.offset,
   )!;
-  const addition = ` [${allowed.reference}${allowed.pending ? ' — مصدر بحثي غير معتمد' : ''}]`;
-  const originalLength = 3000 - addition.length;
+  const referenceList = `\n\nReferences\n1. ${allowed.reference}${allowed.pending ? ' — مصدر بحثي غير معتمد' : ''}`;
+  const expansion =
+    operations.replacements[0]!.replacementText.length -
+    operations.replacements[0]!.originalText.length;
+  const originalLength = 3000 - referenceList.length - expansion - 2;
   report.intake.originalText += 'ا'.repeat(originalLength - report.intake.originalText.length);
   report.inputSha256 = report.intake.revisionSha256 = sha256(report.intake.originalText);
   report.semanticAssessment!.trace.inputSha256 = report.inputSha256;
@@ -237,7 +273,18 @@ it('omits an optional citation that no longer fits after an author expansion rat
   expect(valid.budgetLimited).toBe(true);
   expect(valid.text).toContain(operations.replacements[0]!.replacementText);
   expect(valid.text).toContain('«مقتطف تجريبي»');
+  expect(valid.text).toContain(referenceList);
   expect(valid.text.length).toBeLessThanOrEqual(3000);
+});
+
+it('withholds an author candidate when its required bibliography cannot fit without truncation', () => {
+  const { report, operations } = fixture();
+  report.intake.originalText += 'ا'.repeat(3000 - report.intake.originalText.length);
+  report.inputSha256 = report.intake.revisionSha256 = sha256(report.intake.originalText);
+  report.semanticAssessment!.trace.inputSha256 = report.inputSha256;
+  const original = report.intake.originalText;
+  expect(() => validateAuthorRewrite(report, operations)).toThrow('REWRITE_INVALID_CANDIDATE');
+  expect(report.intake.originalText).toBe(original);
 });
 
 it('records only the typed failing verifier check and packet hashes when diagnostics are explicitly enabled', async () => {

@@ -331,6 +331,9 @@ export function RewritePanel({
         <>
           <h3>النص المقترح — للمراجعة</h3>
           <p style={{ whiteSpace: 'pre-wrap' }}>{candidate.text}</p>
+          {candidate.text?.includes('\n\nReferences\n') && (
+            <p>يتضمن النص المعروض والمنسوخ قسم References بالمصادر المستخدمة فقط.</p>
+          )}
           {!candidate.operations?.citations.length &&
             !candidate.operations?.paragraphBreaks.length &&
             !candidate.operations?.replacements?.length && (
