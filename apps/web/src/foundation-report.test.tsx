@@ -32,6 +32,66 @@ afterEach(() => {
 });
 
 describe('foundation report presentation', () => {
+  it('explains zero sources as missing displayed evidence without declaring the narration false', () => {
+    const report = foundationReportFixture();
+    report.intake.evidence = [];
+    report.intake.quotationFindings = [];
+    render(<FoundationReportContent report={report} />);
+    expect(
+      screen.getByText(/غياب المصادر هنا لا يعني عدم وجود دليل أو عدم صحة النقل/),
+    ).not.toBeNull();
+    expect(screen.queryByText(/هذه نتيجة غير مكتملة/)).toBeNull();
+  });
+
+  it('distinguishes an incomplete assessment with zero sources from a completed empty result', () => {
+    const report = semanticBindingFixture();
+    report.intake.evidence = [];
+    report.intake.quotationFindings = [];
+    report.semanticAssessment!.status = 'unavailable';
+    report.semanticAssessment!.errorCode = 'gateway_blocked';
+    report.semanticAssessment!.claims = [];
+    report.semanticAssessment!.assessments = [];
+    render(<FoundationReportContent report={report} />);
+    expect(screen.getByText(/هذه نتيجة غير مكتملة، وليست حكمًا على صحة النص/)).not.toBeNull();
+    expect(screen.queryByText(/غياب المصادر هنا لا يعني/)).toBeNull();
+  });
+
+  it('explains a retrieval interruption before treating zero sources as a completed search', () => {
+    const report = semanticBindingFixture();
+    report.intake.evidence = [];
+    report.intake.quotationFindings = [];
+    report.semanticAssessment!.trace.retrieval = {
+      corpusVersion: 'synthetic',
+      mode: 'local_research',
+      queries: [
+        {
+          claimId: report.semanticAssessment!.claims[0]!.id,
+          querySha256: 'a'.repeat(64),
+          modes: [],
+          candidateKeys: [],
+          cache: { outcome: 'timeout', elapsedMs: 1, parentCandidateCount: 0, failureCodes: [] },
+        },
+      ],
+    };
+    render(<FoundationReportContent report={report} />);
+    expect(
+      screen.getByText(
+        `${retrievalLimitation(report)} لا توجد مصادر معروضة في هذا التقرير؛ راجع المرجع أو أعد التحليل لاحقًا.`,
+      ),
+    ).not.toBeNull();
+    expect(screen.queryByText(/غياب المصادر هنا لا يعني/)).toBeNull();
+  });
+
+  it('retains Quran evidence and explains missing Tafsir without diagnosing a service outage', () => {
+    const report = foundationReportFixture();
+    report.intake.evidence[0]!.sourceRole = 'quran_text';
+    const original = report.intake.evidence[0]!.originalText;
+    render(<FoundationReportContent report={report} />);
+    expect(screen.getByText(/عدد التفسير صفر لا يحدد سبب غيابه أو حالة الخدمة/)).not.toBeNull();
+    expect(screen.getAllByText(original).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'مصادر المقارنة (1)' })).not.toBeNull();
+  });
+
   it('offers a ticket only after capability confirmation and distinguishes pending approval', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       async () =>

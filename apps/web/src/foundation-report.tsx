@@ -270,6 +270,23 @@ function SourceLibrary({
     activeCategory === 'all' ? allRows : allRows.filter((row) => row.category === activeCategory);
   const visibleRows = showAll ? filteredRows : filteredRows.slice(0, 5);
   const hiddenCount = filteredRows.length - visibleRows.length;
+  const assessment = report.semanticAssessment;
+  const assessmentIncomplete =
+    assessment?.status === 'unavailable' ||
+    (assessment?.status === 'partial' &&
+      !!assessment.errorCode &&
+      assessment.errorCode !== 'no_claims_extracted');
+  const retrievalNotice = retrievalLimitation(report);
+  const emptyNotice = retrievalNotice
+    ? `${retrievalNotice} لا توجد مصادر معروضة في هذا التقرير؛ راجع المرجع أو أعد التحليل لاحقًا.`
+    : assessmentIncomplete
+      ? 'لم يكتمل التقييم الآلي، ولا توجد مصادر معروضة في هذا التقرير. هذه نتيجة غير مكتملة، وليست حكمًا على صحة النص أو على وجود الدليل.'
+      : 'لم تُعرض مصادر مرتبطة بهذا النص ضمن المراجعة الحالية. غياب المصادر هنا لا يعني عدم وجود دليل أو عدم صحة النقل؛ راجع المرجع المذكور.';
+  const missingTafsir =
+    report.intake.evidence.some((source) => source.sourceRole === 'quran_text') &&
+    !report.intake.evidence.some((source) =>
+      ['tafsir_commentary', 'tafsir_footnote'].includes(source.sourceRole),
+    );
 
   return (
     <section className="foundation-library" aria-labelledby="foundation-library-title">
@@ -280,6 +297,13 @@ function SourceLibrary({
             المصادر والسياقات المرتبطة بالنص ({report.intake.evidence.length} مصدرًا)
           </h2>
           <p>اختر مصدرًا لقراءته في مساحة المقارنة. ظهوره هنا لا يثبت المطابقة أو الاستدلال.</p>
+          {!allRows.length && <p role="note">{emptyNotice}</p>}
+          {missingTafsir && (
+            <p role="note">
+              لم يُدرج تفسير لهذه الآية في هذا التقرير. النص القرآني المعروض يظل متاحًا؛ عدد التفسير
+              صفر لا يحدد سبب غيابه أو حالة الخدمة.
+            </p>
+          )}
         </div>
         <div className="foundation-source-tabs" role="group" aria-label="تصفية المصادر">
           <button
