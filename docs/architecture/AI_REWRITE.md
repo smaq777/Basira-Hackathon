@@ -33,6 +33,15 @@ every revised material clause from the same immutable evidence. Conditions,
 negations, exceptions, scope and modality each have an independent required check.
 The `supported-author-wording-v2` prompt and verifier schema version 2 distinguish
 obligation, prohibition, permission, possibility and absence of obligation.
+Generation additionally uses `author-original-scope-v1`: source support does not
+authorize importing an unstated comparison or other source detail into author
+wording. It prefers a small faithful edit and safe skip when improvement would
+add meaning. The independent verifier instruction and veto remain unchanged.
+See the [captured comparison investigation](../evidence/2026-10-06-rewrite-scope-investigation.md).
+Bounded local live acceptance retained two clear drafts as attribution-only safe
+skips and independently verified a faithful edit of a distinct rough charity
+draft, with exact copy and unchanged quotations. These fixed public-source tests
+do not establish shared deployment health or a general acceptance rate.
 Source support cannot authorize changing author modality; ambiguous colloquial
 wording requires abstention. These remain model judgments, not deterministic
 proof of preservation. Exact
