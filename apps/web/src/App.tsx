@@ -2877,7 +2877,7 @@ function ReviewerSources() {
   return (
     <main className="reviewer-main page-enter">
       <p>
-        تضاف الأدلة إلى التقرير داخل الطلب المرتبط بها. لا يوجد سجل تجريبي ثابت يمثل مصدرًا معتمدًا.
+        مراجع المشروع المختارة ومصادر البحث المسموح بها. تظهر الأدلة المستخدمة لكل نص داخل تقريره.
       </p>
       <SourceInformation />
     </main>

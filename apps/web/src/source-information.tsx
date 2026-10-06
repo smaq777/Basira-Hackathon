@@ -1,8 +1,95 @@
+import sourcePolicy from '../../../config/source-policy.json' with { type: 'json' };
+
+const corpusReferences = [
+  { name: 'القرآن الكريم', detail: 'النص العثماني من مشروع تنزيل (Tanzil)، الإصدار 1.1.' },
+  {
+    name: 'التفسير الميسر',
+    detail: 'مجمع الملك فهد لطباعة المصحف الشريف؛ نصوص من الناشر وخادم التفسير.',
+  },
+  {
+    name: 'تيسير الكريم الرحمن',
+    detail: 'تفسير الشيخ عبد الرحمن بن ناصر السعدي؛ مقتطفات عبر خادم التفسير.',
+  },
+  { name: 'صحيح البخاري', detail: 'مقتطفات موثقة من كتابي الزكاة والتوحيد.' },
+  { name: 'صحيح مسلم', detail: 'مقتطف موثق من كتاب الإيمان.' },
+  { name: 'سنن أبي داود', detail: 'مقتطف موثق من كتاب الجنائز، باب التلقين.' },
+  {
+    name: 'محاسن التوحيد وارتباطها بأركان الإيمان',
+    detail: 'محمد بن خليفة التميمي؛ مقتطف من المكتبة الشاملة.',
+  },
+];
+
+const webResourceLabels: Record<string, { name: string; detail: string }> = {
+  dawa: { name: 'المستودع الدعوي', detail: 'كتب ومواد دعوية، ومنها بينات.' },
+  'islamic-content': { name: 'الجمهرة', detail: 'موضوعات ومصطلحات المحتوى الإسلامي.' },
+  quranpedia: {
+    name: 'موسوعة القرآن الكريم (Quranpedia)',
+    detail: 'مراجع وصفحات حول القرآن وعلومه.',
+  },
+  dorar: {
+    name: 'الدرر السنية',
+    detail: 'التفسير والحديث والعقيدة والفقه والتاريخ، ضمن المسارات المسموح بها.',
+  },
+  shamela: { name: 'المكتبة الشاملة', detail: 'مقتطفات من كتب محددة مع ذكر الكتاب والمرجع.' },
+  binbaz: {
+    name: 'الموقع الرسمي للشيخ عبد العزيز بن باز',
+    detail: 'الفتاوى والدروس الصوتية وشروحها.',
+  },
+};
+
+export function selectedWebResources(
+  policy: { sources: typeof sourcePolicy.sources; deniedDomains: string[] } = sourcePolicy,
+) {
+  return policy.sources.filter(
+    (source) => source.enabled && !policy.deniedDomains.includes(source.domain),
+  );
+}
+
 export function SourceInformation() {
   return (
     <section className="reviewed-report">
       <article className="reviewer-panel">
-        <h1>كيف نعرض المصادر في النتيجة؟</h1>
+        <h1>مراجع المشروع ومصادر البحث</h1>
+        <p>
+          هذه المراجع ومواقع البحث مختارة لاستخدام بصيرة. اعتماد جهة للاستخدام لا يعني اعتماد كل
+          صفحة أو مقتطف فيها؛ يبيّن التقرير مرجع الدليل المستخدم وحالة اعتماده وحدود الاستدلال به.
+        </p>
+        <h2>المراجع الموجودة في مجموعة النصوص</h2>
+        <p>التغطية بمقتطفات محددة، ولا تمثل إتاحة جميع هذه الكتب كاملة.</p>
+        <ul className="source-catalogue">
+          {corpusReferences.map((reference) => (
+            <li key={reference.name}>
+              <strong>{reference.name}</strong>
+              <span>{reference.detail}</span>
+            </li>
+          ))}
+        </ul>
+      </article>
+      <article className="reviewer-panel">
+        <h2>مواقع البحث المختارة</h2>
+        <p>
+          تُعرض المواقع المفعّلة في قائمة مصادر المشروع مع بيان ما ورد في قائمة مراجع التحدي وما
+          اختير للمشروع بصورة مستقلة. لا تكفي نتيجة البحث لإثبات النص أو الحكم.
+        </p>
+        <ul className="source-catalogue">
+          {selectedWebResources().map((source) => (
+            <li key={source.id}>
+              <strong>
+                <a href={`https://${source.domain}/`} target="_blank" rel="noreferrer">
+                  {webResourceLabels[source.id]?.name ?? source.domain}
+                </a>
+              </strong>
+              <span>{webResourceLabels[source.id]?.detail}</span>
+              <small>
+                <bdi>{source.domain}</bdi> ·{' '}
+                {source.basis === 'hackathon_listed' ? 'من قائمة مراجع التحدي' : 'مختار للمشروع'}
+              </small>
+            </li>
+          ))}
+        </ul>
+      </article>
+      <article className="reviewer-panel">
+        <h2>كيف نعرض المصادر في النتيجة؟</h2>
         <p>
           بصيرة تقارن النقل وتراجع حدود الاستدلال في النص الذي أرسلته. لا نعرض مصدرًا بوصفه دليلًا
           لمجرد تشابه موضوعه مع النص.

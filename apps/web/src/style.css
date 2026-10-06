@@ -2465,6 +2465,24 @@ mark {
   padding: 18px;
 }
 
+.source-catalogue {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.source-catalogue li {
+  display: grid;
+  gap: 5px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.source-catalogue span,
+.source-catalogue small {
+  color: var(--muted);
+}
+
 .panel-heading {
   display: flex;
   align-items: flex-start;
