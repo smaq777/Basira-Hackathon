@@ -12,6 +12,7 @@ import {
 import { isSafeDraftText, MAX_DRAFT_LENGTH } from '../../../packages/contracts/src/draft-text.js';
 import { canonical, sha256, validateIntake } from './foundation.js';
 import { readableSourceCitation } from '../../../packages/contracts/src/source-citation.js';
+import type { RewriteFailureReason, RewriteFailureReceipt } from './rewrite-diagnostics.js';
 import {
   authorRewriteInput,
   validateAuthorRewrite,
@@ -57,6 +58,7 @@ export class RewriteError extends Error {
   constructor(
     public code: string,
     public status = 409,
+    public reason?: RewriteFailureReason,
   ) {
     super(code);
   }
@@ -137,28 +139,43 @@ export function rewriteInput(report: FoundationReport) {
   };
 }
 
-export function validateRewrite(report: FoundationReport, raw: unknown) {
+/** Validate insertions in original offsets against a server-computed final prose length. */
+export function validateRewriteInsertions(
+  report: FoundationReport,
+  raw: unknown,
+  baseLength = report.intake.originalText.length,
+) {
   try {
     validateIntake(report.intake, report.intake.originalText, report.revisionId, true);
     if (sha256(report.intake.originalText) !== report.inputSha256) throw new Error('hash');
   } catch {
-    throw new RewriteError('REWRITE_INVALID_CANDIDATE');
+    throw new RewriteError('REWRITE_INVALID_CANDIDATE', 409, 'report_binding');
   }
   const parsed = RewriteOperationsSchema.safeParse(raw);
-  if (!parsed.success) throw new RewriteError('REWRITE_INVALID_CANDIDATE');
+  if (!parsed.success) throw new RewriteError('REWRITE_INVALID_CANDIDATE', 409, 'layout_schema');
   const operations = parsed.data;
-  if (operations.replacements?.length) throw new RewriteError('REWRITE_INVALID_CANDIDATE');
+  if (operations.replacements?.length)
+    throw new RewriteError('REWRITE_INVALID_CANDIDATE', 409, 'layout_schema');
   const input = rewriteInput(report);
+  if (
+    !Number.isInteger(baseLength) ||
+    baseLength < 1 ||
+    baseLength > MAX_DRAFT_LENGTH ||
+    input.originalText.length > MAX_DRAFT_LENGTH ||
+    !input.originalText.trim() ||
+    !isSafeDraftText(input.originalText)
+  )
+    throw new RewriteError('REWRITE_INVALID_CANDIDATE', 409, 'candidate_length');
   const insertions = new Map<number, string[]>();
   const retained: RewriteOperations = { paragraphBreaks: [], citations: [] };
-  let remaining = input.remainingUtf16Units;
+  let remaining = MAX_DRAFT_LENGTH - baseLength;
   const append = (at: number, text: string) =>
     insertions.set(at, [...(insertions.get(at) ?? []), text]);
   if (new Set(operations.paragraphBreaks).size !== operations.paragraphBreaks.length)
-    throw new RewriteError('REWRITE_INVALID_CANDIDATE');
+    throw new RewriteError('REWRITE_INVALID_CANDIDATE', 409, 'insertion_binding');
   for (const offset of operations.paragraphBreaks) {
     if (!input.paragraphOffsets.includes(offset))
-      throw new RewriteError('REWRITE_INVALID_CANDIDATE');
+      throw new RewriteError('REWRITE_INVALID_CANDIDATE', 409, 'insertion_binding');
     if (remaining >= 2) {
       append(offset, '\n\n');
       remaining -= 2;
@@ -171,10 +188,11 @@ export function validateRewrite(report: FoundationReport, raw: unknown) {
     const allowed = input.allowedCitations.find(
       (s) => s.offset === citation.offset && s.evidenceKey === citation.evidenceKey,
     );
-    if (!allowed || cited.has(key)) throw new RewriteError('REWRITE_INVALID_CANDIDATE');
+    if (!allowed || cited.has(key))
+      throw new RewriteError('REWRITE_INVALID_CANDIDATE', 409, 'citation_binding');
     const offset = citation.offset;
     if (protectedRanges(report).some((s) => offset > s.start && offset < s.end))
-      throw new RewriteError('REWRITE_INVALID_CANDIDATE');
+      throw new RewriteError('REWRITE_INVALID_CANDIDATE', 409, 'protected_insertion');
     cited.add(key);
     const addition = ` [${allowed.reference}${allowed.pending ? ' — مصدر بحثي غير معتمد' : ''}]`;
     if (addition.length <= remaining) {
@@ -183,9 +201,19 @@ export function validateRewrite(report: FoundationReport, raw: unknown) {
       retained.citations.push(citation);
     }
   }
+  return {
+    insertions,
+    operations: retained,
+    budgetLimited: canonical(retained) !== canonical(operations),
+  };
+}
+
+export function validateRewrite(report: FoundationReport, raw: unknown) {
+  const layout = validateRewriteInsertions(report, raw);
+  const input = rewriteInput(report);
   let text = '';
   let cursor = 0;
-  for (const [offset, additions] of [...insertions].sort(([a], [b]) => a - b)) {
+  for (const [offset, additions] of [...layout.insertions].sort(([a], [b]) => a - b)) {
     text += input.originalText.slice(cursor, offset) + additions.join('');
     cursor = offset;
   }
@@ -200,8 +228,8 @@ export function validateRewrite(report: FoundationReport, raw: unknown) {
     throw new RewriteError('REWRITE_INVALID_CANDIDATE');
   return {
     text,
-    operations: retained,
-    budgetLimited: canonical(retained) !== canonical(operations),
+    operations: layout.operations,
+    budgetLimited: layout.budgetLimited,
   };
 }
 
@@ -257,6 +285,7 @@ export function createRewriteService(
     timeoutMs?: number;
     verifier?: RewriteVerifier;
     requireCompleteEvidence?: boolean;
+    onFailureDiagnostic?: (receipt: RewriteFailureReceipt) => void;
   } = {},
 ) {
   const now = options.now ?? Date.now;
@@ -351,6 +380,17 @@ export function createRewriteService(
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       timer.unref();
       const signal = controller.signal;
+      let stage: RewriteFailureReceipt['stage'] = 'input';
+      let operationsSha256: string | null = null;
+      let verificationSha256: string | null = null;
+      const packetHash = (packet: unknown) => {
+        if (!options.onFailureDiagnostic) return null;
+        try {
+          return sha256(canonical(packet));
+        } catch {
+          return null;
+        }
+      };
       void Promise.race([
         Promise.resolve().then(async () => {
           signal.throwIfAborted();
@@ -363,13 +403,17 @@ export function createRewriteService(
             options.verifier &&
             authorInput?.authorClaims.length === 0 &&
             (context.report.semanticAssessment?.claims.length ?? 0) === 0;
+          stage = 'generation';
           const output = quotationOnly
             ? quotationCitationOperations(input)
             : await generate(input, signal);
+          operationsSha256 = packetHash(output);
           signal.throwIfAborted();
+          stage = 'report_reload';
           const fresh = await reload();
           signal.throwIfAborted();
           if (row.binding !== binding(fresh)) throw new RewriteError('REWRITE_STALE_REPORT');
+          stage = 'candidate_validation';
           const valid = options.verifier
             ? validateAuthorRewrite(fresh.report, output)
             : validateRewrite(fresh.report, output);
@@ -381,9 +425,13 @@ export function createRewriteService(
             throw new RewriteError('REWRITE_EVIDENCE_REQUIRED');
           if (options.verifier && valid.operations.replacements?.length) {
             const verifierInput = authorRewriteInput(fresh.report);
+            stage = 'verification';
             const raw = await options.verifier(verifierInput, valid.operations, signal);
+            verificationSha256 = packetHash(raw);
             signal.throwIfAborted();
+            stage = 'verification_validation';
             const hash = validateAuthorVerification(verifierInput, valid.operations, raw);
+            stage = 'verified_report_reload';
             const after = await reload();
             signal.throwIfAborted();
             if (row.binding !== binding(after)) throw new RewriteError('REWRITE_STALE_REPORT');
@@ -409,7 +457,7 @@ export function createRewriteService(
           candidate.status = 'validated';
         })
         .catch((error) => {
-          if (candidate.status !== 'pending') return;
+          if (candidate.status !== 'pending' || !records.has(candidate.id)) return;
           candidate.status = 'failed';
           candidate.text = null;
           candidate.errorCode =
@@ -418,6 +466,43 @@ export function createRewriteService(
                 ? 'stale_report'
                 : 'invalid_candidate'
               : 'provider_unavailable';
+          if (options.onFailureDiagnostic) {
+            const reason: RewriteFailureReason = signal.aborted
+              ? 'deadline'
+              : error instanceof RewriteError
+                ? (error.reason ??
+                  (error.code === 'REWRITE_STALE_REPORT'
+                    ? 'stale_report'
+                    : error.code === 'REWRITE_EVIDENCE_REQUIRED'
+                      ? 'evidence_required'
+                      : 'invalid_candidate'))
+                : ['report_reload', 'verified_report_reload'].includes(stage)
+                  ? 'report_reload_unavailable'
+                  : error instanceof SyntaxError ||
+                      (error instanceof Error &&
+                        [
+                          'ZodError',
+                          'REWRITE_PROVIDER_OUTPUT_INVALID',
+                          'REWRITE_RESPONSE_TOO_LARGE',
+                        ].includes(error.name === 'ZodError' ? error.name : error.message))
+                    ? 'provider_output_invalid'
+                    : 'provider_unavailable';
+            try {
+              void Promise.resolve(
+                options.onFailureDiagnostic({
+                  event: 'rewrite_failed',
+                  stage: signal.aborted ? 'deadline' : stage,
+                  reason,
+                  inputSha256: context.report.inputSha256,
+                  evidenceStateSha256: context.report.evidenceStateSha256,
+                  operationsSha256,
+                  verificationSha256,
+                }),
+              ).catch(() => undefined);
+            } catch {
+              /* Diagnostic observers cannot change withholding. */
+            }
+          }
         })
         .finally(() => clearTimeout(timer));
       return structuredClone(candidate);

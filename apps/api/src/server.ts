@@ -1,6 +1,7 @@
 import { semanticBudgetConfiguration } from './semantic-budget.js';
 import { createApp } from './app.js';
 import { createRewriteService } from './rewrite.js';
+import { rewriteDiagnosticSink } from './rewrite-diagnostics.js';
 import { createAuthorRewriteGenerator, createAuthorRewriteVerifier } from './rewrite-provider.js';
 import { createDatabase, databaseTls, DatabaseUnavailable } from './database.js';
 import { Pool } from 'pg';
@@ -365,6 +366,7 @@ const rewrite = rewriteEnabled
       verifier: createAuthorRewriteVerifier(process.env.OPENROUTER_API_KEY ?? ''),
       timeoutMs: 90_000,
       requireCompleteEvidence: foundation?.runtimeMode === 'hosted_demo',
+      onFailureDiagnostic: rewriteDiagnosticSink(process.env),
     })
   : undefined;
 const corpusAccessMode = reviewerCorpusAccessMode(process.env);
