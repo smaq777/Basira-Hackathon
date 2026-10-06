@@ -1,5 +1,18 @@
 # Current delivery status
 
+**Submission blockers (#157/#8), 6 October morning:** The deployed development
+revision observed in the audit is `156e539e8df8c2b95861a652a839f8e7f7fa9126`.
+Railway and selected MCP/model requests work, and semantic 1.11 is active, but
+fresh reports still use the historical 86-passage snapshot. Read-only Neon
+preflight verifies the prepared 175-passage snapshot and preserved 86-passage
+history. This branch fixes faithful quotation-only attribution with unchanged
+evidence/copy gates, adds bounded semantic acceptance and precise Saleh-owned
+activation steps. It does not claim deployment of these fixes. See
+[submission evidence](evidence/2026-10-06-submission-blockers.md) and
+[activation](operations/SUBMISSION_CORPUS_ACTIVATION.md).
+Reviewer/publication/email work is deferred; no new collection or production
+activation is included. The next entry is a historical reviewer checkpoint.
+
 **Reviewer workflow and result comparison (#156), 6 October:** PRs #159/#160
 are merged into `development` and deployed on Railway staging at code merge
 `f3eb3814910fe888cb59e00ee64a4c01a13efeb5`. Report and corpus migrations are
