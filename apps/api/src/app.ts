@@ -729,7 +729,7 @@ export function createApp(options: AppOptions = {}) {
           : []),
       );
       if (!saved) return res.status(404).json({ code: 'TICKET_NOT_FOUND' });
-      if (input.publish) options.tickets.notifications?.notify();
+      options.tickets.notifications?.notify();
       return res.status(input.publish ? 201 : 200).json({ response: saved });
     } catch (error) {
       return next(error);
@@ -749,6 +749,7 @@ export function createApp(options: AppOptions = {}) {
         input.provenance,
       );
       if (!approved) return res.status(409).json({ code: 'PUBLISHED_RESPONSE_REQUIRED' });
+      options.tickets.notifications?.notify();
       // A legacy candidate is an audit record, not a corpus publication.
       return res.status(201).json({ candidateRecorded: true, addedToRetrieval: false });
     } catch (error) {
@@ -808,6 +809,7 @@ export function createApp(options: AppOptions = {}) {
       } catch {
         /* retain honest corpus success */
       }
+      if (auditRecorded) options.tickets.notifications?.notify();
       return res
         .status(auditRecorded ? 201 : 202)
         .json({ addedToRetrieval: true, auditRecorded, ...receipt });
@@ -824,6 +826,7 @@ export function createApp(options: AppOptions = {}) {
       const { ticketCode: code } = ReviewerTicketParams.parse(req.params);
       if (!(await options.tickets.store.archive(code, actor, false)))
         return res.status(404).json({ code: 'TICKET_NOT_FOUND' });
+      options.tickets.notifications?.notify();
       return res.json({ archived: true });
     } catch (error) {
       return next(error);
@@ -838,6 +841,7 @@ export function createApp(options: AppOptions = {}) {
       const { ticketCode: code } = ReviewerTicketParams.parse(req.params);
       if (!(await options.tickets.store.archive(code, actor, true)))
         return res.status(404).json({ code: 'TICKET_NOT_FOUND' });
+      options.tickets.notifications?.notify();
       return res.json({ restored: true });
     } catch (error) {
       return next(error);

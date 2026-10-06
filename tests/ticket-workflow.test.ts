@@ -268,7 +268,7 @@ it('requires reviewer authorization and only notifies after publishing', async (
     body: JSON.stringify({ decision: 'needs_context', text: 'مسودة', publish: false }),
   });
   expect(draft.status).toBe(200);
-  expect(notification.notify).not.toHaveBeenCalled();
+  expect(notification.notify).toHaveBeenCalledTimes(1);
   const published = await fetch(path, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: 'Bearer reviewer' },
@@ -279,7 +279,7 @@ it('requires reviewer authorization and only notifies after publishing', async (
     }),
   });
   expect(published.status).toBe(201);
-  expect(notification.notify).toHaveBeenCalledTimes(1);
+  expect(notification.notify).toHaveBeenCalledTimes(2);
 });
 
 it('returns a conflict instead of a service error when a response is already published', async () => {

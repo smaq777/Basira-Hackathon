@@ -1,4 +1,4 @@
-import type { TicketStore } from './ticket-store.js';
+import type { TicketStore, TicketNotificationEvent } from './ticket-store.js';
 import { decryptTicketContact } from './ticket-crypto.js';
 import {
   EditorialReviewSchema,
@@ -18,6 +18,8 @@ export type TicketMailer = {
     responseText: string;
     editorial?: EditorialReview;
     notificationId?: number;
+    notificationKey?: string;
+    eventType?: TicketNotificationEvent;
   }): Promise<{ messageId: string } | void>;
   delivery?(messageId: string): Promise<{ event: string; occurredAt: string } | null>;
 };
@@ -108,6 +110,35 @@ export function createBrevoMailer(options: {
       const safeName = input.name ? escapeHtml(input.name) : '';
       const safeCode = escapeHtml(input.ticketCode);
       const safeUrl = escapeHtml(followUpUrl);
+      const eventType = input.eventType ?? 'published';
+      const updates: Record<Exclude<TicketNotificationEvent, 'published'>, string> = {
+        draft_saved: 'حدّث المراجع العمل على تذكرتك. ستصلك الملاحظات والتقرير عند نشر الرد.',
+        archived:
+          'تم إغلاق تذكرتك. تبقى الملاحظات والتقارير المنشورة في رسائلها السابقة. المتابعة في الموقع غير متاحة أثناء إغلاق التذكرة.',
+        restored: 'أُعيد فتح تذكرتك وأصبحت المتابعة في الموقع متاحة من جديد.',
+        retrieval_approved:
+          'سُجل تحديث على حالة مصادر مراجعة تذكرتك. لا يعني ذلك تغيير نتيجة المراجعة المنشورة أو إتاحة المصدر تلقائيًا للمراجعات المستقبلية.',
+      };
+      const update = eventType === 'published' ? undefined : updates[eventType];
+      if (update) {
+        return sendMessage({
+          sender: { email: options.senderEmail, name: options.senderName },
+          to: [{ email: input.email, ...(input.name ? { name: input.name } : {}) }],
+          subject: `${eventType === 'archived' ? 'تم إغلاق تذكرتك' : eventType === 'restored' ? 'أُعيد فتح تذكرتك' : 'تحديث على تذكرتك'} ${input.ticketCode}`,
+          textContent: `مرحبًا${input.name ? ` ${input.name}` : ''}،\n\n${update}\nرقم التذكرة: ${input.ticketCode}\n\n${eventType === 'archived' ? '' : `للمتابعة افتح ${followUpUrl} وأدخل رقم التذكرة والبريد الإلكتروني نفسه.\n\n`}بصيرة`,
+          htmlContent: brandedEmail(
+            `<p>مرحبًا${safeName ? ` ${safeName}` : ''}،</p><h2>تحديث على التذكرة <span dir="ltr">${safeCode}</span></h2><p>${escapeHtml(update)}</p>${eventType === 'archived' ? '' : `<p><a href="${safeUrl}">متابعة التذكرة في بصيرة</a> باستخدام رقم التذكرة والبريد الإلكتروني نفسه.</p>`}`,
+          ),
+          tags: ['basirah-ticket-update'],
+          ...(input.notificationKey
+            ? {
+                headers: {
+                  idempotencyKey: input.notificationKey,
+                },
+              }
+            : {}),
+        });
+      }
       return sendMessage({
         sender: { email: options.senderEmail, name: options.senderName },
         to: [{ email: input.email, ...(input.name ? { name: input.name } : {}) }],
@@ -117,10 +148,10 @@ export function createBrevoMailer(options: {
           `<p>مرحبًا${safeName ? ` ${safeName}` : ''}،</p><h2>اكتملت المراجعة البشرية</h2><p>التذكرة <strong dir="ltr">${safeCode}</strong></p><h3>ملاحظات المراجع ونصيحته</h3><p style="white-space:pre-wrap">${escapeHtml(input.responseText)}</p>${reviewedEmail(input.editorial)}<p><a style="display:inline-block;padding:12px 20px;background:#008e89;color:#fff;text-decoration:none;border-radius:8px" href="${safeUrl}">عرض التقرير والأدلة والتغييرات</a></p><p>أدخل رقم التذكرة مع البريد الإلكتروني نفسه. احتفظ بهذه الرسالة للمراجعة.</p>`,
         ),
         tags: ['basirah-review-ticket'],
-        ...(input.notificationId
+        ...(input.notificationKey
           ? {
               headers: {
-                idempotencyKey: `basirah-review-${input.ticketCode}-${input.notificationId}`,
+                idempotencyKey: input.notificationKey,
               },
             }
           : {}),
@@ -177,7 +208,8 @@ export function createTicketNotificationWorker(options: {
         try {
           const contact = decryptTicketContact(job.contactCiphertext, options.dataKey);
           const ticket = await options.store.get(job.ticketCode);
-          if (!ticket || ticket.status === 'closed') throw new Error('TICKET_ARCHIVED');
+          if (!ticket) throw new Error('TICKET_ARCHIVED');
+          if (ticket.notifyOptIn === false) throw new Error('TICKET_NOTIFICATION_OPTED_OUT');
           // Bind the email to the exact outbox response, never to matching notes
           // (two published versions may legitimately contain identical notes).
           const editorial = EditorialReviewSchema.safeParse(job.editorial);
@@ -188,6 +220,8 @@ export function createTicketNotificationWorker(options: {
             ticketCode: job.ticketCode,
             responseText: job.responseText,
             notificationId: job.notificationId,
+            ...(job.notificationKey ? { notificationKey: job.notificationKey } : {}),
+            ...(job.eventType ? { eventType: job.eventType } : {}),
             ...(editorial.success ? { editorial: editorial.data } : {}),
           });
           if (receipt && options.store.recordEmailReceipt) {
@@ -208,7 +242,7 @@ export function createTicketNotificationWorker(options: {
         } catch (error) {
           const message = error instanceof Error ? error.message : '';
           const code =
-            /^(BREVO_HTTP_\d{3}|BREVO_SEND_RESULT_UNKNOWN|EMAIL_ACCEPTED_AUDIT_FAILED|TICKET_ARCHIVED|INVALID_EDITORIAL_REPORT)$/u.test(
+            /^(BREVO_HTTP_\d{3}|BREVO_SEND_RESULT_UNKNOWN|EMAIL_ACCEPTED_AUDIT_FAILED|TICKET_ARCHIVED|TICKET_NOTIFICATION_OPTED_OUT|INVALID_EDITORIAL_REPORT)$/u.test(
               message,
             )
               ? message

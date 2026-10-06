@@ -538,7 +538,7 @@ export type ReviewerTicket = ReviewerTicketSummary & {
     errorCode: string | null;
   }>;
   emailDeliveries?: Array<{
-    kind: 'receipt' | 'review';
+    kind: 'receipt' | 'review' | 'update';
     version: number | null;
     messageId: string;
     event: string;

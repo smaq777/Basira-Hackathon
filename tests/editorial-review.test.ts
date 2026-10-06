@@ -60,6 +60,7 @@ async function serve(
       responses: [{ version: 1, published: true, editorial: review }],
     }),
     recordSourceReceipt: vi.fn().mockResolvedValue(true),
+    archive: vi.fn().mockResolvedValue(true),
     saveResponse: vi.fn().mockResolvedValue({ version: 2, published: true }),
     page: vi.fn().mockResolvedValue({
       tickets: [],
@@ -235,6 +236,7 @@ describe('evidence-bounded human review', () => {
     const response = await app.post('source-approval', input);
     expect(response.status).toBe(201);
     expect(await response.json()).toMatchObject({ addedToRetrieval: true, auditRecorded: true });
+    expect(app.notification.notify).toHaveBeenCalledOnce();
     const forbidden = await serve([]);
     expect((await forbidden.post('source-approval', input)).status).toBe(403);
     expect(forbidden.corpus.approve).not.toHaveBeenCalled();
@@ -250,6 +252,23 @@ describe('evidence-bounded human review', () => {
     });
     expect(response.status).toBe(202);
     expect(await response.json()).toMatchObject({ addedToRetrieval: true, auditRecorded: false });
+    expect(app.notification.notify).not.toHaveBeenCalled();
+  });
+  it('wakes notification delivery after closure and restoration, only for successful authorized changes', async () => {
+    const app = await serve();
+    const path = `${app.base}/api/v1/reviewer/tickets/${code}`;
+    expect((await fetch(path, { method: 'DELETE' })).status).toBe(401);
+    expect(app.notification.notify).not.toHaveBeenCalled();
+    expect(
+      (await fetch(path, { method: 'DELETE', headers: { authorization: 'Bearer reviewer' } }))
+        .status,
+    ).toBe(200);
+    expect(app.notification.notify).toHaveBeenCalledTimes(1);
+    expect((await app.post('restore', {})).status).toBe(200);
+    expect(app.notification.notify).toHaveBeenCalledTimes(2);
+    app.store.archive.mockResolvedValueOnce(false);
+    expect((await app.post('restore', {})).status).toBe(404);
+    expect(app.notification.notify).toHaveBeenCalledTimes(2);
   });
   it('sends the exact outbox version, not another version with identical notes', async () => {
     const dataKey = Buffer.alloc(32, 7).toString('base64');

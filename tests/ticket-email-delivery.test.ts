@@ -81,6 +81,7 @@ describe('email delivery evidence', () => {
         .mockResolvedValueOnce([
           {
             notificationId: 8,
+            notificationKey: '78f281c0-96f6-4d0f-a6bc-fbb68d89a5a3',
             ticketCode: code,
             responseVersion: 2,
             responseText: 'نصيحة',
@@ -111,6 +112,11 @@ describe('email delivery evidence', () => {
     );
     await worker.stop();
     expect(store.recordEmailReceipt).toHaveBeenCalledWith(code, 8, '<test>');
+    expect(transport.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notificationKey: '78f281c0-96f6-4d0f-a6bc-fbb68d89a5a3',
+      }),
+    );
     expect(store.completeNotification).toHaveBeenCalledWith(8, true);
     expect(transport.send).toHaveBeenCalledOnce();
   });
@@ -143,5 +149,128 @@ describe('email delivery evidence', () => {
       ),
     );
     await worker.stop();
+  });
+});
+
+describe('post-intake ticket communication', () => {
+  it('uses the same durable UUID for retries of published mail, and distinct UUIDs for new jobs', async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockImplementation(
+        async () => new Response('{"messageId":"<update@example.com>"}', { status: 201 }),
+      );
+    const keys = [
+      '78f281c0-96f6-4d0f-a6bc-fbb68d89a5a3',
+      '78f281c0-96f6-4d0f-a6bc-fbb68d89a5a3',
+      '6e5f1864-846d-4df3-b47c-2367bbfa87ed',
+    ];
+    for (const notificationKey of keys) {
+      await mailer(request).send({
+        email: 'synthetic@example.com',
+        ticketCode: code,
+        responseText: 'Published note',
+        notificationId: 12,
+        notificationKey,
+      });
+    }
+    const payloads = request.mock.calls.map((call) => JSON.parse(String(call[1]?.body)));
+    expect(payloads.map((p) => p.headers.idempotencyKey)).toEqual(keys);
+    for (const payload of payloads) {
+      expect(payload.headers.idempotencyKey).toMatch(
+        /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u,
+      );
+      expect(payload.htmlContent).toContain('Published note');
+      expect(payload.subject).toContain('اكتملت');
+    }
+  });
+  it.each(['draft_saved', 'archived', 'restored', 'retrieval_approved'] as const)(
+    'renders %s as an update without disclosing unpublished content',
+    async (eventType) => {
+      const request = vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(new Response('{"messageId":"<update@example.com>"}', { status: 201 }));
+      await mailer(request).send({
+        email: 'synthetic@example.com',
+        ticketCode: code,
+        responseText: 'PRIVATE DRAFT',
+        eventType,
+        notificationId: 12,
+        notificationKey: '78f281c0-96f6-4d0f-a6bc-fbb68d89a5a3',
+      });
+      const payload = JSON.parse(String(request.mock.calls[0]?.[1]?.body));
+      expect(payload.subject).toContain(code);
+      expect(payload.subject).not.toContain('اكتملت');
+      expect(payload.htmlContent).not.toContain('PRIVATE DRAFT');
+      expect(payload.textContent).not.toContain('PRIVATE DRAFT');
+      expect(payload.headers.idempotencyKey).toBe('78f281c0-96f6-4d0f-a6bc-fbb68d89a5a3');
+      expect(payload.tags).toEqual(['basirah-ticket-update']);
+      if (eventType === 'archived') expect(payload.htmlContent).not.toContain('href=');
+    },
+  );
+  it('delivers a closure notice and earlier published communication for a closed ticket', async () => {
+    const dataKey = Buffer.alloc(32, 9).toString('base64');
+    const store = {
+      ...unavailableTicketStore,
+      get: vi.fn().mockResolvedValue({ status: 'closed', notifyOptIn: true }),
+      claimNotifications: vi
+        .fn()
+        .mockResolvedValueOnce(
+          ['published', 'archived'].map((eventType, i) => ({
+            notificationId: i + 1,
+            ticketCode: code,
+            eventType,
+            responseText: i ? '' : 'Published note',
+            contactCiphertext: encryptTicketContact({ email: 'synthetic@example.com' }, dataKey),
+          })),
+        )
+        .mockResolvedValue([]),
+      completeNotification: vi.fn().mockResolvedValue(true),
+      recordEmailReceipt: vi.fn().mockResolvedValue(true),
+    };
+    const transport = {
+      sendReceipt: vi.fn(),
+      send: vi.fn().mockResolvedValue({ messageId: '<update>' }),
+    };
+    const worker = createTicketNotificationWorker({ store, mailer: transport, dataKey });
+    worker.notify();
+    await vi.waitFor(() => expect(store.completeNotification).toHaveBeenCalledTimes(2));
+    await worker.stop();
+    expect(transport.send).toHaveBeenCalledTimes(2);
+    expect(transport.send.mock.calls[1]?.[0]).toMatchObject({
+      eventType: 'archived',
+      responseText: '',
+    });
+  });
+  it('honors consent withdrawn after claiming a job', async () => {
+    const dataKey = Buffer.alloc(32, 9).toString('base64');
+    const store = {
+      ...unavailableTicketStore,
+      get: vi.fn().mockResolvedValue({ status: 'published', notifyOptIn: false }),
+      claimNotifications: vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            notificationId: 3,
+            ticketCode: code,
+            eventType: 'published',
+            responseText: 'Published note',
+            contactCiphertext: encryptTicketContact({ email: 'synthetic@example.com' }, dataKey),
+          },
+        ])
+        .mockResolvedValue([]),
+      completeNotification: vi.fn().mockResolvedValue(true),
+    };
+    const transport = { sendReceipt: vi.fn(), send: vi.fn() };
+    const worker = createTicketNotificationWorker({ store, mailer: transport, dataKey });
+    worker.notify();
+    await vi.waitFor(() =>
+      expect(store.completeNotification).toHaveBeenCalledWith(
+        3,
+        false,
+        'TICKET_NOTIFICATION_OPTED_OUT',
+      ),
+    );
+    await worker.stop();
+    expect(transport.send).not.toHaveBeenCalled();
   });
 });

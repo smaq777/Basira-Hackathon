@@ -2684,7 +2684,9 @@ function ReviewerDetail({
                 <summary>
                   {delivery.kind === 'receipt'
                     ? 'رسالة استلام التذكرة'
-                    : `تقرير المراجعة · نسخة ${delivery.version}`}{' '}
+                    : delivery.kind === 'update'
+                      ? 'رسالة تحديث التذكرة'
+                      : `تقرير المراجعة · نسخة ${delivery.version}`}{' '}
                   —{' '}
                   {(
                     {
