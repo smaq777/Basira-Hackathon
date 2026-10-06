@@ -40,3 +40,20 @@ The source table describes how a record is used in the report. It does not conve
 ## Rollback
 
 Revert the Issue #145 merge commit to restore the previous component order. No stored report, migration or API contract needs rollback.
+
+## Live comparison follow-up
+
+- Quotation selection supports all findings through a compact selector, not only the first item in each status group.
+- The draft card remains present in source-reading and author-only report states.
+- Semantic assessments now occupy a main-flow section. Selecting a claim or one of its citations places that exact claim and exact cited excerpt in the top comparison cards, together with the recorded assessment explanation.
+- Literal word-difference highlights remain exclusive to report-bound quotation comparisons. Selecting an explanatory source or semantic claim does not inherit a quotation-match verdict.
+- The result screen remounts its selection when review identity or evidence-state identity changes.
+- RTL navigation, inline Arabic word marks and the card-header hierarchy were corrected without changing the API, provider settings or stored report contract.
+
+### Staging receipt before deployment
+
+The existing staging deployment was crashing with `HOSTED_DEMO_ENVIRONMENT_MISMATCH`: its declared deployment SHA still identified an older build. Aligning that nonsecret declaration with the already-deployed development merge restored the service. No database records or credentials were changed.
+
+A real public test contained Quran 2:271 followed by the author's universal claim about hiding every charity. The saved report returned one normalized-faithful quotation, three sources, two tafsir contexts and a separate contradicted claim assessment with exact source excerpts. Reload restored the same report. The follow-up layout must be accepted against that persisted report, not a static mock.
+
+The Edge screenshot showing draft capacity is a separate pre-analysis rejection. The previous policy limited a session to 20 saved documents. The owner clarified that the current design should stay and the fixed capacity block should be removed. Issue #148 removes the lifetime document/revision/review caps and their unsupported session-history claim; short-window request throttling, ownership isolation, retention and validation remain intact. No existing records are deleted.

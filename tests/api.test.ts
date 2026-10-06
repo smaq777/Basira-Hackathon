@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { createApp } from '../apps/api/src/app.js';
-import { ResourceLimitError, type BackendDatabase } from '../apps/api/src/database.js';
+import type { BackendDatabase } from '../apps/api/src/database.js';
 import {
   createClerkReviewerAuth,
   parseReviewerAccessMode,
@@ -437,37 +437,6 @@ it('rate-limits public session creation before repeated database writes', async 
   } finally {
     await new Promise<void>((resolve, reject) =>
       limited.close((error) => (error ? reject(error) : resolve())),
-    );
-  }
-});
-
-it('maps database-backed guest quotas to a bounded client response', async () => {
-  const quotaDatabase: BackendDatabase = {
-    ...database,
-    async createDocument() {
-      throw new ResourceLimitError('documents');
-    },
-  };
-  const quotaServer = createApp({ database: quotaDatabase, production: false }).listen(
-    0,
-    '127.0.0.1',
-  );
-  await new Promise<void>((resolve) => quotaServer.once('listening', resolve));
-  const quotaBase = `http://127.0.0.1:${(quotaServer.address() as AddressInfo).port}`;
-  try {
-    const response = await fetch(quotaBase + '/api/v1/documents', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', cookie: ownedCookie },
-      body: JSON.stringify({ text: 'نص اصطناعي' }),
-    });
-    expect(response.status).toBe(429);
-    expect(await response.json()).toEqual({
-      code: 'RESOURCE_LIMIT_REACHED',
-      resource: 'documents',
-    });
-  } finally {
-    await new Promise<void>((resolve, reject) =>
-      quotaServer.close((error) => (error ? reject(error) : resolve())),
     );
   }
 });

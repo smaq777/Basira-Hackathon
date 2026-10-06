@@ -61,3 +61,19 @@ Verification:
 
 - `npm run test -- apps/web/src/foundation-report.test.tsx apps/web/src/rewrite.test.tsx --reporter=dot` — 67 tests passed.
 - `npm run check` — 815 tests, documentation, policy, formatting and production build passed.
+
+### Live comparison follow-up
+
+final result: passed
+
+- Same owner-selected reference; extended the workspace only where the persisted report supplies additional functionality.
+- The right-side RTL navigator, blue draft header, green reference header, three counts and inline word differences were compared side by side with the reference.
+- Added an always-visible evidence-assessment section because the live report's actual claim assessment was hidden inside collapsed context.
+- A claim citation now opens the exact claim and the exact cited excerpt together. This is semantic evidence, not a fabricated literal match or generated correction.
+- Multiple literal findings can be selected directly above the comparison cards. Full-text source reading keeps the draft card visible.
+- Local browser proof: `/tmp/basirah-result-proof/reference-comparison.jpg` and `/tmp/basirah-result-proof/mobile-comparison.jpg`.
+- Responsive proof used an isolated 480px iframe browsing context; document client width and scroll width were both 450px after its scrollbar. Both cards were 422px wide and stacked in reading order.
+- Source navigation opened its disclosure, updated `aria-current` and applied the destination pulse.
+- The labeled local fixture verified word-difference rendering only. Separately, the real staging API completed a quotation-plus-claim review and restored it after reload; no fixture was deployed.
+- Full Node 24 check: 816 tests, type checking, documentation, policy, formatting and build passed. Staging deployment acceptance is recorded separately on Issue #145.
+- After the separately approved Issue #148 capacity change, the combined Node 24 check passed with 809 tests; obsolete fixed-cap response tests were removed. Burst-throttling and ownership checks remain.
