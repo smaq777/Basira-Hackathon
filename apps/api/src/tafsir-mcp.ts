@@ -5,10 +5,12 @@ import {
 } from '../../../packages/contracts/src/foundation.js';
 import { sha256 } from './foundation.js';
 import type { ClaimCorpusSearch } from './claim-retrieval.js';
+import { closeQuotationAlignment } from './hosted-foundation.js';
 
 const ENDPOINT = 'https://mcp.tafsir.net/mcp';
 const PROTOCOL = '2025-03-26';
 const SCHEMA_SHA256 = 'c492c3d0c73919981e4518a483750eae90b025559985c3fe286681e16765c332';
+const SEARCH_SCHEMA_SHA256 = '7cbdcd572267ea24ed3b707457378c60620b4587e6b723c4db42ea26d427b3ba';
 const WORKS = { moyassar: 'التفسير الميسر', saadi: 'تيسير الكريم الرحمن للسعدي' } as const;
 const MAX_RESPONSE_BYTES = 200_000;
 const MAX_AGGREGATE_BYTES = 1_000_000;
@@ -51,6 +53,7 @@ type TafsirRow = {
 };
 
 class TafsirMcpClient {
+  constructor(private readonly request: typeof fetch = fetch) {}
   private requests = 0;
   private bytes = 0;
   private readonly deadline = Date.now() + 12_000;
@@ -63,7 +66,7 @@ class TafsirMcpClient {
     signal?.addEventListener('abort', abort, { once: true });
     const timer = setTimeout(abort, Math.max(1, Math.min(10_000, this.deadline - Date.now())));
     try {
-      const response = await fetch(ENDPOINT, {
+      const response = await this.request(ENDPOINT, {
         method: 'POST',
         redirect: 'manual',
         headers: {
@@ -90,7 +93,7 @@ class TafsirMcpClient {
     }
   }
 
-  async initialize(signal?: AbortSignal): Promise<Record<string, unknown>> {
+  async initialize(signal?: AbortSignal, searchOnly = false): Promise<Record<string, unknown>> {
     const initialized = object(
       await this.rpc(
         {
@@ -116,12 +119,51 @@ class TafsirMcpClient {
     );
     const tools = object(listed.result).tools;
     if (!Array.isArray(tools)) throw new Error('MCP_TOOLS_INVALID');
-    const matches = tools.filter((entry) => object(entry).name === 'fetch_tafsir');
+    const matches = tools.filter(
+      (entry) => object(entry).name === (searchOnly ? 'search_quran_text' : 'fetch_tafsir'),
+    );
     if (matches.length !== 1) throw new Error('MCP_TOOL_MISSING');
     const schema = object(matches[0]).inputSchema;
-    if (createHash('sha256').update(stable(schema), 'utf8').digest('hex') !== SCHEMA_SHA256)
+    if (
+      createHash('sha256').update(stable(schema), 'utf8').digest('hex') !==
+      (searchOnly ? SEARCH_SCHEMA_SHA256 : SCHEMA_SHA256)
+    )
       throw new Error('MCP_SCHEMA_DRIFT');
     return object(result.serverInfo);
+  }
+
+  async discoverQuran(query: string, signal?: AbortSignal): Promise<string[]> {
+    const envelope = object(
+      await this.rpc(
+        {
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'tools/call',
+          params: { name: 'search_quran_text', arguments: { query, limit: 3 } },
+        },
+        signal,
+      ),
+    );
+    if (envelope.jsonrpc !== '2.0' || envelope.id !== 3 || envelope.error)
+      throw new Error('MCP_SEARCH_REJECTED');
+    const result = object(envelope.result);
+    if (result.isError) throw new Error('MCP_SEARCH_REJECTED');
+    const rows = object(result.structuredContent).result;
+    if (!Array.isArray(rows) || rows.length > 3) throw new Error('MCP_SEARCH_RESULT_INVALID');
+    const references = rows.map((value) => {
+      const row = object(value);
+      if (
+        !Number.isInteger(row.surah) ||
+        Number(row.surah) < 1 ||
+        Number(row.surah) > 114 ||
+        !Number.isInteger(row.ayah) ||
+        Number(row.ayah) < 1 ||
+        Number(row.ayah) > 286
+      )
+        throw new Error('MCP_SEARCH_LOCATOR_INVALID');
+      return `${row.surah}:${row.ayah}`;
+    });
+    return [...new Set(references)];
   }
 
   async page(
@@ -195,6 +237,79 @@ class TafsirMcpClient {
       has_more: more,
     };
   }
+}
+
+/** Search results are locators only, never source text or relevance proof.
+ * Re-fetch canonical wording and require one unique near-exact alignment. */
+export function withBoundedQuranDiscovery(
+  base: ClaimCorpusSearch,
+  request: typeof fetch = fetch,
+): ClaimCorpusSearch {
+  return {
+    async search(query, references, signal) {
+      const stored = await base.search(query, references, signal);
+      const words = query
+        .normalize('NFKC')
+        .replace(/[\p{M}ـ]/gu, '')
+        .trim()
+        .split(/\s+/u);
+      if (
+        references.length ||
+        query.length > 700 ||
+        words.length < 6 ||
+        words.length > 100 ||
+        /["«»﴿﴾()]/u.test(query) ||
+        !/^[\p{Script=Arabic}\p{M}\sـ،؛.؟]+$/u.test(query) ||
+        stored.some(
+          (source) =>
+            source.sourceRole === 'quran_text' &&
+            sha256(source.originalText) === source.originalSha256 &&
+            closeQuotationAlignment(query, source.originalText),
+        )
+      )
+        return stored;
+      try {
+        const client = new TafsirMcpClient(request);
+        await client.initialize(signal, true);
+        const discovered = await client.discoverQuran(words.slice(0, 6).join(' '), signal);
+        if (!discovered.length || discovered.length > 2) return stored;
+        const exact = await base.search(query, discovered, signal);
+        const matched = exact.filter(
+          (source) =>
+            source.sourceRole === 'quran_text' &&
+            discovered.includes(source.reference) &&
+            sha256(source.originalText) === source.originalSha256 &&
+            closeQuotationAlignment(query, source.originalText),
+        );
+        const identities = new Set(
+          matched.map((source) => `${source.reference}:${source.originalSha256}`),
+        );
+        if (identities.size !== 1) return stored;
+        const source = matched[0]!;
+        return [
+          ...stored.filter((row) => row.snapshotKey !== source.snapshotKey),
+          {
+            ...source,
+            provenance: {
+              ...source.provenance,
+              locatorDiscovery: {
+                provider: 'tafsir-center-mcp',
+                tool: 'search_quran_text',
+                schemaSha256: SEARCH_SCHEMA_SHA256,
+                canonicalRefetched: true,
+              },
+            },
+          },
+        ];
+      } catch {
+        signal?.throwIfAborted();
+        return stored;
+      }
+    },
+    restore(keys, signal) {
+      return base.restore(keys, signal);
+    },
+  };
 }
 
 /** Add schema-pinned Tafsir MCP context to explicit Quran references. */

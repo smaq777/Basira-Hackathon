@@ -148,3 +148,18 @@ snapshots, deterministic quotation comparison and provisional AI interpretation.
 The altered unreferenced excerpt `وإن تخفوها وتؤتوها الفقراء فهو خير لهم`
 must expose `لهم` versus source `لكم`; an accurately aligned excerpt remains an
 excerpt, not automatically a fabricated whole verse.
+
+## Bounded unreferenced Quran discovery
+
+Live acceptance found that an unreferenced excerpt could not match when the
+pinned corpus did not contain its verse. The hosted adapter now uses the existing
+Tafsir MCP `search_quran_text` tool to discover locators for short Arabic-only
+unquoted inputs (6–100 words, at most 700 characters). Its tool schema is pinned;
+only the first six words are queried, with at most three results. More than two
+distinct locators, schema drift, invalid references and provider failure abstain.
+Search snippets and ranking scores are never treated as evidence. The existing
+exact-source provider re-fetches canonical Quran wording, verifies its hash and
+requires one unique near-exact alignment against the entire supplied excerpt.
+The existing minimum consecutive-word and maximum-replacement checks remain;
+ambiguity or a thematic-only neighbor is not shown as a match. No unrestricted
+web search, corpus reset or fabricated reference is involved.
