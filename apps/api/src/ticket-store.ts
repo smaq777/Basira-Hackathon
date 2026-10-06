@@ -27,13 +27,18 @@ const ReviewerResponseSchema = z
 export type TicketReceipt = z.infer<typeof TicketReceiptSchema>;
 export type ReviewerDecision = z.infer<typeof ReviewerResponseSchema>['decision'];
 
+export type TicketNotificationEvent =
+  'published' | 'draft_saved' | 'archived' | 'restored' | 'retrieval_approved';
+
 export type NotificationClaim = {
   notificationId: number;
+  notificationKey?: string;
   ticketCode: string;
   contactCiphertext: Buffer;
   responseText: string;
   responseVersion?: number;
   editorial?: unknown;
+  eventType?: TicketNotificationEvent;
 };
 
 export interface TicketStore {
@@ -261,19 +266,23 @@ export function createTicketStore(connectionString: string): TicketStore {
     async claimNotifications(limit) {
       const result = await pool.query<{
         notification_id: number;
+        notification_key: string;
         ticket_code: string;
         contact_ciphertext: Buffer;
         response_text: string;
         response_version: number;
         editorial: unknown;
-      }>('select * from basirah_api.claim_editorial_notifications($1)', [limit]);
+        event_type: TicketNotificationEvent;
+      }>('select * from basirah_api.claim_ticket_notifications($1)', [limit]);
       return result.rows.map((row) => ({
         notificationId: Number(row.notification_id),
+        notificationKey: row.notification_key,
         ticketCode: row.ticket_code,
         contactCiphertext: row.contact_ciphertext,
         responseText: row.response_text,
         responseVersion: row.response_version,
         editorial: row.editorial,
+        eventType: row.event_type,
       }));
     },
     async completeNotification(id, sent, errorCode) {

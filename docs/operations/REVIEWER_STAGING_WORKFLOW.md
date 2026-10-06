@@ -205,3 +205,46 @@ requires one unique near-exact alignment against the entire supplied excerpt.
 The existing minimum consecutive-word and maximum-replacement checks remain;
 ambiguity or a thematic-only neighbor is not shown as a match. No unrestricted
 web search, corpus reset or fabricated reference is involved.
+
+## Post-intake communications (#202)
+
+Migration `0019_ticket_event_notifications.sql` adds event-bound notices to the
+existing durable outbox. Consented ticket owners receive generic review-progress,
+closure, reopening and source-status updates. Every published response retains
+its own exact-version report and reviewer comment email. Unpublished draft notes
+and reports are never included in progress notices. Contact confirmation uses the
+existing receipt path; email transport audit events never create new notices.
+Closure no longer cancels pending communications. The closure notice explains
+that lookup remains unavailable while a ticket is archived. Repeated close,
+restore and identical source-receipt operations do not enqueue duplicates.
+
+Brevo requires UUID idempotency keys. The worker now passes the existing outbox
+`public_id` UUID unchanged on retries, rather than a ticket-code string. See
+[Brevo's contract](https://developers.brevo.com/docs/heterogenous-versions-batch-emails).
+A staging outbox read found one `BREVO_HTTP_400` rejected review email; the old
+non-UUID key violates the provider contract, but the stored HTTP status alone
+does not establish Brevo's exact rejection reason.
+
+Rehearsal uses synthetic records inside rolled-back transactions in explicitly
+named isolated databases. `events-fresh` applies the complete migration chain;
+`events-shaped` copies only the current staging schema through 0018 and applies
+0019; `events-verify` repeats the probes in an existing isolated database:
+
+```bash
+node scripts/rehearse-reviewer-migrations.mjs events-fresh basirah_qa_202_fresh_example
+node scripts/rehearse-reviewer-migrations.mjs events-shaped basirah_qa_202_shaped_example
+```
+
+Use the explicit staging `QA_RAILWAY_PROJECT`, `QA_RAILWAY_POSTGRES_SERVICE` and
+`QA_RAILWAY_ENVIRONMENT` IDs as in the original reviewer rehearsal. Never target
+production or copy beneficiary/contact rows. The isolated databases are retained
+for owner inspection; cleanup requires its own authorization.
+
+Release order: obtain owner acceptance, apply reviewed 0019 to the owning ticket
+database through the migration runner with historical checksum verification,
+then deploy the accepted application SHA. Old workers skip event-bound jobs;
+rolling application code back retains the additive schema and audit history.
+Verify one owner-approved synthetic mailbox through progress, publication,
+closure and reopening, recording acceptance and delivery separately. No shared
+migration, deployment or live sends were performed by the implementation pass.
+Do not automatically reset historical terminal failures or resend old mail.

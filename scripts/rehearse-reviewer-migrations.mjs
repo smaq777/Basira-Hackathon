@@ -6,10 +6,12 @@ import { historicalCorpusChecksum } from './role-bootstrap.mjs';
 // Scoped rehearsal only: no deployment, provider configuration, credentials,
 // production data dump or shared-database migration. Keep the isolated database
 // as evidence until the owner explicitly requests its cleanup.
-const [mode, preview] = process.argv.slice(2);
+const [requestedMode, preview] = process.argv.slice(2);
+const ticketEvents = requestedMode?.startsWith('events-');
+const mode = ticketEvents ? requestedMode.slice(7) : requestedMode;
 if (
   !['fresh', 'shaped', 'verify'].includes(mode) ||
-  !/^basirah_qa_156_[a-z0-9_]{1,30}$/u.test(preview ?? '')
+  !/^basirah_qa_(156|202)_[a-z0-9_]{1,30}$/u.test(preview ?? '')
 )
   throw new Error('EXPLICIT_ISOLATED_REHEARSAL_REQUIRED');
 const project = process.env.QA_RAILWAY_PROJECT,
@@ -44,12 +46,14 @@ if (mode === 'fresh') {
     sql.push(body);
   }
 } else if (mode === 'shaped') {
-  for (const file of [
-    '0015_source_content_views.sql',
-    '0016_editorial_review_versions.sql',
-    '0017_reviewed_source_contributions.sql',
-    '0018_email_delivery_receipts.sql',
-  ]) {
+  for (const file of ticketEvents
+    ? ['0019_ticket_event_notifications.sql']
+    : [
+        '0015_source_content_views.sql',
+        '0016_editorial_review_versions.sql',
+        '0017_reviewed_source_contributions.sql',
+        '0018_email_delivery_receipts.sql',
+      ]) {
     const migration = migrationChecksums(await readFile(`migrations/${file}`, 'utf8'));
     sql.push(
       migration.canonicalSql.replace(
@@ -59,7 +63,12 @@ if (mode === 'fresh') {
     );
   }
 }
-sql.push(await readFile('scripts/sql/reviewer-rehearsal.sql', 'utf8'));
+sql.push(
+  await readFile(
+    ticketEvents ? 'scripts/sql/ticket-events-rehearsal.sql' : 'scripts/sql/reviewer-rehearsal.sql',
+    'utf8',
+  ),
+);
 const guard = `psql -U "\${PGUSER:-postgres}" -d "\${PGDATABASE:-railway}" -v ON_ERROR_STOP=1 -Atc "select case when count(*)=4 and bool_and(not (rolsuper or rolcreatedb or rolcreaterole or rolinherit or rolcanlogin or rolbypassrls)) then 'compatible' else 'blocked' end from pg_roles where rolname in ('basirah_runtime','basirah_worker','basirah_research_runtime','basirah_cache_writer')"`;
 const base = [
   '--yes',
@@ -103,7 +112,9 @@ const output = remote(
 );
 const receipt = output
   .split('\n')
-  .find((line) => line.includes('PASS: direct publication'))
+  .find((line) =>
+    line.includes(ticketEvents ? 'PASS: ticket event communications' : 'PASS: direct publication'),
+  )
   ?.trim();
 if (!receipt) throw new Error('REHEARSAL_RECEIPT_MISSING');
 console.log(JSON.stringify({ mode, preview, profile: 'existing-roles-v1', receipt }));
