@@ -9,7 +9,7 @@ An accurate quotation can still accompany an unsupported conclusion. Basirah com
 - **Working product:** [Railway API staging](https://api-staging-42bc.up.railway.app/).
 - **Public code:** [smaq777/Basira-Hackathon](https://github.com/smaq777/Basira-Hackathon), default branch `development`.
 
-Railway staging is our only submission/demo URL. Guest analysis needs no account, API key or local MCP setup.
+Railway staging is our only submission/demo URL, including the repository About link. Vercel Git previews are disabled for this repository. Guest analysis needs no account, API key or local MCP setup.
 
 Selected fresh Quran/Tafsir comparisons, abstention cases and a useful independently verified rewrite have passed on staging. [Live release evidence](https://github.com/smaq777/Basira-Hackathon/issues/169#issuecomment-6022396451) and [six-case acceptance](docs/evidence/2026-10-06-staging-1.14-acceptance.md) record the tested versions and limits; they are not a general accuracy or uptime guarantee.
 
