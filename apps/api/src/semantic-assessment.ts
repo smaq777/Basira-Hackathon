@@ -750,7 +750,7 @@ export function createSemanticAssessmentAdapter(
           claims = packet.resolve(
             await stage(
               'relevance',
-              options.extractor,
+              options.assessor,
               packet.data,
               RelevanceOutputSchema,
               RELEVANCE_INSTRUCTION,
@@ -1009,7 +1009,7 @@ export function createSemanticAssessmentAdapter(
                 const [selected] = packet.resolve(
                   await stage(
                     'relevance',
-                    options.extractor,
+                    options.assessor,
                     packet.data,
                     RelevanceOutputSchema,
                     RELEVANCE_INSTRUCTION,

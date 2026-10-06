@@ -68,8 +68,8 @@ function harness(
           claims: offTopic ? [] : [{ id: 'claim-owned' }],
           assessments: offTopic ? [] : [{ status: 'supported' }],
           trace: {
-            promptVersion: 'evidence-support-v1.11',
-            pipelineVersion: 'provisional-semantic-v1.11',
+            promptVersion: 'evidence-support-v1.12',
+            pipelineVersion: 'provisional-semantic-v1.12',
             ...(!offTopic ? { retrieval: { corpusVersion: CORPUS } } : {}),
           },
         },
@@ -231,5 +231,45 @@ describe('bounded submission acceptance harness', () => {
     const result = await runSubmissionAcceptance(['--live', '--case=off-topic'], run.dependencies);
     expect(result.exitCode).toBe(0);
     expect(result.rows[0]!.passed).toBe(true);
+  });
+
+  it('accepts explicit off-topic abstention without evidence or citations', async () => {
+    const run = harness({
+      mutate(report) {
+        report.semanticAssessment.claims = [{ id: 'off-topic', evidenceKeys: [] }];
+        report.semanticAssessment.assessments = [{ status: 'not_applicable', citations: [] }];
+      },
+    });
+    expect(
+      (await runSubmissionAcceptance(['--live', '--case=off-topic'], run.dependencies)).exitCode,
+    ).toBe(0);
+  });
+
+  it.each(['supported', 'insufficient_context', 'not_established'])(
+    'rejects an off-topic religious assessment with status %s',
+    async (status) => {
+      const run = harness({
+        mutate(report) {
+          report.semanticAssessment.claims = [{ id: 'off-topic', evidenceKeys: [] }];
+          report.semanticAssessment.assessments = [{ status, citations: [] }];
+        },
+      });
+      expect(
+        (await runSubmissionAcceptance(['--live', '--case=off-topic'], run.dependencies)).exitCode,
+      ).toBe(1);
+    },
+  );
+
+  it('rejects unrelated evidence even when the off-topic finding abstains', async () => {
+    const run = harness({
+      mutate(report) {
+        report.intake.evidence = [{ snapshotKey: 'unrelated' }];
+        report.semanticAssessment.claims = [{ id: 'off-topic', evidenceKeys: ['unrelated'] }];
+        report.semanticAssessment.assessments = [{ status: 'not_applicable', citations: [] }];
+      },
+    });
+    expect(
+      (await runSubmissionAcceptance(['--live', '--case=off-topic'], run.dependencies)).exitCode,
+    ).toBe(1);
   });
 });

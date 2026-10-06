@@ -2,7 +2,7 @@
 
 Related to [issue #157](https://github.com/smaq777/Basira-Hackathon/issues/157).
 For tonight's bounded staging checks, retain semantic prompt
-`evidence-support-v1.11` and pipeline `provisional-semantic-v1.11`. Version 1.10
+`evidence-support-v1.12` and pipeline `provisional-semantic-v1.12`. Versions 1.10/1.11
 is historical compatibility, not the release target. The 175-passage corpus pin
 is `7372242cf7f4960c2cba0a33d8670a04ce13413f9fab5536783d6a3671e3ad6f`.
 Neither a green transport test nor a successful deployment proves that fresh
@@ -24,14 +24,14 @@ retries a failed provider outcome, changes configuration, approves sources,
 publishes reports or sends notifications. Reviewer/publication acceptance is
 deferred and is not part of this command.
 
-| Case                     | Expected selected outcome      | Manual inspection                                                                                       |
-| ------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| `supported-negation`     | `supported`                    | The prohibition of excess is explicit in explanation and scope.                                         |
-| `contradicted-negation`  | `contradicted`                 | Scope identifies the author's proposition as contradicted and does not endorse it.                      |
-| `supported-condition`    | `supported`                    | Hiding the charity **and giving it to the poor** remain linked; the source clause is cited verbatim.    |
-| `contradicted-condition` | `contradicted`                 | Mutual consent is material; dropping it cannot become supported.                                        |
-| `unavailable-narration`  | `insufficient_context`         | The explanation identifies the unavailable narration or attribution, with no thematic Quran substitute. |
-| `off-topic`              | No claims, findings or sources | Office file management does not become a religious judgment.                                            |
+| Case                     | Expected selected outcome                            | Manual inspection                                                                                       |
+| ------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `supported-negation`     | `supported`                                          | The prohibition of excess is explicit in explanation and scope.                                         |
+| `contradicted-negation`  | `contradicted`                                       | Scope identifies the author's proposition as contradicted and does not endorse it.                      |
+| `supported-condition`    | `supported`                                          | Hiding the charity **and giving it to the poor** remain linked; the source clause is cited verbatim.    |
+| `contradicted-condition` | `contradicted`                                       | Mutual consent is material; dropping it cannot become supported.                                        |
+| `unavailable-narration`  | `insufficient_context`                               | The explanation identifies the unavailable narration or attribution, with no thematic Quran substitute. |
+| `off-topic`              | No evidence; empty findings or `not_applicable` only | Office file management does not become a religious judgment; no evidence keys or citations are allowed. |
 
 Every case also checks the exact corpus/version pair, report reload and anonymous
 report denial. A mismatch produces a failed receipt, not an automatic verdict
@@ -55,6 +55,6 @@ npx vitest run tests/semantic-assessment.test.ts tests/semantic-relevance.test.t
 These deterministic fixtures exercise malformed/blocked responses, bounded
 timeouts, one distinct fallback, missing evidence, topic-only candidate rejection,
 verbatim citations, original condition spans and durable report binding. They
-make no network requests. Historical v1.10 reports must stay readable, while a
+make no network requests. Historical v1.10/1.11 reports must stay readable, while a
 mixed prompt/pipeline version pair remains invalid. Controlled provider failures
 belong in these offline tests; do not inject an outage into shared staging.

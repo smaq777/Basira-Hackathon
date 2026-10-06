@@ -46,6 +46,10 @@ describe('claim-specific relevance identity binding', () => {
       packet.resolve({ selections: [{ claimId: 'C1', evidenceKeys: ['E2'] }] })[0]!.evidenceKeys,
     ).toEqual(['relevant']);
     expect(RELEVANCE_INSTRUCTION).toContain('Keep relevant contradictions');
+    expect(RELEVANCE_INSTRUCTION).toContain('asserted core action or proposition');
+    expect(RELEVANCE_INSTRUCTION).toContain(
+      'Marriage companionship, love or mercy alone is not relevant',
+    );
   });
   it('permits no relevant evidence without inventing a substitute', () => {
     expect(

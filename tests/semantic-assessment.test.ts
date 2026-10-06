@@ -181,6 +181,7 @@ it('filters topic-only corpus candidates before assessment and preserves the fro
     const stage = body.response_format.json_schema.name;
     if (stage === 'extraction') return response(proposal(), body.model);
     if (stage === 'relevance') {
+      expect(body.model).toBe(assessor.modelId);
       expect(data.claims[0].evidence).toHaveLength(1);
       expect(data.claims[0].evidence[0].passages[0].originalText).toBe(unrelated.originalText);
       return response({ selections: [{ claimId: 'C1', evidenceKeys: [] }] }, body.model);
@@ -492,7 +493,7 @@ describe('bounded semantic assessment', () => {
     expect(prompt).toContain('Missing evidence does not establish contradiction');
     expect(prompt).toContain('naming the missing qualifier or antecedent and why it matters');
     expect(prompt).toContain('packet has no evidence');
-    expect(prompt).toContain('Prompt evidence-support-v1.11.');
+    expect(prompt).toContain('Prompt evidence-support-v1.12.');
     expect(prompt).toContain('Each scope item must be a self-contained Arabic statement');
     expect(prompt).toContain(
       'affirmation or negation and any material condition, exception or modality',
@@ -507,8 +508,8 @@ describe('bounded semantic assessment', () => {
     expect(prompt).not.toMatch(/scholar_explanation|book_excerpt/u);
     expect(result.scholarlyApproval).toBe(false);
     expect(result.trace).toMatchObject({
-      pipelineVersion: 'provisional-semantic-v1.11',
-      promptVersion: 'evidence-support-v1.11',
+      pipelineVersion: 'provisional-semantic-v1.12',
+      promptVersion: 'evidence-support-v1.12',
     });
     expect(intake).toEqual(before);
   });

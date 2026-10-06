@@ -132,12 +132,19 @@ export async function runSubmissionAcceptance(args, dependencies = {}) {
       if (semantic?.trace?.retrieval && semantic.trace.retrieval.corpusVersion !== corpusVersion)
         throw new Error('RETRIEVAL_CORPUS_PIN_MISMATCH');
       if (
-        semantic?.trace?.promptVersion !== 'evidence-support-v1.11' ||
-        semantic?.trace?.pipelineVersion !== 'provisional-semantic-v1.11'
+        semantic?.trace?.promptVersion !== 'evidence-support-v1.12' ||
+        semantic?.trace?.pipelineVersion !== 'provisional-semantic-v1.12'
       )
         throw new Error('SEMANTIC_VERSION_MISMATCH');
       if (test.expected === 'no_assessment') {
-        if (semantic.claims.length || semantic.assessments.length || report.intake.evidence.length)
+        if (
+          report.intake.evidence.length ||
+          semantic.claims.some((claim) => claim.evidenceKeys?.length) ||
+          semantic.assessments.some(
+            (finding) => finding.status !== 'not_applicable' || finding.citations?.length,
+          ) ||
+          semantic.assessments.length !== semantic.claims.length
+        )
           throw new Error('OFF_TOPIC_EVIDENCE_OR_ASSESSMENT');
       } else if (
         semantic.status !== 'completed' ||
