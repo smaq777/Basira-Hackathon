@@ -16,6 +16,9 @@ Tafsir inventory, MCP/storage roles and the report-language follow-up.
 - **Committee:** [judge quickstart](hackathon/JUDGE_QUICKSTART.md) → [alignment](hackathon/ALIGNMENT.md) → [business model and Arabic review cases](hackathon/BUSINESS_MODEL_AND_TEST_CASES.md) → [committee guide](hackathon/COMMITTEE_GUIDE.md) → [foundation record](evidence/2026-09-30.md) → [governance record](evidence/2026-10-01-governance.md) → [security and mobile verification](evidence/2026-10-03-security-mobile.md).
 - **Team member:** [contributing](../CONTRIBUTING.md) → [workflow](governance/WORKFLOW.md) → [backlog](planning/BACKLOG.md).
 
+The [Render hosting alternative](planning/RENDER_HOSTING_PLAN.md) is a planning
+proposal only; it does not change the current deployment or Neon bindings.
+
 ## Documentation contract
 
 Every material change updates the relevant document in the same pull request. Use explicit labels: **Implemented**, **Verified**, **Planned**, **Blocked**, **Accepted**, and **Released**. These states are not interchangeable.
