@@ -649,7 +649,10 @@ it('shows provisional semantic findings with readable sources and no model trace
         exceptions: [],
         scope: [],
         explanation: 'الدليل المعروض لا يثبت هذا التعميم.',
-        citations: [{ evidenceKey: 'source', excerpt: SYNTHETIC_QUOTE }],
+        citations: [
+          { evidenceKey: 'source', excerpt: SYNTHETIC_QUOTE },
+          { evidenceKey: 'source', excerpt: 'الشاهد الثاني من المصدر نفسه' },
+        ],
       },
     ],
     trace: {
@@ -686,6 +689,10 @@ it('shows provisional semantic findings with readable sources and no model trace
   expect(screen.getByRole('button', { name: 'مقارنة النصوص' }).getAttribute('aria-current')).toBe(
     'true',
   );
+  fireEvent.click(screen.getAllByRole('button', { name: /^عرض شاهد:/ })[1]!);
+  expect(
+    comparison.querySelector('.foundation-compare-card--reference blockquote')?.textContent,
+  ).toBe('الشاهد الثاني من المصدر نفسه');
   fireEvent.click(screen.getByRole('button', { name: 'نقل مطابق (1)' }));
   expect(comparison.querySelector('.foundation-compare-card--draft blockquote')?.textContent).toBe(
     SYNTHETIC_QUOTE,

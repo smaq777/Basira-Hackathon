@@ -383,6 +383,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
   const initialClaim = initial ? null : report.semanticAssessment?.claims[0];
   const [selectedId, setSelectedId] = useState<string | undefined>(initial?.segment.id);
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(initialClaim?.id ?? null);
+  const [selectedCitationIndex, setSelectedCitationIndex] = useState(0);
   const [sourceOverride, setSourceOverride] = useState<string | null>(
     initialClaim
       ? (report.semanticAssessment?.assessments.find((row) => row.claimId === initialClaim.id)
@@ -413,11 +414,9 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
   const retrievalNotice = retrievalLimitation(report);
   const collections = sourceCollections(report);
   const notes = editorialNotes(report);
-  const selectedCitation = selectedAssessment?.citations.find(
-    (citation) => citation.evidenceKey === source?.snapshotKey,
-  );
+  const selectedCitation = selectedAssessment?.citations[selectedCitationIndex];
   const comparisonText =
-    source && selectedClaim && selectedCitation
+    source && selectedClaim && selectedCitation?.evidenceKey === source.snapshotKey
       ? { text: selectedCitation.excerpt, label: 'الشاهد المرتبط بعبارة الكاتب', truncated: false }
       : source
         ? sourceComparisonText(source, selected?.finding)
@@ -497,12 +496,13 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
     }, 1_400);
   };
 
-  const selectClaim = (claimId: string, evidenceKey?: string) => {
+  const selectClaim = (claimId: string, evidenceKey?: string, citationIndex = 0) => {
     const assessment = report.semanticAssessment?.assessments.find(
       (row) => row.claimId === claimId,
     );
     setSelectedId(undefined);
     setSelectedClaimId(claimId);
+    setSelectedCitationIndex(citationIndex);
     setSourceOverride(evidenceKey ?? assessment?.citations[0]?.evidenceKey ?? null);
     navigateTo('comparison');
   };
@@ -866,7 +866,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
                             type="button"
                             className="text-action"
                             aria-label={`عرض شاهد: ${sourceCitation(citationSource, report.intake.evidence)}`}
-                            onClick={() => selectClaim(claim.id, citation.evidenceKey)}
+                            onClick={() => selectClaim(claim.id, citation.evidenceKey, index)}
                           >
                             {sourceCitation(citationSource, report.intake.evidence)}
                           </button>
