@@ -1,5 +1,16 @@
 # Current delivery status
 
+**Submission checkpoint, 6 October:** the repository is public, MIT-licensed and
+uses `development` for the staged deliverable. Required CI passed at application
+SHA `72a9ed835b7040ccc47bb61b19e979afe5ba6fbd`; staging deployment and the five-message
+ticket lifecycle have [live evidence](https://github.com/smaq777/Basira-Hackathon/issues/202#issuecomment-6024644194).
+PR #203 was closed without merging at the owner's request; saved-answer demo RAG
+publication from that proposal is not part of this release. See the
+[brief timeline](hackathon/DEVELOPMENT_TIMELINE.md) and
+[submission checklist](hackathon/SUBMISSION_READINESS.md). Portal submission,
+final deck/video, content rights and scholarly acceptance remain separate.
+The dated checkpoints and foundation table below are historical.
+
 **Persistence repair (#193), 6 October:** owner-authorized active staging writer
 repair preserves the frozen corpus through a distinct reviewed exact/lexical layer.
 Successful owned saves renew live guest retention. Isolated source approval/readback

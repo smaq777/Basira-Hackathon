@@ -78,14 +78,21 @@ Web: `http://localhost:5173`; API: `http://localhost:3000`. Default tests need n
 - Quotation accuracy, inference support and hadith authenticity are different. Ambiguous references and unrelated evidence must not become invented answers.
 - Provider failures remain failures; legitimate insufficient context produces abstention/referral. `verification:false` denotes provisional assessment.
 - Guest retention is configured to 24 hours after last successful save. Keep the same valid browser session; reads do not renew expiry.
-- Reviewer editing, source-approval controls and mail receipts exist, but the complete expert-publication → future retrieval → consented email journey still needs final end-to-end acceptance. Queued email is not delivered email.
+- Reviewer reports and consented ticket emails are implemented. A synthetic lifecycle test confirmed delivery of receipt, progress, published review, closure and reopening messages; [delivery evidence](https://github.com/smaq777/Basira-Hackathon/issues/202#issuecomment-6024644194). Source approval → future retrieval remains a separate acceptance boundary.
 - Qualified scholarly evaluation, complete source/asset permissions and measured beneficiary impact remain outstanding.
 
 ## Submission and documentation
 
 Basirah targets Track 4: knowledge and verification tools empowering those introducing Islam. The [official challenge](https://islamicaich.org/) lists **6 October 2026, 23:59 Riyadh** as the deadline. Required delivery includes a working demo, permitted public code, operating/source/license records, presentation and video **no longer than two minutes**, submitted through the portal with confirmation retained.
 
-[Submission readiness](docs/hackathon/SUBMISSION_READINESS.md) maps official requirements to evidence and remaining actions. Preparatory work is disclosed; the original pre-4 October baseline proof still needs owner confirmation because this repository was imported on 4 October. AI assistance is disclosed. No final portal submission or broad scholarly acceptance is claimed.
+[Submission readiness](docs/hackathon/SUBMISSION_READINESS.md) maps official requirements to evidence and remaining actions. AI assistance is disclosed. No final portal submission or broad scholarly acceptance is claimed.
+
+### Development timeline
+
+- **Before 4 October:** preparatory setup, architecture, documentation, GitHub issues and an early prototype baseline.
+- **4–6 October:** intensive implementation and integration of the application, AI/source retrieval, reviewer workflow, notifications, testing and staging deployment.
+
+The [brief development record](docs/hackathon/DEVELOPMENT_TIMELINE.md) identifies the preserved starting version. Importing the repository on 4 October did not make earlier work new hackathon work.
 
 For deeper review: [implemented architecture](docs/architecture/ARCHITECTURE.md) · [component/rights ledger](docs/governance/SUBMISSION_COMPONENTS.md) · [documentation hub](docs/README.md).
 
