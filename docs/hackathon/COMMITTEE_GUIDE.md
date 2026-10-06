@@ -1,4 +1,4 @@
-# Committee handoff guide
+# Committee guide
 
 Basirah helps Arabic Islamic-content editors distinguish an accurate quotation from an unsupported inference, using attributed source evidence and explicit abstention.
 
@@ -14,7 +14,7 @@ The 6 October functional checkpoint has selected fresh live RAG and useful rewri
 
 ## Submission and evaluation evidence
 
-The [submission readiness and Ahmed handoff](SUBMISSION_HANDOFF.md) is the current requirement-to-evidence checklist, official-rule links, release identity, final-stage rubric mapping, video outline and prioritized owner actions. It explicitly retains rights/source approval, qualified evaluation, original dated baseline, final presentation/video and portal receipt gaps.
+The [submission readiness](SUBMISSION_READINESS.md) is the current requirement-to-evidence checklist, official-rule links, release identity, final-stage rubric mapping, video outline and prioritized owner actions. It explicitly retains rights/source approval, qualified evaluation, original dated baseline, final presentation/video and portal receipt gaps.
 
 Use the [live receipt](https://github.com/smaq777/Basira-Hackathon/issues/169#issuecomment-6022396451) and [six-case acceptance](../evidence/2026-10-06-staging-1.14-acceptance.md), not a UI mock or green build as deployment proof. Full expert publication→future retrieval→consented email acceptance remains a separate task.
 

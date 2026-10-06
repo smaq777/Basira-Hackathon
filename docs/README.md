@@ -14,7 +14,7 @@ text-provider recovery path and Saleh-owned staging activation.
 
 ## Reading paths
 
-For final submission, start with the [submission readiness and Ahmed handoff](hackathon/SUBMISSION_HANDOFF.md): live links, official-rule checklist, evidence gaps and prioritized ownership.
+For final submission, start with the [submission readiness](hackathon/SUBMISSION_READINESS.md): live links, official-rule checklist, evidence gaps and prioritized ownership.
 
 - **Developer:** [setup](operations/SETUP.md) → [credentials](operations/CREDENTIALS.md) → [requirements](product/REQUIREMENTS.md) → [complete system blueprint](architecture/SYSTEM_BLUEPRINT.md) → [architecture summary](architecture/ARCHITECTURE.md) → [tests](testing/STRATEGY.md).
 - **Content reviewer:** [glossary](product/GLOSSARY.md) → [manual-review criteria](product/MANUAL_REVIEW.md) → [source policy](governance/RIGHTS.md) → [Tanzil intake](content/TANZIL_INTAKE.md) → [RAG](architecture/RAG.md) → [evaluation](testing/STRATEGY.md).
