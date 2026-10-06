@@ -22,6 +22,13 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
 
 function completeQuotationFixture() {
   const report = rewriteFixture();
+  report.intake.originalText = `قال تعالى: «${SYNTHETIC_QUOTE}».`;
+  const segment = report.intake.segments[0]!;
+  segment.startOffset = segment.codePointStart =
+    report.intake.originalText.indexOf(SYNTHETIC_QUOTE);
+  segment.endOffset = segment.codePointEnd = segment.startOffset + SYNTHETIC_QUOTE.length;
+  report.inputSha256 = report.intake.revisionSha256 = sha256(report.intake.originalText);
+  report.interpretation.status = 'not_applicable';
   report.semanticAssessment = {
     schemaVersion: 1,
     status: 'not_applicable',
@@ -50,6 +57,7 @@ it('requires complete evidence before hosted generation and rejects missing, sta
   for (const mutate of [
     (r: typeof report) => {
       r.semanticAssessment = undefined;
+      r.interpretation.status = 'not_assessed';
     },
     (r: typeof report) => {
       r.semanticAssessment!.status = 'partial';
@@ -81,6 +89,18 @@ it('requires complete evidence before hosted generation and rejects missing, sta
     );
     expect(generate).not.toHaveBeenCalled();
     service.close();
+  }
+});
+
+it('reuses deterministic quotation-only eligibility when the worker intentionally skips semantic AI', () => {
+  const report = completeQuotationFixture();
+  report.semanticAssessment = undefined;
+  expect(rewriteEvidenceReady(report)).toBe(true);
+  for (const extra of [' ثم يضيف الكاتب معنى يحتاج إلى مراجعة.', ' كيف نستنتج من ذلك؟']) {
+    const invalid = structuredClone(report);
+    invalid.intake.originalText += extra;
+    invalid.inputSha256 = invalid.intake.revisionSha256 = sha256(invalid.intake.originalText);
+    expect(rewriteEvidenceReady(invalid)).toBe(false);
   }
 });
 
