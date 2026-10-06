@@ -2876,9 +2876,6 @@ function ReviewerDetail({
 function ReviewerSources() {
   return (
     <main className="reviewer-main page-enter">
-      <p>
-        تضاف الأدلة إلى التقرير داخل الطلب المرتبط بها. لا يوجد سجل تجريبي ثابت يمثل مصدرًا معتمدًا.
-      </p>
       <SourceInformation />
     </main>
   );
