@@ -2088,6 +2088,7 @@ mark {
 
 .follow-card input,
 .note-field textarea,
+.note-field select,
 .search-field input {
   min-height: 46px;
   border: 1px solid var(--line-strong);
@@ -2855,6 +2856,38 @@ mark {
 .decision-note {
   color: var(--muted);
   font-size: 0.82rem;
+}
+
+.source-publication {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+
+.source-publication .note-field {
+  margin-top: 0;
+}
+
+.source-publication select,
+.source-publication textarea,
+.source-publication > .button {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  font: inherit;
+}
+
+.source-publication-hint {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--teal-soft);
+  line-height: 1.8;
+  overflow-wrap: anywhere;
 }
 
 .source-list {

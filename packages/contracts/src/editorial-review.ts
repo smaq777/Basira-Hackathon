@@ -81,6 +81,30 @@ export const EditorialReviewSchema = z
 export type EditorialReview = z.infer<typeof EditorialReviewSchema>;
 export type ReviewedRecord = z.infer<typeof ReviewedRecordSchema>;
 
+// Share the publication gates with the reviewer selector. Editing a report is
+// not source approval, and canonical Quran/Tafsir are not inserted by this path.
+export function reviewedSourcePublicationIssue(
+  review: EditorialReview,
+  source: EditorialReview['evidence'][number],
+): 'RESOLVED_LINKED_EVIDENCE_REQUIRED' | 'REVIEWED_SOURCE_PROVENANCE_REQUIRED' | undefined {
+  if (
+    !review.records.some(
+      (row) =>
+        ['matched', 'different', 'supported', 'contradicted'].includes(row.status) &&
+        row.evidenceIds.includes(source.id),
+    )
+  )
+    return 'RESOLVED_LINKED_EVIDENCE_REQUIRED';
+  if (
+    !['hadith_matn', 'book_excerpt', 'scholar_explanation'].includes(source.sourceRole) ||
+    !source.author.trim() ||
+    !source.edition.trim() ||
+    !source.sourceUrl.startsWith('https://') ||
+    source.reference.length > 300
+  )
+    return 'REVIEWED_SOURCE_PROVENANCE_REQUIRED';
+}
+
 export function initialEditorialReview(report: FoundationReport | null): EditorialReview {
   if (!report)
     return {

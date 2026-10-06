@@ -48,7 +48,11 @@ afterEach(async () => {
       .map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
   );
 });
-async function serve(allowedUserIds = ['reviewer'], accessMode?: 'allowlist' | 'authenticated') {
+async function serve(
+  allowedUserIds = ['reviewer'],
+  accessMode?: 'allowlist' | 'authenticated',
+  corpusEnabled = true,
+) {
   const store = {
     ...unavailableTicketStore,
     get: vi.fn().mockResolvedValue({
@@ -85,7 +89,7 @@ async function serve(allowedUserIds = ['reviewer'], accessMode?: 'allowlist' | '
       lookupPepper: 'p'.repeat(40),
       notifications: notification,
     },
-    reviewerCorpus: { store: corpus, allowedUserIds, accessMode },
+    reviewerCorpus: corpusEnabled ? { store: corpus, allowedUserIds, accessMode } : undefined,
   }).listen(0, '127.0.0.1');
   servers.push(server);
   await new Promise<void>((resolve) => server.once('listening', resolve));
@@ -102,6 +106,44 @@ async function serve(allowedUserIds = ['reviewer'], accessMode?: 'allowlist' | '
   return { store, corpus, notification, post, base };
 }
 describe('evidence-bounded human review', () => {
+  it('exposes publication availability only to the authenticated reviewer and follows the writer gate', async () => {
+    for (const [allowed, mode, enabled, expected] of [
+      [['reviewer'], 'allowlist', true, true],
+      [[], 'allowlist', true, false],
+      [[], 'authenticated', true, true],
+      [['reviewer'], 'allowlist', false, false],
+    ] as const) {
+      const app = await serve([...allowed], mode, enabled);
+      const path = `${app.base}/api/v1/reviewer/tickets/${code}`;
+      expect((await fetch(path)).status).toBe(401);
+      const result = await fetch(path, { headers: { authorization: 'Bearer reviewer' } });
+      expect(result.status).toBe(200);
+      expect(await result.json()).toMatchObject({
+        ticket: { sourcePublicationAvailable: expected },
+      });
+    }
+  });
+  it('keeps Quran, unresolved records and incomplete provenance out of corpus writes', async () => {
+    const app = await serve();
+    const input = {
+      version: 1,
+      evidenceId: 'source-1',
+      rightsRecord: 'Synthetic permission',
+      confirmed: true,
+    };
+    for (const editorial of [
+      { ...review, evidence: [{ ...review.evidence[0]!, sourceRole: 'quran_text' }] },
+      { ...review, records: [{ ...review.records[0]!, status: 'unresolved' }] },
+      { ...review, evidence: [{ ...review.evidence[0]!, author: '' }] },
+    ]) {
+      app.store.get.mockResolvedValueOnce({
+        status: 'published',
+        responses: [{ version: 1, published: true, editorial }],
+      });
+      expect((await app.post('source-approval', input)).status).toBe(422);
+    }
+    expect(app.corpus.approve).not.toHaveBeenCalled();
+  });
   it('lets a signed-in staging reviewer curate without an allowlist but denies anonymous writes', async () => {
     const app = await serve([], 'authenticated');
     const input = {
