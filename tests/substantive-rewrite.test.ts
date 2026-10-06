@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { foundationReportFixture } from '../apps/web/src/foundation-report.fixtures.js';
 import { sha256 } from '../apps/api/src/foundation.js';
-import { createRewriteService } from '../apps/api/src/rewrite.js';
+import { createRewriteService, rewriteInput } from '../apps/api/src/rewrite.js';
 import {
   authorRewriteInput,
   validateAuthorRewrite,
@@ -117,6 +117,248 @@ function fixture() {
   return { report, operations, verification };
 }
 const settle = () => new Promise((r) => setTimeout(r, 10));
+
+it('labels a supported-author safe skip with valid citations as attribution rather than verified author wording', async () => {
+  const { report, operations } = fixture();
+  const claim = report.semanticAssessment!.claims[0]!;
+  // Complete owned editorial control: no additional unreviewed author span.
+  report.intake.originalText = report.intake.originalText.slice(0, claim.endOffset);
+  report.inputSha256 = report.intake.revisionSha256 = sha256(report.intake.originalText);
+  report.semanticAssessment!.trace.inputSha256 = report.inputSha256;
+  report.semanticAssessment!.trace.claimCoverage = {
+    inventoryVersion: 'original-span-v1',
+    candidates: [
+      {
+        candidateId: claim.id,
+        segmentId: claim.segmentId,
+        startOffset: claim.startOffset,
+        endOffset: claim.endOffset,
+      },
+    ],
+    excluded: [],
+    selectedIds: [claim.id],
+    unselectedIds: [],
+    claimLimitReached: false,
+  };
+  const generate = vi.fn(
+    async (_input: Parameters<ReturnType<typeof createAuthorRewriteGenerator>>[0]) => ({
+      ...operations,
+      replacements: [],
+    }),
+  );
+  const verifier = vi.fn(async () => {
+    throw new Error('There is no changed author wording to verify.');
+  });
+  const context = { report, attempt: 1 };
+  const reload = vi.fn(async () => context);
+  const service = createRewriteService(generate, { verifier, requireCompleteEvidence: true });
+  try {
+    const task = service.create('owner', 'safe-author-skip', context, reload);
+    await vi.waitFor(() => expect(service.get('owner', task.id, context).status).toBe('validated'));
+    const candidate = service.get('owner', task.id, context);
+    expect(candidate).toMatchObject({
+      status: 'validated',
+      mode: 'citation_and_layout_only',
+      operations: { replacements: [], citations: operations.citations },
+    });
+    expect(generate).toHaveBeenCalledOnce();
+    expect(generate.mock.calls[0]![0].authorClaims).toHaveLength(1);
+    expect(verifier).not.toHaveBeenCalled();
+    expect(reload).toHaveBeenCalledOnce();
+    expect(service.copy('owner', task.id, context)).toBe(candidate.text);
+    expect(candidate.text).toContain(claim.originalText);
+    expect(() => service.copy('other', task.id, context)).toThrow('REWRITE_NOT_FOUND');
+    expect(() => service.copy('owner', task.id, { ...context, attempt: 2 })).toThrow(
+      'REWRITE_STALE_REPORT',
+    );
+  } finally {
+    service.close();
+  }
+});
+
+it('uses room freed by an author replacement for its exact source citation', () => {
+  const { report, operations } = fixture();
+  const source = report.intake.evidence[0]!;
+  // Synthetic labels keep this regression about length accounting, not approval.
+  source.work = 'حقوق';
+  source.author = null;
+  source.reference = '1';
+  source.approvalStatus = 'approved';
+  source.researchOnly = false;
+  report.intake.originalText += 'ا'.repeat(3000 - report.intake.originalText.length);
+  report.inputSha256 = report.intake.revisionSha256 = sha256(report.intake.originalText);
+  report.semanticAssessment!.trace.inputSha256 = report.inputSha256;
+  const valid = validateAuthorRewrite(report, operations);
+  expect(valid.operations.citations).toEqual(operations.citations);
+  expect(valid.text).toContain(' [حقوق — 1]');
+  expect(valid.text.length).toBeLessThanOrEqual(3000);
+  expect(valid.text).toContain(operations.replacements[0]!.replacementText);
+});
+
+it('reconstructs the same replacement-aware citation budget during fresh server copy', async () => {
+  const { report, operations, verification } = fixture();
+  const source = report.intake.evidence[0]!;
+  source.work = 'حقوق';
+  source.author = null;
+  source.reference = '1';
+  source.approvalStatus = 'approved';
+  source.researchOnly = false;
+  report.intake.originalText += 'ا'.repeat(3000 - report.intake.originalText.length);
+  report.inputSha256 = report.intake.revisionSha256 = sha256(report.intake.originalText);
+  report.semanticAssessment!.trace.inputSha256 = report.inputSha256;
+  const context = { report, attempt: 1 };
+  const service = createRewriteService(async () => operations, {
+    verifier: async () => verification,
+  });
+  const task = service.create('owner', 'budget-copy', context, async () => context);
+  await settle();
+  const candidate = service.get('owner', task.id, context);
+  expect(candidate.status).toBe('validated');
+  expect(candidate.operations!.citations).toHaveLength(1);
+  expect(service.copy('owner', task.id, context)).toBe(candidate.text);
+  expect(candidate.text).toContain(' [حقوق — 1]');
+  service.close();
+});
+
+it('omits an optional citation that no longer fits after an author expansion rather than rejecting the author candidate', () => {
+  const { report, operations } = fixture();
+  operations.replacements[0]!.replacementText =
+    'يجب على الكاتب أن يحفظ الحقوق وأن يصون هذه الحقوق، إلا إذا تعذر عليه ذلك.';
+  const allowed = rewriteInput(report).allowedCitations.find(
+    (c) => c.offset === operations.citations[0]!.offset,
+  )!;
+  const addition = ` [${allowed.reference}${allowed.pending ? ' — مصدر بحثي غير معتمد' : ''}]`;
+  const originalLength = 3000 - addition.length;
+  report.intake.originalText += 'ا'.repeat(originalLength - report.intake.originalText.length);
+  report.inputSha256 = report.intake.revisionSha256 = sha256(report.intake.originalText);
+  report.semanticAssessment!.trace.inputSha256 = report.inputSha256;
+  const valid = validateAuthorRewrite(report, operations);
+  expect(valid.operations.citations).toEqual([]);
+  expect(valid.budgetLimited).toBe(true);
+  expect(valid.text).toContain(operations.replacements[0]!.replacementText);
+  expect(valid.text).toContain('«مقتطف تجريبي»');
+  expect(valid.text.length).toBeLessThanOrEqual(3000);
+});
+
+it('records only the typed failing verifier check and packet hashes when diagnostics are explicitly enabled', async () => {
+  const { report, operations, verification } = fixture();
+  verification.checks[0]!.scopePreserved = false;
+  const receipts: unknown[] = [];
+  const service = createRewriteService(async () => operations, {
+    verifier: async () => verification,
+    onFailureDiagnostic: (receipt) => receipts.push(receipt),
+  });
+  const context = { report, attempt: 1 };
+  const task = service.create('owner', 'diagnostic', context, async () => context);
+  await settle();
+  expect(service.get('owner', task.id, context)).toMatchObject({ status: 'failed', text: null });
+  expect(receipts).toHaveLength(1);
+  expect(receipts[0]).toMatchObject({
+    event: 'rewrite_failed',
+    stage: 'verification_validation',
+    reason: 'scope_changed',
+    inputSha256: report.inputSha256,
+    evidenceStateSha256: report.evidenceStateSha256,
+    operationsSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+    verificationSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+  });
+  const serialized = JSON.stringify(receipts[0]);
+  for (const excluded of [
+    report.intake.originalText,
+    operations.replacements[0]!.replacementText,
+    report.intake.evidence[0]!.originalText,
+    report.reviewId,
+    report.revisionId,
+    'owner',
+    'diagnostic',
+  ])
+    expect(serialized).not.toContain(excluded);
+  expect(() => service.copy('owner', task.id, context)).toThrow('REWRITE_NOT_VALIDATED');
+  service.close();
+});
+
+it('distinguishes generation and operation binding failures without logging raw provider errors or affecting withholding', async () => {
+  const { report, operations } = fixture();
+  const context = { report, attempt: 1 };
+  const receipts: unknown[] = [];
+  operations.replacements[0]!.claimId = 'unknown';
+  const service = createRewriteService(async () => operations, {
+    verifier: vi.fn(),
+    onFailureDiagnostic: (receipt) => receipts.push(receipt),
+  });
+  const task = service.create('owner', 'binding', context, async () => context);
+  await settle();
+  expect(receipts[0]).toMatchObject({
+    stage: 'candidate_validation',
+    reason: 'claim_binding',
+    verificationSha256: null,
+  });
+  expect(service.get('owner', task.id, context)).toMatchObject({ status: 'failed', text: null });
+  service.close();
+  const provider = createRewriteService(
+    async () => {
+      throw Error('private provider key or response');
+    },
+    {
+      onFailureDiagnostic: (receipt) => {
+        receipts.push(receipt);
+        throw Error('observer failed');
+      },
+    },
+  );
+  const failed = provider.create('owner', 'provider', context, async () => context);
+  await settle();
+  expect(receipts[1]).toMatchObject({
+    stage: 'generation',
+    reason: 'provider_unavailable',
+    operationsSha256: null,
+    verificationSha256: null,
+  });
+  expect(JSON.stringify(receipts[1])).not.toContain('private provider');
+  expect(provider.get('owner', failed.id, context)).toMatchObject({ status: 'failed', text: null });
+  provider.close();
+});
+
+it.each(['cancel', 'cancelKey', 'close'] as const)(
+  'does not label %s as a deadline failure in optional receipts',
+  async (action) => {
+    const { report } = fixture();
+    const context = { report, attempt: 1 };
+    const diagnostic = vi.fn();
+    const service = createRewriteService(() => new Promise(() => {}), {
+      onFailureDiagnostic: diagnostic,
+    });
+    const task = service.create('owner', 'cancel-diagnostic', context, async () => context);
+    await settle();
+    if (action === 'close') service.close();
+    else if (action === 'cancelKey') service.cancelKey('owner', 'cancel-diagnostic', context);
+    else service.cancel('owner', task.id, context);
+    await settle();
+    expect(diagnostic).not.toHaveBeenCalled();
+    if (action !== 'close')
+      expect(service.get('owner', task.id, context)).toMatchObject({
+        status: 'cancelled',
+        text: null,
+      });
+    service.close();
+  },
+);
+
+it('records a genuine task deadline as a deadline and still withholds generated text', async () => {
+  const { report } = fixture();
+  const context = { report, attempt: 1 };
+  const diagnostic = vi.fn();
+  const service = createRewriteService(() => new Promise(() => {}), {
+    timeoutMs: 5,
+    onFailureDiagnostic: diagnostic,
+  });
+  const task = service.create('owner', 'timeout-diagnostic', context, async () => context);
+  await new Promise((resolve) => setTimeout(resolve, 15));
+  expect(diagnostic).toHaveBeenCalledOnce();
+  expect(diagnostic.mock.calls[0]![0]).toMatchObject({ stage: 'deadline', reason: 'deadline' });
+  expect(service.get('owner', task.id, context)).toMatchObject({ status: 'failed', text: null });
+  service.close();
+});
 it.each(['revoked', 'rejected'] as const)(
   'excludes a supported commentary whose canonical parent is %s',
   (approvalStatus) => {

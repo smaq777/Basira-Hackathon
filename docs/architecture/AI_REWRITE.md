@@ -44,6 +44,20 @@ Copy reloads the owned report and current attempt, reconstructs the candidate,
 and revalidates the stored verifier output and its input/operations hash. The
 90-second shared task deadline covers generation, verification and report reload.
 Provider failure or cancellation never exposes generated text for validated copy.
+Insertion budgeting includes the exact length change of accepted author
+replacements before selecting optional citations and paragraph breaks. Shorter
+wording may make room for an existing citation; longer wording cannot consume
+space already reserved for that citation. The same budget is reconstructed at
+copy. This does not trim original text or loosen source/meaning checks.
+
+For bounded staging diagnosis, `FOUNDATION_REWRITE_DIAGNOSTIC_RECEIPTS=true`
+enables strict operational failure receipts with only a fixed stage/reason and
+input/evidence/operations/verifier SHA-256 hashes. It defaults off and adds no
+public API fields. Drafts, source text, model output, credentials, identifiers
+and free-form provider errors are excluded. Diagnostic failures cannot affect
+candidate withholding. See the
+[author budget and diagnostic evidence](../evidence/2026-10-06-author-rewrite-budget.md).
+
 Both requests currently use Luna low: the fixed-packet comparison found no
 relation improvement from configured Sol medium, whose receipts reported zero
 reasoning tokens. A separate request is independent of the generator's answer,
@@ -54,6 +68,11 @@ coverage. It explicitly says only displayed supported spans were improved and
 all remaining text was preserved. Ten-minute session-bound memory, ownership,
 idempotency, cancellation, default-off production controls and manual acceptance
 remain as described below. See [new evidence](../evidence/2026-10-05-substantive-rewrite.md).
+Validated candidate mode follows actual retained operations: an author-safe skip
+that adds only recorded citations is `citation_and_layout_only`, without implying
+an author replacement or independent wording-verifier call. Actual replacements
+require the full verifier path before the `supported_author_wording` result is
+available. See the [charity investigation](../evidence/2026-10-06-charity-rewrite-investigation.md).
 The [modality follow-up](../evidence/2026-10-05-rewrite-modality.md) retains a real
 UI false acceptance and its bounded diagnostic; earlier success did not establish
 reliable preservation across author wording.
