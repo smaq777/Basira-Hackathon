@@ -40,6 +40,16 @@ dimensions, document task and corpus version.
 
 ## Retrieval cascade
 
+Live Tafsir acquisition maps the pinned provider's footnote coordinates into
+strict evidence footnotes with exact text and hashes. Raw commentary text and
+complete provider footnote metadata remain separate in provenance. Each requested work is
+buffered until all pages validate with a consistent part count within the
+eight-part limit. A failed or incomplete work contributes no pages; other
+completed works remain available. Cancellation still aborts the acquisition.
+These transport checks do not establish relevance, claim support, source
+approval or scholarly completeness. See the
+[7:31 boundary repair evidence](../evidence/2026-10-06-tafsir-footnote-boundary.md).
+
 ```mermaid
 flowchart LR
   C[Confirmed claim and references] --> E[Exact reference lookup]

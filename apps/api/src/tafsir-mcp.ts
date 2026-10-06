@@ -52,6 +52,35 @@ type TafsirRow = {
   has_more: boolean;
 };
 
+/** Provider coordinates identify a footnote; only its exact text is evidence. */
+function evidenceFootnotes(reference: string, row: TafsirRow) {
+  if (row.footnotes.length > 80) throw new Error('MCP_FOOTNOTE_INVALID');
+  const seen = new Set<number>();
+  return row.footnotes.map((footnote) => {
+    const { index, marker, text, type } = footnote;
+    if (
+      typeof index !== 'number' ||
+      !Number.isSafeInteger(index) ||
+      index < 1 ||
+      seen.has(index) ||
+      marker !== `[${index}]` ||
+      typeof text !== 'string' ||
+      !text.trim() ||
+      text.length > 30_000 ||
+      typeof type !== 'string' ||
+      !type.trim() ||
+      type.length > 160
+    )
+      throw new Error('MCP_FOOTNOTE_INVALID');
+    seen.add(index);
+    return {
+      reference: `${reference} part ${row.part} ${marker}`,
+      originalText: text,
+      originalSha256: sha256(text),
+    };
+  });
+}
+
 class TafsirMcpClient {
   constructor(private readonly request: typeof fetch = fetch) {}
   private requests = 0;
@@ -59,6 +88,7 @@ class TafsirMcpClient {
   private readonly deadline = Date.now() + 12_000;
 
   private async rpc(payload: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
+    signal?.throwIfAborted();
     if (this.requests >= 35 || Date.now() >= this.deadline) throw new Error('MCP_BUDGET_EXCEEDED');
     this.requests += 1;
     const controller = new AbortController();
@@ -316,6 +346,7 @@ export function withBoundedQuranDiscovery(
 export function withLiveTafsirMcp(base: ClaimCorpusSearch): ClaimCorpusSearch {
   return {
     async search(query, references, signal) {
+      signal?.throwIfAborted();
       const stored = await base.search(query, references, signal);
       const quran = new Map(
         stored.filter((row) => row.sourceRole === 'quran_text').map((row) => [row.reference, row]),
@@ -334,42 +365,59 @@ export function withLiveTafsirMcp(base: ClaimCorpusSearch): ClaimCorpusSearch {
           if (!parent) continue;
           const [surah, ayah] = reference.split(':').map(Number);
           for (const source of Object.keys(WORKS) as Array<keyof typeof WORKS>) {
-            for (let part = 1; part <= MAX_PARTS; part += 1) {
-              const row = await client.page(surah!, ayah!, source, part, ++rpcId, signal);
-              const key = `tafsir-mcp:${source}:${reference}:${part}:${sha256(row.text).slice(0, 16)}`;
-              live.push(
-                SourceEvidenceSchema.parse({
-                  snapshotKey: key,
-                  sourceId: `tafsir-center-mcp:${source}`,
-                  sourceVersion: SCHEMA_SHA256,
-                  sourceRole: 'tafsir_commentary',
-                  reference,
-                  originalText: row.text,
-                  originalSha256: sha256(row.text),
-                  work: WORKS[source],
-                  author: row.attribution,
-                  edition: null,
-                  sourceUrl: ENDPOINT,
-                  approvalStatus: 'pending',
-                  researchOnly: true,
-                  parentSnapshotKey: parent.snapshotKey,
-                  delivery: 'live',
-                  retrievalModes: ['exact'],
-                  provenance: {
-                    provider_id: 'tafsir-center-mcp',
-                    schema_sha256: SCHEMA_SHA256,
-                    server_info: serverInfo,
-                    original_raw_text: row.text_raw,
-                    part: row.part,
-                    total_parts: row.total_parts,
-                  },
-                  contextBefore: null,
-                  contextAfter: null,
-                  footnotes: row.footnotes,
-                  relations: [],
-                }),
-              );
-              if (!row.has_more) break;
+            const completeWork: SourceEvidence[] = [];
+            let expectedParts: number | undefined;
+            let complete = false;
+            try {
+              for (let part = 1; part <= MAX_PARTS; part += 1) {
+                const row = await client.page(surah!, ayah!, source, part, ++rpcId, signal);
+                expectedParts ??= row.total_parts;
+                if (row.total_parts !== expectedParts || row.total_parts > MAX_PARTS)
+                  throw new Error('MCP_PAGINATION_INVALID');
+                const key = `tafsir-mcp:${source}:${reference}:${part}:${sha256(row.text).slice(0, 16)}`;
+                completeWork.push(
+                  SourceEvidenceSchema.parse({
+                    snapshotKey: key,
+                    sourceId: `tafsir-center-mcp:${source}`,
+                    sourceVersion: SCHEMA_SHA256,
+                    sourceRole: 'tafsir_commentary',
+                    reference,
+                    originalText: row.text,
+                    originalSha256: sha256(row.text),
+                    work: WORKS[source],
+                    author: row.attribution,
+                    edition: null,
+                    sourceUrl: ENDPOINT,
+                    approvalStatus: 'pending',
+                    researchOnly: true,
+                    parentSnapshotKey: parent.snapshotKey,
+                    delivery: 'live',
+                    retrievalModes: ['exact'],
+                    provenance: {
+                      provider_id: 'tafsir-center-mcp',
+                      schema_sha256: SCHEMA_SHA256,
+                      server_info: serverInfo,
+                      original_raw_text: row.text_raw,
+                      part: row.part,
+                      total_parts: row.total_parts,
+                      provider_footnotes: row.footnotes,
+                    },
+                    contextBefore: null,
+                    contextAfter: null,
+                    footnotes: evidenceFootnotes(reference, row),
+                    relations: [],
+                  }),
+                );
+                if (!row.has_more) {
+                  complete = true;
+                  break;
+                }
+              }
+              if (!complete) throw new Error('MCP_PAGINATION_INCOMPLETE');
+              live.push(...completeWork);
+            } catch {
+              signal?.throwIfAborted();
+              // A failed or incomplete work cannot erase other completed works.
             }
           }
         }
