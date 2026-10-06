@@ -9,7 +9,7 @@ An accurate quotation can still accompany an unsupported conclusion. Basirah com
 - **Working product:** [Railway API staging](https://api-staging-42bc.up.railway.app/).
 - **Public code:** [smaq777/Basira-Hackathon](https://github.com/smaq777/Basira-Hackathon), default branch `development`.
 
-Railway staging is our only submission/demo URL, including the repository About link. Vercel Git previews are disabled for this repository. Guest analysis needs no account, API key or local MCP setup.
+Railway staging is our only submission/demo URL, including the repository About link. Guest analysis needs no account, API key or local MCP setup.
 
 Selected fresh Quran/Tafsir comparisons, abstention cases and a useful independently verified rewrite have passed on staging. [Live release evidence](https://github.com/smaq777/Basira-Hackathon/issues/169#issuecomment-6022396451) and [six-case acceptance](docs/evidence/2026-10-06-staging-1.14-acceptance.md) record the tested versions and limits; they are not a general accuracy or uptime guarantee.
 
@@ -96,4 +96,4 @@ The [brief development record](docs/hackathon/DEVELOPMENT_TIMELINE.md) identifie
 
 For deeper review: [implemented architecture](docs/architecture/ARCHITECTURE.md) · [component/rights ledger](docs/governance/SUBMISSION_COMPONENTS.md) · [documentation hub](docs/README.md).
 
-Project-authored software is [MIT-licensed](LICENSE); third-party text, models, fonts and assets retain independent rights. Use public/synthetic inputs for demonstrations, never real beneficiary conversations or secrets. Contributions follow [issue → reviewed branch → merge commit](CONTRIBUTING.md); production promotion is deferred.
+Project-authored software is [MIT-licensed](LICENSE); third-party text, models, fonts and assets retain independent rights. Use public/synthetic inputs for demonstrations, never real beneficiary conversations or secrets. Contributions follow [issue → reviewed branch → merge commit](CONTRIBUTING.md).
