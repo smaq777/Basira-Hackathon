@@ -38,7 +38,11 @@ import {
   QUERY_EMBEDDING_DIMENSIONS,
 } from './query-embedding.js';
 import { createTicketStore } from './ticket-store.js';
-import { initializeReviewerCorpus, reviewerCorpusAccessMode } from './reviewer-corpus.js';
+import {
+  initializeReviewerCorpus,
+  reviewerCorpusAccessMode,
+  reviewerCorpusVersion,
+} from './reviewer-corpus.js';
 import { createBrevoMailer, createTicketNotificationWorker } from './ticket-notifications.js';
 
 const port = Number(process.env.PORT ?? 3000);
@@ -49,7 +53,9 @@ const geminiBackup = geminiBackupConfiguration(process.env);
 const connectionString = process.env.DATABASE_URL;
 if (process.env.NODE_ENV === 'production' && !connectionString)
   throw new Error('DATABASE_URL is required in production');
-const database = connectionString ? createDatabase(connectionString) : new DatabaseUnavailable();
+const database = connectionString
+  ? createDatabase(connectionString, Number(process.env.GUEST_RETENTION_HOURS ?? 24))
+  : new DatabaseUnavailable();
 const ticketsEnabled = process.env.TICKETS_ENABLED === 'true';
 if (ticketsEnabled && !connectionString) throw new Error('TICKETS_REQUIRE_DATABASE');
 const ticketDataKey = process.env.TICKET_DATA_KEY?.trim();
@@ -166,6 +172,7 @@ async function initializeFoundation() {
       const corpus = createHostedCorpus({
         pool: corpusPool,
         corpusVersion,
+        reviewedCorpusVersion: reviewerCorpusVersion(process.env),
         researchPreview: researchEvidence,
         embeddingSpace: {
           modelId: QUERY_EMBEDDING_MODEL,

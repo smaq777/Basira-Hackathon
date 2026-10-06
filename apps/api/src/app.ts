@@ -375,6 +375,12 @@ export function createApp(options: AppOptions = {}) {
         credentials.ownershipSecret,
         text,
       );
+      setGuestCookie(
+        res,
+        `${credentials.publicId}.${credentials.ownershipSecret}`,
+        retentionHours * 60 * 60,
+        production,
+      );
       return res.status(201).json(created);
     } catch (error) {
       return next(error);
@@ -398,6 +404,12 @@ export function createApp(options: AppOptions = {}) {
           text,
         );
         if (!created) return res.status(404).json({ code: 'DOCUMENT_NOT_FOUND' });
+        setGuestCookie(
+          res,
+          `${credentials.publicId}.${credentials.ownershipSecret}`,
+          retentionHours * 60 * 60,
+          production,
+        );
         return res.status(201).json(created);
       } catch (error) {
         return next(error);
@@ -462,6 +474,12 @@ export function createApp(options: AppOptions = {}) {
         corpusVersion,
       );
       if (!created) return res.status(404).json({ code: 'REVISION_NOT_FOUND' });
+      setGuestCookie(
+        res,
+        `${credentials.publicId}.${credentials.ownershipSecret}`,
+        retentionHours * 60 * 60,
+        production,
+      );
       if (created.replayed) res.setHeader('Idempotent-Replayed', 'true');
       options.foundation?.worker.notify();
       return res.status(created.replayed ? 200 : 202).json({

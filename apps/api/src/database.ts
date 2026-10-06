@@ -204,7 +204,28 @@ async function authenticate(client: PoolClient, publicId: string, secret: string
   if (!result.rows[0]?.session_id) throw new OwnershipError();
 }
 
-export function createDatabase(connectionString: string): BackendDatabase {
+export async function renewOwnedGuestSession(
+  client: Pick<PoolClient, 'query'>,
+  retentionHours: number,
+): Promise<void> {
+  if (!Number.isInteger(retentionHours) || retentionHours < 1 || retentionHours > 24)
+    throw new Error('INVALID_RETENTION_CONFIGURATION');
+  // Runs only inside an authenticated save transaction. RLS remains in force;
+  // expired/deleted sessions cannot be revived, even across a cleanup race.
+  const result = await client.query(
+    `update basirah.guest_session
+     set expires_at = greatest(expires_at, clock_timestamp() + make_interval(hours => $1))
+     where id = basirah_private.current_session_id()
+       and deleted_at is null and expires_at > clock_timestamp()
+     returning id`,
+    [retentionHours],
+  );
+  if (!result.rowCount) throw new OwnershipError();
+}
+
+export function createDatabase(connectionString: string, retentionHours = 24): BackendDatabase {
+  if (!Number.isInteger(retentionHours) || retentionHours < 1 || retentionHours > 24)
+    throw new Error('INVALID_RETENTION_CONFIGURATION');
   const pool = new Pool({
     connectionString: securedConnectionString(connectionString),
     ssl: databaseTls(),
@@ -311,6 +332,7 @@ export function createDatabase(connectionString: string): BackendDatabase {
           revisionRow.id,
           row.id,
         ]);
+        await renewOwnedGuestSession(client, retentionHours);
         return {
           documentId: row.public_id,
           revisionId: revisionRow.public_id,
@@ -349,6 +371,7 @@ export function createDatabase(connectionString: string): BackendDatabase {
           revisionRow.id,
           row.id,
         ]);
+        await renewOwnedGuestSession(client, retentionHours);
         return {
           documentId: documentPublicId,
           revisionId: revisionRow.public_id,
@@ -401,6 +424,7 @@ export function createDatabase(connectionString: string): BackendDatabase {
         );
         const revisionId = revision.rows[0]?.id;
         if (!revisionId) return null;
+        await renewOwnedGuestSession(client, retentionHours);
 
         const existing = await client.query<ReviewRunRow>(
           `select rr.public_id, dr.public_id as revision_public_id, rr.status, rr.attempt,

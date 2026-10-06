@@ -25,7 +25,7 @@ const row = (key: string, role = 'quran_text') => ({
   relations: [],
 });
 function fixture(exact: unknown[] = [], lexical: unknown[] = []) {
-  const query = vi.fn(async (sql: string) => ({
+  const query = vi.fn(async (sql: string, _values?: unknown[]) => ({
     rows: sql.includes('stable_reference=any')
       ? exact
       : sql.includes('word_similarity')
@@ -37,6 +37,43 @@ function fixture(exact: unknown[] = [], lexical: unknown[] = []) {
   return { pool, query, release };
 }
 describe('hosted evidence boundaries', () => {
+  it('includes only approved reviewer originals in exact/lexical/restored overlay membership', async () => {
+    const f = fixture([], [row('reviewed-source', 'book_excerpt')]);
+    const corpus = createHostedCorpus({
+      pool: f.pool,
+      corpusVersion: 'synthetic-v1',
+      reviewedCorpusVersion: 'reviewed-synthetic-v1',
+    });
+    await corpus.search('Owned assertion', []);
+    await corpus.search('Owned quotation', ['book:1']);
+    await corpus.restore(['reviewed-source']);
+    const queries = f.query.mock.calls.filter(([sql]) =>
+      String(sql).includes('from basirah.passage p'),
+    );
+    expect(queries).toHaveLength(3);
+    for (const [sql, values] of queries) {
+      expect(sql).toContain("s.approval_status='approved'");
+      expect(sql).toContain("p.provenance->>'source'='reviewer_approved_original'");
+      expect(sql).toContain("('hadith_matn','book_excerpt','scholar_explanation')");
+      expect(values).toContain('synthetic-v1');
+      expect(values).toContain('reviewed-synthetic-v1');
+    }
+  });
+  it('keeps readiness counts and vector space pinned to the base snapshot', async () => {
+    const f = fixture();
+    const corpus = createHostedCorpus({
+      pool: f.pool,
+      corpusVersion: 'synthetic-v1',
+      reviewedCorpusVersion: 'reviewed-synthetic-v1',
+      embeddingSpace: { modelId: 'fixture', dimensions: 2, embedQuery: async () => [1, 0] },
+    });
+    await corpus.search('Owned assertion', []);
+    const vectorCall = f.query.mock.calls.find(([sql]) =>
+      String(sql).includes('join basirah.passage_embedding'),
+    );
+    expect(vectorCall?.[1]).not.toContain('reviewed-synthetic-v1');
+    expect(vectorCall?.[0]).toContain('e.corpus_version=$1');
+  });
   it('returns only the resolved explicit source family and skips broad neighbors', async () => {
     const f = fixture(
       Array.from({ length: 8 }, (_, index) => row('anchor-' + index)),

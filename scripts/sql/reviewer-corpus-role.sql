@@ -7,7 +7,7 @@ declare
   credential text := current_setting('basirah.curator_password',true);
   existing record;
 begin
-  if curator is null or curator !~ '^basirah_(reviewer_curator|qa_curator_156)$'
+  if curator is null or curator !~ '^basirah_(reviewer_curator|qa_curator_156|reviewer_curator_193|qa_curator_193_[a-f0-9]{8})$'
     or credential is null or char_length(credential)<32 then
     raise exception 'explicit curator provisioning required';
   end if;

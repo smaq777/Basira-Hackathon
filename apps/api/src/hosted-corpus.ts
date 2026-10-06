@@ -19,6 +19,7 @@ export function normalizeCorpusSearch(text: string): string {
 export type HostedCorpusOptions = {
   pool: Pool;
   corpusVersion: string;
+  reviewedCorpusVersion?: string;
   researchPreview?: boolean;
   limit?: number;
   embeddingSpace?: {
@@ -70,7 +71,10 @@ function evidence(
     parentSnapshotKey: row.parent_snapshot_key,
     delivery: 'snapshot',
     retrievalModes: modes,
-    provenance: row.provenance,
+    provenance:
+      provenance.source === 'reviewer_approved_original'
+        ? { ...provenance, corpusVersion: row.corpus_version, evidenceLayer: 'reviewer_approved' }
+        : row.provenance,
     contextBefore: row.context_before,
     contextAfter: row.context_after,
     footnotes: row.footnotes,
@@ -89,6 +93,17 @@ export function createHostedCorpus(options: HostedCorpusOptions): ClaimCorpusSea
   readiness(): Promise<{ ready: boolean; passages: number; embeddings: number }>;
 } {
   const limit = options.limit ?? 8;
+  if (
+    options.reviewedCorpusVersion &&
+    (options.reviewedCorpusVersion === options.corpusVersion ||
+      options.reviewedCorpusVersion.length > 120)
+  )
+    throw new Error('REVIEWER_CORPUS_OVERLAY_INVALID');
+  const membership = (overlayParameter: number) =>
+    `exists(select 1 from basirah.corpus_snapshot membership where membership.passage_id=p.id
+      and (membership.corpus_version=$1 or (membership.corpus_version=$${overlayParameter}
+        and s.approval_status='approved' and p.provenance->>'source'='reviewer_approved_original'
+        and p.source_role in ('hadith_matn','book_excerpt','scholar_explanation'))))`;
   if (!Number.isInteger(limit) || limit < 1 || limit > 20) throw new Error('INVALID_CORPUS_BOUND');
   const role = options.researchPreview ? 'basirah_research_runtime' : 'basirah_runtime';
   async function read<T>(
@@ -171,9 +186,9 @@ export function createHostedCorpus(options: HostedCorpusOptions): ClaimCorpusSea
           exactRows = parentClosed(
             await client
               .query(
-                `${selectRows} where exists(select 1 from basirah.corpus_snapshot membership where membership.passage_id=p.id and membership.corpus_version=$1) and p.snapshot_key is not null and p.source_role is not null and p.stable_reference=any($2::text[])
+                `${selectRows} where ${membership(4)} and p.snapshot_key is not null and p.source_role is not null and p.stable_reference=any($2::text[])
               order by case p.source_role when 'quran_text' then 0 when 'tafsir_commentary' then 1 when 'tafsir_footnote' then 2 else 3 end,p.snapshot_key limit $3`,
-                [options.corpusVersion, exact, limit],
+                [options.corpusVersion, exact, limit, options.reviewedCorpusVersion ?? null],
               )
               .then((result) => result.rows),
           );
@@ -192,10 +207,10 @@ export function createHostedCorpus(options: HostedCorpusOptions): ClaimCorpusSea
         merge(
           (
             await client.query(
-              `${selectRows} where exists(select 1 from basirah.corpus_snapshot membership where membership.passage_id=p.id and membership.corpus_version=$1) and p.snapshot_key is not null and p.source_role is not null
+              `${selectRows} where ${membership(4)} and p.snapshot_key is not null and p.source_role is not null
           and (public.word_similarity($2,p.search_key)>0.08 or p.search_key like '%' || $2 || '%')
           order by public.word_similarity($2,p.search_key) desc,p.snapshot_key limit $3`,
-              [options.corpusVersion, normalized, limit],
+              [options.corpusVersion, normalized, limit, options.reviewedCorpusVersion ?? null],
             )
           ).rows,
           'lexical',
@@ -247,14 +262,14 @@ export function createHostedCorpus(options: HostedCorpusOptions): ClaimCorpusSea
       return read(async (client) => {
         const rows = (
           await client.query(
-            `${selectRows} where exists(select 1 from basirah.corpus_snapshot membership where membership.passage_id=p.id and membership.corpus_version=$1) and p.snapshot_key is not null and p.source_role is not null and (
+            `${selectRows} where ${membership(3)} and p.snapshot_key is not null and p.source_role is not null and (
           p.snapshot_key=any($2::text[])
           or p.id in (select parent_passage_id from basirah.passage where snapshot_key=any($2::text[]))
           or p.parent_passage_id in (select id from basirah.passage where snapshot_key=any($2::text[]))
           or p.id in (select r.to_passage_id from basirah.passage_relation r join basirah.passage origin on origin.id=r.from_passage_id where origin.snapshot_key=any($2::text[]))
           or p.id in (select r.from_passage_id from basirah.passage_relation r join basirah.passage target on target.id=r.to_passage_id where target.snapshot_key=any($2::text[]))
         ) order by p.snapshot_key limit 80`,
-            [options.corpusVersion, keys],
+            [options.corpusVersion, keys, options.reviewedCorpusVersion ?? null],
           )
         ).rows;
         return rows.map((row) => evidence(row, ['exact']));
