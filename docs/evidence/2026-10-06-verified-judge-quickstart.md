@@ -45,7 +45,7 @@ This proves one controlled useful author rewrite/copy and cancellation control. 
 
 At 14:09 UTC, a separate local first charity rewrite used public evidence frozen from a 175-corpus report. Both OpenRouter Luna generation and verification calls returned HTTP 200. The proposal added `من إظهارها`, a comparison target absent from the original author claim. The verifier returned `evidenceSupported:true`, but `meaningPreserved:false` and `scopePreserved:false`; the result was withheld at `verification_validation` / `meaning_changed`, with no copy.
 
-Exact captured-packet and minimized deterministic replays reproduce this rejection. This explains this newly captured failure, not Saleh's historical failures with diagnostics off. The generation-only `author-original-scope-v1` policy is now implemented in the issue157 follow-up, with its PR and deployment pending. The independent verifier and all preservation/copy gates remain unchanged. Rejected meaning/scope output does not authorize a Gemini retry. No fresh Railway review or database retrieval was performed by this local control.
+Exact captured-packet and minimized deterministic replays reproduce this rejection. This explains this newly captured failure, not Saleh's historical failures with diagnostics off. The generation-only `author-original-scope-v1` policy is implemented in [PR182](https://github.com/smaq777/Basira-Hackathon/pull/182), with merge and deployment pending. The independent verifier and all preservation/copy gates remain unchanged. Rejected meaning/scope output does not authorize a Gemini retry. No fresh Railway review or database retrieval was performed by this local control.
 
 Retained operator receipt: `author-first-2026-10-06T14-09-34-475Z/trace.json`, SHA256 `4ea711439dbf7687e5e936afe56958c03b0fbae7c0709a3c32dba5b52188b24b`; companion first and minimized replays remain local. Only the bounded outcome and receipt identity are published here.
 
@@ -57,7 +57,7 @@ A rough public author span, `لما نخفي الصدقة ونعطيها للف�
 
 This semantic control also exercised a real transport recovery: OpenRouter Sol relevance timed out after 6.684 seconds; direct Gemini relevance and assessment then returned HTTP 200. No failure was injected, and the trace retains the actual failed primary and successful Google model/provider identities. All these controls used frozen public sources, not fresh RAG or Railway. They do not establish deployment or general rewrite reliability.
 
-Retained receipt: `colloquial-policy-2026-10-06T14-19-35-203Z/receipt.json`, SHA256 `70cf710f60797a175255b119ba08aa92608f88d92c2de661ce18dd3093d0ddd4`. The issue157 generation policy remains pending publication and deployment; unchanged validation continues to withhold altered meaning/scope.
+Retained receipt: `colloquial-policy-2026-10-06T14-19-35-203Z/receipt.json`, SHA256 `70cf710f60797a175255b119ba08aa92608f88d92c2de661ce18dd3093d0ddd4`. The [PR182 generation policy](https://github.com/smaq777/Basira-Hackathon/pull/182) remains pending merge and deployment; unchanged validation continues to withhold altered meaning/scope.
 
 ## Later code and direct Gemini evidence
 
