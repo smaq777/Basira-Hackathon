@@ -119,6 +119,10 @@ describe('foundation report presentation', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /إرسال النص للمراجعة$/ })).not.toBeNull(),
     );
+    expect(screen.getByText(/يرجى استخدام المراجعة البشرية/).textContent).toContain(
+      'وسنعود إليك بالنتيجة بعد اكتمال المراجعة',
+    );
+    expect(screen.getByText(/يرجى استخدام المراجعة البشرية/).textContent).toContain('أضف بريدك');
     fireEvent.click(screen.getByRole('button', { name: /إرسال النص للمراجعة$/ }));
     expect(onTicket).toHaveBeenCalledOnce();
     const finalSection = document.getElementById('report-rewrite');
@@ -1323,6 +1327,31 @@ describe('material report reasons and ticket availability', () => {
     report.intake.evidence = report.intake.evidence.slice(1);
     expect(codes(report)).not.toContain('source_approval_pending');
   });
+  it.each(['not_established', 'insufficient_context'] as const)(
+    'offers review for %s even when the report and assessment are completed',
+    (status) => {
+      const report = supported();
+      report.status = 'completed';
+      report.intake.evidence[0]!.approvalStatus = 'approved';
+      report.intake.evidence[0]!.researchOnly = false;
+      report.semanticAssessment!.assessments[0]!.status = status;
+      const before = JSON.stringify(report);
+      expect(codes(report)).toEqual([
+        status === 'not_established' ? 'claim_evidence_insufficient' : 'claim_context_insufficient',
+      ]);
+      expect(shouldOfferHumanReview(report)).toBe(true);
+      expect(JSON.stringify(report)).toBe(before);
+    },
+  );
+  it('offers review for an omitted selected claim assessment without inventing an evidence verdict', () => {
+    const report = supported();
+    report.status = 'completed';
+    report.intake.evidence[0]!.approvalStatus = 'approved';
+    report.intake.evidence[0]!.researchOnly = false;
+    report.semanticAssessment!.assessments = [];
+    expect(codes(report)).toEqual(['author_coverage_unreviewed']);
+    expect(shouldOfferHumanReview(report)).toBe(true);
+  });
   it('distinguishes a verified wording difference and proposed mapping from an unassessed verdict', () => {
     const report = supported();
     report.interpretation.status = 'needs_confirmation';
@@ -1407,6 +1436,8 @@ describe('material report reasons and ticket availability', () => {
       await act(async () => {});
       expect(screen.queryByRole('button', { name: /إرسال النص للمراجعة/ })).toBeNull();
       expect(screen.queryByText(/مراجع مختص/)).toBeNull();
+      expect(screen.queryByText(/وسنعود إليك/)).toBeNull();
+      expect(screen.getByText(/لم يتأكد توفر استقبال طلبات/)).not.toBeNull();
       expect(onTicket).not.toHaveBeenCalled();
       expect(fetch.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(
         true,
