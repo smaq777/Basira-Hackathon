@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { createPythonAdapter, type FoundationAdapter } from './foundation.js';
 import { createHostedDraftAdapter, foundationRuntimeMode } from './hosted-foundation.js';
-import { withLiveTafsirMcp } from './tafsir-mcp.js';
+import { withLiveTafsirMcp, withBoundedQuranDiscovery } from './tafsir-mcp.js';
 import { withExactQuranApi } from './quran-api.js';
 import { createReviewStore } from './review-store.js';
 import { createFoundationWorker } from './review-worker.js';
@@ -173,7 +173,9 @@ async function initializeFoundation() {
         },
       });
       if (!(await corpus.readiness()).ready) throw new Error('HOSTED_CORPUS_NOT_READY');
-      const explicitCorpus = hostedRuntime ? withExactQuranApi(corpus) : corpus;
+      const explicitCorpus = hostedRuntime
+        ? withBoundedQuranDiscovery(withExactQuranApi(corpus))
+        : corpus;
       baseCorpus =
         hostedRuntime && process.env.FOUNDATION_TAFSIR_LIVE === 'true'
           ? withLiveTafsirMcp(explicitCorpus)
