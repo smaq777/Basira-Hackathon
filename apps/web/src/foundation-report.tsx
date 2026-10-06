@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { RewritePanel } from './rewrite.js';
 import { ArrowLeft } from '@phosphor-icons/react/ArrowLeft';
 import { BookOpen } from '@phosphor-icons/react/BookOpen';
@@ -378,7 +378,13 @@ function SourceLibrary({
   );
 }
 
-export function FoundationReportContent({ report }: { report: FoundationReport }) {
+export function FoundationReportContent({
+  report,
+  children,
+}: {
+  report: FoundationReport;
+  children?: ReactNode;
+}) {
   const { intake } = report;
   const rows = reportFindings(report);
   const initial =
@@ -1134,6 +1140,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
             <p>حدود المقتطف تصف موضعه في المصدر، ولا تحكم على أثره في معنى الاستدلال.</p>
           </div>
         </details>
+        {children}
       </div>
     </div>
   );
@@ -1302,11 +1309,10 @@ export function FoundationResultScreen({
           </div>
         )}
         {report && !loading && !error && (
-          <>
-            <FoundationReportContent
-              key={`${report.reviewId}:${report.evidenceStateSha256}`}
-              report={report}
-            />
+          <FoundationReportContent
+            key={`${report.reviewId}:${report.evidenceStateSha256}`}
+            report={report}
+          >
             <div className="foundation-report-actions" aria-label="إجراءات التقرير">
               <button
                 className="button button--outline foundation-refresh"
@@ -1369,7 +1375,7 @@ export function FoundationResultScreen({
                 onReview={ticketAvailable ? onTicket : undefined}
               />
             </div>
-          </>
+          </FoundationReportContent>
         )}
       </main>
     </div>

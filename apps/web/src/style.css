@@ -4153,6 +4153,11 @@ mark {
 }
 
 /* Result report v2: navigable comparison workspace based on the selected visual target. */
+.result-page {
+  /* Clip horizontal overflow without creating a scroll container that traps sticky navigation. */
+  overflow-x: clip;
+}
+
 .foundation-report-shell {
   display: grid;
   grid-template-areas: 'nav report';
@@ -4170,6 +4175,10 @@ mark {
   grid-area: nav;
   position: sticky;
   top: 18px;
+  max-height: calc(100vh - 36px);
+  max-height: calc(100dvh - 36px);
+  overflow-y: auto;
+  scrollbar-width: thin;
   display: grid;
   gap: 4px;
   padding-inline-start: 16px;
@@ -4582,8 +4591,10 @@ mark {
   .foundation-report-nav {
     z-index: 5;
     top: 0;
+    max-height: none;
     display: flex;
     overflow-x: auto;
+    overflow-y: hidden;
     padding: 8px 0;
     border-inline-start: 0;
     border-block: 1px solid var(--line);
