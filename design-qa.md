@@ -76,3 +76,4 @@ final result: passed
 - Source navigation opened its disclosure, updated `aria-current` and applied the destination pulse.
 - The labeled local fixture verified word-difference rendering only. Separately, the real staging API completed a quotation-plus-claim review and restored it after reload; no fixture was deployed.
 - Full Node 24 check: 816 tests, type checking, documentation, policy, formatting and build passed. Staging deployment acceptance is recorded separately on Issue #145.
+- After the separately approved Issue #148 capacity change, the combined Node 24 check passed with 809 tests; obsolete fixed-cap response tests were removed. Burst-throttling and ownership checks remain.
