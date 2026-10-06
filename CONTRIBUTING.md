@@ -7,7 +7,7 @@
 3. Inspect `git status --short --branch`; preserve changes you did not create.
 4. Update local `development`, then create a short-lived issue branch: `saleh/<issue>-<slug>` for Saleh, `ahmed/<issue>-<slug>` for Ahmed, or `codex/<issue>-<slug>` for a Codex-managed change.
 
-`development` is the integration branch. `main` is production-only and receives reviewed promotion pull requests from `development`. GitHub currently denies protection requests for this private repository, so do not treat configured CI or written policy as enforced branch protection. Direct pushes remain technically possible until the rules can be written and read back.
+`development` is the integration branch. `main` is production-only and receives reviewed promotion pull requests from `development`. The repository is public. On 6 October 2026, GitHub read-back confirmed `main` requires one approval and `quality`, `policy`, `dependency-audit`, with force pushes/deletions disabled. Administrators are not enforced by that rule; do not treat it as absolute protection or infer the same rules on `development`. Written owner acceptance and deployment gates still apply.
 
 ## Development and validation
 

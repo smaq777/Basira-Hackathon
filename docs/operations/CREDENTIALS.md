@@ -1,96 +1,121 @@
-# Credentials and service onboarding
+# Credentials and provider onboarding
 
-This is the judge and maintainer guide for obtaining configuration safely. It lists names and official setup locations only. Never paste a real value into this repository, a pull request, an issue, a screenshot, a log, or a committee document.
+**Checked 6 October 2026.** Judges need no credentials to use [staging](https://api-staging-42bc.up.railway.app/). Offline software tests also need no paid keys. The following instructions are for an authorized operator reproducing implemented integrations in their **own** environment; they are not permission to purchase credits, rotate shared keys or migrate shared databases.
 
-## What the current repository needs
+Never share account passwords, cookie values, connection strings or private keys in GitHub, videos or logs. Use provider secret variables or ignored local environment files. All `VITE_*` values are browser-visible. Preserve existing working connections, TLS, corpus, service/environment and deployment-SHA guards.
 
-The repository builds and runs its deterministic checks **without any external credential**. `PORT` and `NODE_ENV` are ordinary configuration. The hosted staging runtime already has its database credential in Railway's secret store; judges do not need it to open the public demo or run the credential-free test suite.
+## 1. OpenRouter: text inference and embeddings
 
-Judges should first run the credential-free path in the root [README](../../README.md). If a final tagged release uses a provider, the release notes must name the provider/model and mark the matching row below as required. An unset planned variable is not a setup failure for the current prototype.
+Official: [authentication](https://openrouter.ai/docs/api_reference/authentication), [key dashboard](https://openrouter.ai/settings/keys), [documentation](https://openrouter.ai/docs).
 
-## Runtime configuration
+1. Sign in with the account whose authorized budget will pay for this environment.
+2. In **Keys**, create a named environment-specific API key. Set an owner-approved credit/spend limit; check account credit and model/provider access. Do not remove limits to cure a 403.
+3. Save its value privately as `OPENROUTER_API_KEY` on the API service. The public application must never receive it.
+4. The implemented text assessor uses `FOUNDATION_ASSESSOR_MODEL` (default `openai/gpt-6.1-sol`); record actual response model/provider identities. Query embeddings use fixed `openai/text-embedding-3-small`, 1536 dimensions, through the same gateway.
+5. Make one bounded synthetic model request and one embedding request. Retain the first status/error category; stop at failure rather than repeated paid retries. A key spending limit, account credit and provider-routing denial are different diagnoses.
 
-| Service                          | Purpose and current status                                                                                | Official setup location                                                                                                                                                                                                           | Variable                                                                                                         | Safe location                                                                                                        |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Neon                             | Production schema and migration `0005` are verified; the production runtime connection remains gated      | [Neon console](https://console.neon.tech/) and the project **Connect** dialog                                                                                                                                                     | `DATABASE_URL`, `DATABASE_URL_UNPOOLED`                                                                          | Railway environment variables or local ignored `.env`; never Vercel client variables                                 |
-| Railway PostgreSQL staging       | Implemented with a dedicated least-privilege runtime role; value remains provider-side                    | Existing Basirah Railway project                                                                                                                                                                                                  | `DATABASE_URL`                                                                                                   | Railway staging environment only                                                                                     |
-| Database TLS policy              | Strict verification is the default                                                                        | Hosting provider's PostgreSQL TLS documentation                                                                                                                                                                                   | `DATABASE_TLS_MODE`                                                                                              | `verify-full` for Neon/production; `require` only for an encrypted provider certificate that is not publicly trusted |
-| Cohere                           | Candidate embeddings; selection still requires evaluation                                                 | [Cohere dashboard API keys](https://dashboard.cohere.com/api-keys)                                                                                                                                                                | `COHERE_API_KEY`                                                                                                 | Railway environment variable or GitHub environment secret                                                            |
-| Selected language-model provider | Planned structured extraction/support assessment; provider is not yet selected                            | Use only the official key page for the provider named in the accepted release. Do not guess from `LLM_API_KEY`.                                                                                                                   | `LLM_API_KEY`, `LLM_MODEL`                                                                                       | Railway environment variable or GitHub environment secret                                                            |
-| Tafsir MCP                       | Planned approved-source adapter; public remote MCP endpoint, not a repository secret                      | [Tafsir MCP project](https://github.com/tafsircenter/tafsir-mcp)                                                                                                                                                                  | `TAFSIR_MCP_URL`                                                                                                 | Ordinary server configuration; the default URL is public                                                             |
-| Dorar                            | Disabled because sampled access returned 403; no supported production credential is claimed               | [Dorar](https://dorar.net/)                                                                                                                                                                                                       | `DORAR_ENABLED=false`                                                                                            | Leave off until access, terms, and tests are verified                                                                |
-| Guest retention                  | Planned server policy, not a secret                                                                       | Project-approved privacy policy                                                                                                                                                                                                   | `GUEST_RETENTION_HOURS`                                                                                          | Railway environment variable                                                                                         |
-| Review lifecycle                 | Implemented deadline and reproducibility metadata; neither value is secret                                | Project configuration                                                                                                                                                                                                             | `REVIEW_DEADLINE_SECONDS`, `CORPUS_VERSION`                                                                      | Railway environment variable                                                                                         |
-| Public API origin                | Needed only if Vercel hosts a split frontend                                                              | Accepted Railway HTTPS origin                                                                                                                                                                                                     | `VITE_API_BASE_URL`                                                                                              | Vercel environment variable; it is browser-visible and must never contain credentials                                |
-| Session voice evaluation         | Optional browser-native proof of value; disabled by default and uses no provider credential               | Existing Basirah result-page evaluation                                                                                                                                                                                           | `VITE_SESSION_VOICE_ENABLED`                                                                                     | Vercel Preview or local public configuration only; value is `true` or `false`                                        |
-| Clerk reviewer authentication    | Implemented as a default-deny reviewer gate; hosted verification still requires environment configuration | [Clerk API keys](https://dashboard.clerk.com/last-active?path=api-keys), [React setup](https://clerk.com/docs/react/getting-started/quickstart), and [Express setup](https://clerk.com/docs/expressjs/getting-started/quickstart) | `VITE_CLERK_PUBLISHABLE_KEY`, `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`                                        | Public key in the Railway build environment; secret key only in the Railway server environment                       |
-| Clerk reviewer authorization     | Server policy checked after token verification; allowlist is the production default                       | Basirah Clerk **Users** page                                                                                                                                                                                                      | `CLERK_REVIEWER_ACCESS_MODE`, `CLERK_REVIEWER_USER_IDS`, `CLERK_AUTHORIZED_PARTIES`, `CLERK_FRONTEND_API_ORIGIN` | Railway staging/production variables; never source, issue text or client storage                                     |
-| Secure review tickets            | Implemented after migration 0014; contact data is encrypted and lookup uses a separate keyed digest       | Generate independent random values per environment                                                                                                                                                                                | `TICKETS_ENABLED`, `TICKET_DATA_KEY`, `TICKET_LOOKUP_PEPPER`, `PUBLIC_APP_URL`                                   | Railway server environment only; never copy staging encryption material to production                                |
-| Brevo transactional email        | Implemented as an idempotent outbox consumer; activation requires a verified sender                       | [Brevo SMTP & API](https://app.brevo.com/settings/keys/api)                                                                                                                                                                       | `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`                                                       | Railway server environment only; API key must never use a `VITE_*` name                                              |
+The current embedding adapter does not require a separate direct OpenAI key. Historical `LLM_API_KEY`, `LLM_MODEL`, `COHERE_API_KEY`, `EMBEDDING_MODEL=embed-v4.0` and dimension 1024 are not the selected Foundation runtime contract.
 
-Connection strings contain credentials even when their names do not include `KEY` or `TOKEN`. Rotate a leaked string before cleaning history.
+## 2. Gemini: availability-only text backup
 
-`VITE_CLERK_PUBLISHABLE_KEY` is designed to be public; `CLERK_SECRET_KEY` is not. Configure exact
-authorized parties such as `https://api-staging-42bc.up.railway.app`, not wildcard origins. Add a
-Clerk user ID to `CLERK_REVIEWER_USER_IDS` only after that user has authenticated and the owner has
-approved reviewer access. A Clerk dashboard/team account is not automatically a Basirah reviewer.
-For the hackathon demo only, staging may set `CLERK_REVIEWER_ACCESS_MODE=authenticated` so judges
-and committee members can enter after sign-in without a manual allowlist step. Do not copy that
-setting to production; remove it or set `allowlist` when the open evaluation window ends.
+Official: [API key guide](https://ai.google.dev/gemini-api/docs/api-key), [AI Studio API keys](https://aistudio.google.com/api-keys).
 
-Ticket encryption and lookup keys are deliberately separate. Generate new values independently in
-staging and production; do not reuse or copy either value between environments. Brevo email remains
-off unless all sender/API variables are present. Verify the sender in Brevo before enabling delivery.
-Publishing a reviewer response can enqueue an email, but does not automatically admit that response
-to RAG. Retrieval admission is a separate provenance-bearing reviewer action.
+1. Sign in to your authorized Google account/Cloud project. In AI Studio, select/import the intended project and create its Gemini API key using the current project-permission workflow.
+2. Follow Google's current application/API restrictions and billing/quota guidance. If permission is denied, ask that project's administrator; do not use another person's project.
+3. Store `GEMINI_API_KEY` and, only if owned/approved, `GEMINI_API_KEY_2` in the staging server secret environment.
+4. Explicitly set `FOUNDATION_GEMINI_BACKUP_ENABLED=true` in an accepted runtime configuration. The adapter uses `gemini-2.5-flash` via `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`.
+5. Verify key-presence/activation booleans and a bounded synthetic request without printing values. Do not disrupt the shared primary to manufacture a fallback test.
 
-## Deployment credentials
+Backup is for eligible availability failures, not invalid output or meaning/scope rejection. The same validators still apply, and it does not replace OpenRouter query embeddings. See [backup runbook](GEMINI_BACKUP.md).
 
-### Railway backend
+## 3. Tafsir MCP: public religious-source tools
 
-1. Open the verified Basirah project at [Railway](https://railway.com/) (`9837ef84-08f3-4228-b7ac-f3b3dc25fba0`).
-2. Use its existing `staging` and `production` environments and shared `api` service. Do not create a duplicate always-on backend.
-3. In Railway, generate a project-scoped token following the [Railway CLI authentication guide](https://docs.railway.com/cli#authentication). Prefer a project token over an account-wide token.
-4. In GitHub, add `RAILWAY_TOKEN` separately to the `staging` and `production` environments. Do not use a repository variable for the token.
-5. Confirm the existing non-secret Railway service identifier `4d15a8f1-0028-42d6-adfa-cef07e55a9bc` as environment variable `RAILWAY_SERVICE_ID`.
-6. Add runtime values such as `DATABASE_URL` and provider keys directly to the matching Railway environment.
+Official: [project](https://tafsirmcp.netlify.app/), [upstream code](https://github.com/tafsircenter/tafsir-mcp).
 
-The service identifier is already present in both GitHub environments. `RAILWAY_TOKEN` is deliberately absent from GitHub. The staging runtime `DATABASE_URL` exists only inside Railway, and production has no accepted runtime connection. The workflow pins `@railway/cli` and cannot run while `DEPLOY_STAGING_ENABLED` or `DEPLOY_PRODUCTION_ENABLED` is false.
+No key is required by the current public adapter at `https://mcp.tafsir.net/mcp`. It performs MCP initialization/tools-list/schema checks before calls. Hosted code pins the endpoint/protocol; merely changing historical `TAFSIR_MCP_URL` does not imply every adapter will retarget. Enable `FOUNDATION_TAFSIR_LIVE` only in an allowed configured mode following [integration](../architecture/FOUNDATION_INTEGRATION.md).
 
-### Vercel frontend and bot
+Do not install a local MCP server for judges or invent an auth variable. Test Quran 7:31 with canonical Quran plus independently attributed Moyassar and Saadi. Access, edition rights and qualified source approval remain separate.
 
-Vercel's [GitHub integration](https://vercel.com/docs/git/vercel-for-github) is connected to `smaq777/Basira-Hackathon`, and current pull requests receive Vercel preview checks. The final production branch and committee alias still require release-gate read-back; preview success is not production acceptance.
+## 4. Quran.com canonical text versus newer Foundation APIs
 
-For the checked-in GitHub Actions deployment path:
+Official: [Quran.com](https://quran.com/), [Foundation API quickstart](https://api-docs.quran.foundation/docs/quickstart/).
 
-1. Create a scoped token in [Vercel account tokens](https://vercel.com/account/tokens).
-2. Link or create the Basirah project and obtain its project/team identifiers from the project settings or `.vercel/project.json`; do not commit the `.vercel` directory.
-3. Add `VERCEL_TOKEN` as a GitHub `staging` and `production` environment secret.
-4. Add `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` as non-secret environment or repository variables.
-5. Configure Preview and Production values in [Vercel environment variables](https://vercel.com/docs/environment-variables). Never place a private key in a `VITE_*` variable.
+Current [adapter](../../apps/api/src/quran-api.ts) reads public `https://api.quran.com/api/v4/quran/verses/uthmani`; it does not send an API key. Newer Quran Foundation OAuth APIs have their own access/credential onboarding; follow the official quickstart if implementing a future migration. No client-ID/secret variable or OAuth integration is claimed in the accepted adapter. Do not replace a working endpoint just to add a key.
 
-Until the split frontend has an implemented API origin, cookie, CORS, and CSRF policy, Vercel is a preview of the web build; Railway remains the honest single-origin application deployment.
+## 5. Neon research database and optional developer MCP
 
-## GitHub configuration
+Official: [console](https://console.neon.tech/), [connection documentation](https://neon.com/docs/connect/connect-intro), [management API authentication](https://api-docs.neon.tech/reference/authentication).
 
-Repository deployment switches are non-secret variables:
+**SQL runtime:**
 
-- `DEPLOY_STAGING_ENABLED`: global staging switch; default `false`.
-- `DEPLOY_PRODUCTION_ENABLED`: global production switch; default `false`.
-- `DEPLOY_RAILWAY_ENABLED`: provider switch; default `false`.
-- `DEPLOY_VERCEL_ENABLED`: provider switch; default `false`.
+1. In the owner's console, select the correct project, branch, database and dedicated role. Use the Connect dialog to obtain that role's connection string privately.
+2. Configure `FOUNDATION_CORPUS_DATABASE_URL` for the research reader, `FOUNDATION_CORPUS_TLS_MODE=verify-full`, and accepted `FOUNDATION_CORPUS_VERSION`. Retain any required CA certificate. Never substitute a database-owner role.
+3. A separately authorized publication path uses `REVIEWER_CORPUS_DATABASE_URL`, its own role/verified TLS and `REVIEWER_CORPUS_VERSION=reviewed-<frozen-pin>`. Reader and writer must target the same intended database under distinct roles; binding/least-privilege guards remain enabled.
+4. Optional retained-page caching uses `FOUNDATION_WEB_CACHE_DATABASE_URL` and its scoped role, not a general admin connection.
+5. For new isolated environments, follow checked-in migration/runbooks explicitly. **Do not rerun ingestion, embeddings, grants or migrations on the already activated staging corpus merely to reproduce the demo.**
 
-Set secrets through **Settings → Environments → staging/production → Environment secrets**. Keep production approval manual. GitHub Actions logs must never echo secret values.
+SQL credentials are not Neon management API keys. The report/session `DATABASE_URL` in active staging references **Railway report PostgreSQL**, not this corpus DB.
 
-## Local setup
+**Optional operator API/MCP:** use the official console API-key management flow; choose the narrowest supported project scope and keep it in the operator's private MCP/CLI secret configuration. Management tools provision/inspect infrastructure; they are not runtime religious evidence. No management key is needed by the SQL adapter or public guest. Do not commit MCP configuration or agent transcripts.
 
-Copy the names manually from `.env.example` into an ignored `.env` only when a feature actually needs them. Do not commit generated `.env`, `.vercel`, `.railway`, `.mcp`, Codex, editor-agent, credential, transcript, or team-note files. The policy check rejects known credential patterns but does not replace revocation or a full history scan.
+## 6. Railway: single-origin submission deployment
 
-## Rotation and incident response
+Official: [Railway](https://railway.com/), [CLI authentication](https://docs.railway.com/cli#authentication), [variables](https://docs.railway.com/variables).
 
-1. Revoke or rotate the exposed credential at the provider first.
-2. Disable the affected deployment/integration and preserve sanitized evidence privately.
-3. Identify where the value appeared: working tree, commit history, Actions log, deployment output, issue, or artifact.
-4. Open a private security report. Do not paste the value into a public issue.
-5. Use an owner-approved history rewrite only if needed; coordinate because it invalidates clones and open branches.
-6. Re-run the full-history scan and verify the replacement credential with minimum scope.
+1. The existing authorized operator can use `railway login`; automation should use an appropriately scoped project/environment token created by that owner. Store tokens privately, not as repository variables.
+2. Select the existing project/API/staging, not a duplicate service:
+   - Project `9837ef84-08f3-4228-b7ac-f3b3dc25fba0`.
+   - Service `4d15a8f1-0028-42d6-adfa-cef07e55a9bc`.
+   - Environment `97179b92-48b1-412f-95ff-1901bb826458`.
+3. Configure report `DATABASE_URL`, dedicated `REVIEW_WORKER_DATABASE_URL` and verified TLS/CA according to accepted report-store setup. Connection strings remain secret; source DB and report DB are not interchangeable.
+4. Configure server keys in the API service's staging variables. Public Clerk key must also exist at frontend build time. Preserve declarations and hosted-demo guards.
+5. Read the accepted development SHA; align `BASIRAH_DEPLOYMENT_SHA` with the exact source deployment using the [operator procedure](SUBMISSION_CORPUS_ACTIVATION.md). A docs-only Git merge can still trigger deployment; a stale SHA guard can intentionally stop startup.
+6. Require deployment SUCCESS and actual SHA/service/environment match, then HTTP200 health/readiness/capabilities. Do not disable guards or promote `main`.
+
+GitHub deployment automation is a separate optional path. Its `RAILWAY_TOKEN` belongs in an environment secret; checked-in deploy switches are not proof that an Actions deployment is enabled.
+
+## 7. Clerk: reviewer sign-in
+
+Official: [dashboard API keys](https://dashboard.clerk.com/last-active?path=api-keys), [environment reference](https://clerk.com/docs/guides/development/clerk-environment-variables), [React quickstart](https://clerk.com/docs/react/getting-started/quickstart).
+
+1. Create/select your application's intended development/staging instance in the Clerk dashboard.
+2. From its API Keys page copy the **publishable key** into `VITE_CLERK_PUBLISHABLE_KEY` for the web build and `CLERK_PUBLISHABLE_KEY` for backend verification.
+3. Put **secret key** only in server `CLERK_SECRET_KEY`. These app keys are different from Clerk's optional end-user machine-auth API-key product.
+4. Configure exact `CLERK_AUTHORIZED_PARTIES` and `CLERK_FRONTEND_API_ORIGIN` for the accepted site; avoid wildcard origins.
+5. Production/default authorization is `CLERK_REVIEWER_ACCESS_MODE=allowlist` with owner-approved `CLERK_REVIEWER_USER_IDS`. Hackathon staging can explicitly use `authenticated` so judges may sign in without a manual allowlist.
+6. Source-publication authorization has its separate `REVIEWER_CORPUS_ACCESS_MODE` guard; do not assume signing in grants arbitrary database access. Verify anonymous rejection and authenticated behavior.
+
+Signing in proves application identity, not scholarly expertise. Restore restricted production policy after the evaluation window.
+
+## 8. Brevo: ticket and published-review email
+
+Official: [key creation](https://help.brevo.com/hc/en-us/articles/209467485-Create-and-manage-your-API-keys), [API quickstart](https://developers.brevo.com/docs/quickstart), [sender troubleshooting](https://help.brevo.com/hc/en-us/articles/115000188150-Troubleshooting-Issues-with-Brevo-SMTP).
+
+1. In your Brevo account, open **Settings → SMTP & API → API Keys & MCP**, generate a named REST API key, complete required verification and retain its one-time value securely. Do not convert it to an MCP-only key: this application uses REST.
+2. Verify the From sender/domain and any required transactional activation. Configure `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, `PUBLIC_APP_URL` together on the server.
+3. Tickets also require `TICKETS_ENABLED`, independent environment-specific `TICKET_DATA_KEY` (32-byte base64) and `TICKET_LOOKUP_PEPPER`. Generate locally using a cryptographic generator; never put the values in issue text.
+4. Test only an owned ticket with explicit contact consent and a consenting mailbox. Publish its report once; check outbox, provider message acceptance and subsequent delivery-event reconciliation separately.
+5. If delivery fails, retain its status/reason; check sender verification, account activation/quota, suppression/bounce/security and mailbox spam. An API acceptance ID is not delivery proof.
+
+A ticket without contact consent must not generate email. Reviewer publication is not automatic RAG admission; source/rights approval is separate. Actual transport is `https://api.brevo.com/v3/smtp/email`; receipts use Brevo transactional event API. Never expose recipient contact data publicly.
+
+## 9. Optional discovery: Firecrawl and TinyFish
+
+**Firecrawl:** [official dashboard guidance](https://github.com/firecrawl/firecrawl-docs/blob/main/dashboard.mdx), [dashboard](https://www.firecrawl.dev/), [docs](https://docs.firecrawl.dev/). Sign in, open API Keys, create an environment-specific key, save as `FIRECRAWL_API_KEY`, and check credits/owner spend limits. Enable only the intended `FOUNDATION_WEB_DISCOVERY_ENABLED` path and source-policy configuration. Search/scrape responses are candidates, not approved evidence.
+
+**TinyFish:** [official key guide](https://www.tinyfish.ai/blog/tinyfish-web-agent-getting-started-10-minutes), [account](https://agent.tinyfish.ai/), [docs](https://docs.tinyfish.ai/). Create/sign in to your account, open API Keys, create a key and store its one-time value privately as `TINYFISH_API_KEY`. Select the accepted `FOUNDATION_WEB_PROVIDER` adapter with the existing policy/budget guards. Basirah implements Search/Fetch REST, not TinyFish's autonomous Agent or MCP interface. Current assembly also requires Firecrawl configuration for the enabled discovery path; do not infer independent activation from the TinyFish key alone.
+
+Neither optional adapter is required for the Quran/Tafsir judge example. Source policies, rights and exact-text/relevance validation apply regardless of provider.
+
+## 10. Nonintegrated sources and submission URL policy
+
+The owner has selected Railway API staging exclusively. Do not offer or submit a Vercel URL, and do not set up an alternate submission deployment.
+
+Dorar is disabled after 403; no working supported credential is claimed. Quranpedia, Islamic Content, Dawah Center and Shamela are discovery/reference websites, not accepted API-key integrations. Cohere remains a historical candidate; do not create its key or alter vector dimensions for this release. See the [source registry](../api/PROVIDERS.md).
+
+## Secure storage, rotation and test scope
+
+- Backend keys belong in the owning provider or GitHub **environment secrets**, never public variables/source. Connection strings are secrets even without KEY in their names.
+- Use independent staging/production key, encryption and lookup material. Do not promote production as part of submission preparation.
+- Revoke/rotate a leaked credential first, then investigate working tree/history/log exposure through the private [security process](../../SECURITY.md). Public policy checks do not prove a full historical secret audit.
+- Keep a sanitized receipt: timestamp, accepted/deployed SHA, statuses, provider/model, corpus/prompt versions and key-presence booleans only. No raw environment dumps, headers, cookies or contact data.

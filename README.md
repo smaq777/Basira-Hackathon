@@ -2,108 +2,129 @@
 
 Evidence-linked review of Arabic Islamic content before publication.
 
-A quotation can be accurate while the conclusion drawn from it exceeds the source. Basirah separates **quotation fidelity** from **claim support**, targeting unsupported generalization, omitted qualifications, and unsupported exclusivity.
+A quotation may be accurate while the conclusion drawn from it exceeds its source. Basirah separates **quotation fidelity** (مطابقة النقل) from **support for the author's inference** (كفاية الاستدلال). It is an editorial review tool, not a general chatbot, personal fatwa service or automatic scholarly approval.
 
-> **Status: Railway staging prototype, 6 October 2026.** The real guest-analysis/result flow and authenticated reviewer workspace are deployed at [api-staging-42bc.up.railway.app](https://api-staging-42bc.up.railway.app/). Reviewers can edit separate versioned reports and evidence; source publication is a separate explicit operation. Selected Arabic comparisons are verified, but full reviewer/email/RAG acceptance, comprehensive source coverage and scientific evaluation are **not complete**. A successful software check is not proof of religious correctness. See the [current checkpoint and remaining tests](docs/evidence/2026-10-06-reviewer-staging-checkpoint.md).
+## Try the application
 
-## Start here
+| Resource                               | URL / instructions                                                                                                                        |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Live staging                           | [Open Basirah](https://api-staging-42bc.up.railway.app/) — paste Arabic text as a guest; no API key required                              |
+| Public repository                      | [smaq777/Basira-Hackathon](https://github.com/smaq777/Basira-Hackathon) — default branch `development`                                    |
+| Judge reproduction                     | [Arabic examples and expected boundaries](docs/hackathon/JUDGE_QUICKSTART.md)                                                             |
+| Submission readiness and Ahmed handoff | [Requirements, evidence and remaining work](docs/hackathon/SUBMISSION_HANDOFF.md)                                                         |
+| Engineering                            | [Documentation hub](docs/README.md), [implemented architecture](docs/architecture/ARCHITECTURE.md), [API contract](docs/api/OPENAPI.yaml) |
 
-Browse the [documentation hub](docs/README.md) and [English–Arabic terminology guide](docs/product/GLOSSARY.md). Development progress is tracked on the [delivery board](https://github.com/users/smaq777/projects/14).
+**Verified checkpoint, 6 October 2026:** application source `51654b2e045a03b33b0809cadf6a316864512a04`, following [PR #195](https://github.com/smaq777/Basira-Hackathon/pull/195). Useful author rewriting, numbered References and exact website copying passed on a fresh public/synthetic example. See the [live receipt](https://github.com/smaq777/Basira-Hackathon/issues/169#issuecomment-6022396451) and [software CI](https://github.com/smaq777/Basira-Hackathon/actions/runs/37506934672). Dated evidence is not an uptime guarantee or general scholarly accuracy claim. Later documentation-only merges may have a newer SHA; [issue #169](https://github.com/smaq777/Basira-Hackathon/issues/169) identifies the latest verified deployment.
 
-| Audience           | Read                                                                                                                                                                                                                                                        |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| New developer      | [Contributing](CONTRIBUTING.md), [setup](docs/operations/SETUP.md), [current status](docs/STATUS.md)                                                                                                                                                        |
-| Committee          | [Judge quickstart](docs/hackathon/JUDGE_QUICKSTART.md), [committee guide](docs/hackathon/COMMITTEE_GUIDE.md), [challenge alignment](docs/hackathon/ALIGNMENT.md), [business model and Arabic review cases](docs/hackathon/BUSINESS_MODEL_AND_TEST_CASES.md) |
-| Product and design | [Requirements](docs/product/REQUIREMENTS.md), [user experience](docs/product/UX.md)                                                                                                                                                                         |
-| Engineering        | [Complete system blueprint](docs/architecture/SYSTEM_BLUEPRINT.md), [architecture summary](docs/architecture/ARCHITECTURE.md), [RAG](docs/architecture/RAG.md), [data model](docs/architecture/DATA_MODEL.md)                                               |
-| Integrations       | [Credential setup](docs/operations/CREDENTIALS.md), [API/source registry](docs/api/PROVIDERS.md), [API contract](docs/api/OPENAPI.yaml)                                                                                                                     |
-| Quality            | [Testing](docs/testing/STRATEGY.md), [test cases](docs/testing/CASES.md), [security](SECURITY.md)                                                                                                                                                           |
-| Planning           | [Backlog](docs/planning/BACKLOG.md), [GitHub Issues](https://github.com/smaq777/Basira-Hackathon/issues), [team workflow](docs/governance/WORKFLOW.md)                                                                                                      |
-| Evidence           | [Provider setup evidence](docs/evidence/2026-10-02-provider-setup.md), [foundation work](docs/evidence/2026-09-30.md), [Dorar assessment](docs/api/DORAR_AUDIT.md)                                                                                          |
+### Judge walkthrough
 
-## Local development
+1. Open staging in your own browser profile. Paste the public rough draft below and start analysis.
+2. Compare the quotation with its attributed Quran passage. Inspect the author's claim separately, including the condition of giving to the poor.
+3. Open sources/context to see actual evidence and its limits.
+4. At the end, generate an author-wording improvement. Copy is available only after independent verification; numbered References include only used evidence. Cancel another candidate and confirm the original remains unchanged.
+5. Try a contradictory or irrelevant case from the quickstart. Insufficient evidence should produce abstention/referral, not unrelated sources. An upstream outage is an operational failure, not an accepted empty result.
 
-The default-off [source-review integration](docs/architecture/FOUNDATION_INTEGRATION.md)
-adds a persisted report path for configured local development. The separately
-configured hosted-demo path is active on Railway staging; model interpretation
-remains provisional and evidence-bound. See the
-[reviewer staging runbook](docs/operations/REVIEWER_STAGING_WORKFLOW.md).
+> قال تعالى: «وإن تخفوها وتؤتوها الفقراء فهو خير لكم» [البقرة: 271]. لما نخفي الصدقة ونعطيها للفقراء فهذا خير للمتصدق.
 
-Use Node.js **24 LTS** and npm **11**. Foundation tests require no external credentials.
+Wording may vary. It must not add an unstated comparison such as «من إظهارها», change the quotation, remove the poor-recipient condition or expand the claim's scope. Rejected candidates are not copyable.
+
+Guest reports are ownership-bound: retain the same browser profile and valid guest session. A copied `reviewId` URL is **not** a public share link. Guest retention is configured to 24 hours after the last successful save; reading does not renew it. Reviewer access requires Clerk sign-in. Hackathon staging temporarily allows authenticated judges into that workspace; this neither verifies scholarly qualifications nor defines production authorization. Use synthetic drafts and only your own consenting test contact details.
+
+## Implemented behavior and limits
+
+- Arabic RTL paste → automatic extraction → retrieval → quotation comparison → evidence-bounded claim assessment → persisted report/reload.
+- Deterministic source/span/citation checks surround model-assisted extraction and interpretation. Exact wording is preferred; close candidates are not automatically proof of quotation fidelity or hadith authenticity.
+- Canonical Quran and live Moyassar/Saadi context; a pinned **175-passage research snapshot** with 1536-dimensional vectors, plus a separate approved-review contribution overlay. Membership is not scholarly/source-rights approval.
+- Provisional support, contradiction and insufficient-context outcomes. Semantic prompt/pipeline **1.14**; six fresh negation/condition/wedding/off-topic cases have [dated acceptance evidence](docs/evidence/2026-10-06-staging-1.14-acceptance.md).
+- Evidence-grounded author rewriting, independent verification, cancellation, exact validated copying and numbered used-source References. Candidates are temporary, not durable reports.
+- Authenticated report editing/history, tickets, explicit source-publication gate and email outbox/receipt tracking. **Full expert publication → future-user retrieval → consented notification acceptance still needs a final end-to-end receipt.**
+
+Limits: 3000-character input; bounded coverage; ambiguous references remain unresolved; Dorar access is unavailable; provider budgets/upstream availability can interrupt processing. Qualified scholarly evaluation, source rights/approval and measured beneficiary impact are incomplete. `verification:false` deliberately labels provisional review, not an outage by itself. Read [rights](docs/governance/RIGHTS.md), [status](docs/STATUS.md) and [remaining work](docs/hackathon/SUBMISSION_HANDOFF.md).
+
+## How it works
+
+React/TypeScript/Vite and Node.js/Express share one Railway origin. A leased worker processes persisted revisions. Railway report PostgreSQL and Neon research retrieval use separate connections/roles.
+
+```mermaid
+flowchart TD
+  U[Arabic React interface] -->|HTTPS and ownership cookie| A[Railway API]
+  A --> R[(Report Postgres: sessions, revisions, runs, reports)]
+  R --> W[Leased worker]
+  W --> X[Structured extraction]
+  X --> Q[Reference and contiguous quotation matching]
+  Q --> N[(Neon: pinned corpus and reviewed overlay)]
+  Q --> T[Tafsir MCP: attributed context]
+  Q --> K[Quran.com canonical text]
+  N --> E[Validated evidence packet]
+  T --> E
+  K --> E
+  E --> S[Evidence-only model assessment]
+  S --> G[Span, citation, relevance and scope guards]
+  G --> R
+  R --> U
+  U --> RW[Requested rewrite and independent verifier]
+  RW --> C[Validated text plus used References, or abstention]
+```
+
+Retrieval finds candidates; validation decides what can be shown. Models cannot invent references or approve themselves. OpenRouter is primary; direct Gemini is an availability-only text backup, not a way around failed meaning checks. Rewriting preserves protected quotations and independently checks scope, modality and conditions. [Implemented architecture](docs/architecture/ARCHITECTURE.md) details call order, physical tables, source anchors and failure paths.
+
+## MCPs, APIs and services
+
+MCP means **Model Context Protocol**, a standardized tool interface—not a model, database or scholarly authorization. Tafsir MCP is the application's religious-content MCP. Other services below use REST/SQL/infrastructure; developer MCP tooling is not another runtime evidence source.
+
+| Official service / website                                                                           | Actual role                                                                               | Credential / activation                                                                             |
+| ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| [Tafsir MCP](https://tafsirmcp.netlify.app/), [upstream](https://github.com/tafsircenter/tafsir-mcp) | Attributed Quran search and Moyassar/Saadi context, checked tool schemas                  | Current public `https://mcp.tafsir.net/mcp` endpoint is keyless                                     |
+| [Quran.com](https://quran.com/), [Quran Foundation docs](https://api-docs.quran.foundation/)         | Canonical Uthmani text through existing public v4 adapter                                 | Current adapter keyless; newer Foundation OAuth API is a separate unimplemented migration           |
+| [OpenRouter](https://openrouter.ai/), [docs](https://openrouter.ai/docs)                             | Primary extraction/assessment/rewrite; query embeddings                                   | `OPENROUTER_API_KEY`; assessor default `openai/gpt-6.1-sol`; `openai/text-embedding-3-small` / 1536 |
+| [Google Gemini](https://ai.google.dev/), [AI Studio](https://aistudio.google.com/)                   | Direct `gemini-2.5-flash` backup for eligible availability failures only                  | `GEMINI_API_KEY`, optional `GEMINI_API_KEY_2`, explicit flag; no embedding substitution             |
+| [Neon](https://neon.com/), [console](https://console.neon.tech/)                                     | Research corpus and exact/lexical/vector retrieval; separate approved-contribution writer | Private SQL URLs, verified TLS; management API/MCP is optional developer tooling                    |
+| [Railway](https://railway.com/), [docs](https://docs.railway.com/)                                   | Single-origin staging and report PostgreSQL                                               | Owner/operator login or scoped deployment token; judges need neither                                |
+| [Clerk](https://clerk.com/), [dashboard](https://dashboard.clerk.com/)                               | Reviewer authentication followed by server authorization                                  | Public publishable key + private secret; not required for guest analysis                            |
+| [Brevo](https://www.brevo.com/), [API docs](https://developers.brevo.com/)                           | Consented transactional notifications and delivery-event receipts                         | Private API key + verified sender; queued/accepted/delivered are separate                           |
+| [Firecrawl](https://www.firecrawl.dev/), [docs](https://docs.firecrawl.dev/)                         | Optional policy-filtered source discovery, not automatic approved evidence                | `FIRECRAWL_API_KEY`; explicit configuration                                                         |
+| [TinyFish](https://www.tinyfish.ai/), [docs](https://docs.tinyfish.ai/)                              | Optional alternate search/fetch adapter                                                   | `TINYFISH_API_KEY`; selected adapter and source policy required                                     |
+
+**Submission URL policy:** Railway API staging is the only product/demo URL. Do not offer or submit a Vercel URL.
+
+The [credential guide](docs/operations/CREDENTIALS.md) gives official pages and detailed setup. The [source registry](docs/api/PROVIDERS.md) separates unavailable/discovery-only Dorar, Quranpedia, Islamic Content, Dawah Center and Shamela. Cohere/Drizzle are historical candidates, not active dependencies of this embedding/storage path. Do not create accounts just because a legacy variable remains in `.env.example`.
+
+## Reproduce locally
+
+Use Node **24 LTS**, npm **11** and the lockfile. Default tests require no paid provider keys. See [setup](docs/operations/SETUP.md) and [testing](docs/testing/STRATEGY.md) for the Python pipeline suite and configured integrations.
 
 ```bash
+git clone https://github.com/smaq777/Basira-Hackathon.git
+cd Basira-Hackathon
+git switch development
 npm ci
 npm run check
 npm run dev:api
-# In another terminal:
+# In a second terminal, from the repository:
 npm run dev:web
 ```
 
-Web: `http://localhost:5173`. API: `http://localhost:3000`. The app provides the Arabic public journey and a Clerk-protected reviewer workspace. Authorization defaults to an explicit reviewer allowlist; hackathon staging temporarily admits any authenticated Clerk user so judges are not blocked. Anonymous users never receive reviewer access. The configured staging workspace loads actual tickets and independent human report versions; illustrative local fixtures are not real review results. Text moves directly into an automatic-analysis transition; there is no manual phrase-classification step. Guest sessions, documents, immutable revisions and idempotent review-run lifecycle records are implemented when a database is configured. When source-backed review is disabled, a real submission is saved and routed to an explicit unavailable result with the human-review ticket option; illustrative findings are not substituted. Hosted model assessment is provisional, not scholarly verification.
+Web: `http://localhost:5173`; API: `http://localhost:3000`. Without report storage/providers, local operation must disclose unavailability. Offline tests do not reproduce live source-backed analysis. Follow the [integration runbook](docs/architecture/FOUNDATION_INTEGRATION.md); never borrow credentials or accidentally migrate shared staging.
 
 ```bash
 npm run build
 npm start
 ```
 
-The built server serves React and `/api` from one origin. `/health` checks process liveness; `/ready` returns `200` only when the database and required migration are available, and otherwise returns `503`. See [operations](docs/operations/SETUP.md).
+The built server serves web and API from one origin. `/health` checks liveness; `/ready` checks report database/migrations, not all upstreams; `/api/v1/capabilities` discloses enabled paths. Authorized operators can run `node scripts/acceptance-submission-staging.mjs --live`, retaining first outcomes. This is separate from default credential-free tests.
 
-## Judge reproduction and API keys
+## Competition requirements and disclosure
 
-The current foundation requires **no API key** to install, test, build or inspect. Start with the [judge quickstart](docs/hackathon/JUDGE_QUICKSTART.md). The [credential guide](docs/operations/CREDENTIALS.md) lists every planned or delivered service, its official account/key page, exact environment-variable name, safe storage location and current implementation status.
+Track 4: **Knowledge and verification tools empowering those introducing Islam** — أدوات المعرفة والتحقق لتمكين المعرّفين بالإسلام. Confirm the registered track in the portal; this repository is not a registration receipt.
 
-Never commit a real value to `.env.example`. Backend credentials belong in Railway or GitHub environment secrets. Any `VITE_*` value is visible in the browser and therefore must not be a secret. Judges should create credentials only for integrations marked implemented in the final tagged release; planned configuration is not required to reproduce this foundation.
+The [official website](https://islamicaich.org/) and [terms](https://islamicaich.org/terms), checked 6 October, require an operational demo, permitted public source, operating/source/tool/license documentation, presentation and a video **no longer than two minutes**. The website states the deadline is **6 October 2026, 23:59 Riyadh (UTC+3)**. Submit through the organizer portal and retain its receipt; email is not a normal substitute. Follow the supplied participant guide and current organizer announcements too.
 
-| Service                 | Current need                                                                                                                                    | Official setup                                                                                                                                          |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Railway                 | Public staging app and isolated staging PostgreSQL are live; production remains gated                                                           | [Railway](https://railway.com/) and [project-token guidance](https://docs.railway.com/cli#authentication)                                               |
-| Clerk                   | Reviewer sign-in is implemented; production defaults to owner-approved user IDs, with an explicit authenticated-user mode for hackathon staging | [Clerk API keys](https://dashboard.clerk.com/last-active?path=api-keys) and [React quickstart](https://clerk.com/docs/react/getting-started/quickstart) |
-| Vercel                  | Configuration is checked in; authorize and verify this repository before relying on preview checks                                              | [Vercel GitHub integration](https://vercel.com/docs/git/vercel-for-github) and [account tokens](https://vercel.com/account/tokens)                      |
-| Neon                    | Production project/schema exist; production runtime and latest migrations need final verification                                               | [Neon console](https://console.neon.tech/)                                                                                                              |
-| Cohere                  | Candidate embeddings; not selected by evaluation                                                                                                | [Cohere API keys](https://dashboard.cohere.com/api-keys)                                                                                                |
-| Language-model provider | OpenRouter assessment is configured for staging; prompts, citations and source spans remain validated, and results are provisional              | [Provider registry and configuration](docs/api/PROVIDERS.md)                                                                                            |
+Pre-4 October preparation is disclosed in the [30 September record](docs/evidence/2026-09-30.md). This repository's initial commit was imported on **4 October at 10:09 Riyadh**; it alone does **not** prove a pre-4 October baseline. The owner must supply original dated baseline/rights evidence and distinguish October 4–6 additions. AI-assisted development/documentation is disclosed, not represented as entirely unaided human work.
 
-Exact variables, scope, storage, rotation and environment separation are in the [credential guide](docs/operations/CREDENTIALS.md).
+The [submission handoff](docs/hackathon/SUBMISSION_HANDOFF.md) maps requirements to evidence or owner actions. Selected tests do not certify full eligibility, general accuracy or a competition outcome. Use public/synthetic or irreversibly anonymized inputs only; never upload real beneficiary conversations, contact records, secrets or unlicensed archives to GitHub, video or model services.
 
-## Intended architecture
+## Collaboration, security and licensing
 
-React + TypeScript + Vite; Node.js + Express on Railway; Neon PostgreSQL with pgvector and pg_trgm. Cohere Embed v4 is an **evaluation candidate**, not a proven winner. Drizzle is planned for database implementation. Vercel previews are optional and require a provider-side connection specifically authorized for this repository; `main` remains undeployed.
+Issue → short-lived `codex/`, `saleh/` or `ahmed/` branch → review → merge commit into `development` → scoped staging verification. `main` is production-only; promotion is deferred. On 6 October, GitHub read-back confirmed `main` requires one approval and `quality`, `policy`, `dependency-audit`, with force pushes/deletions disabled. Administrators are not enforced by that rule; do not describe it as absolute protection. See [Contributing](CONTRIBUTING.md) and [Security](SECURITY.md).
 
-```mermaid
-flowchart TD
-  UI[Arabic React interface] --> API[Node.js / Railway]
-  API --> P[Review pipeline]
-  P --> R[Reference + lexical + semantic retrieval]
-  R --> N[Neon: approved corpus and vectors]
-  R --> X[Approved source adapters]
-  N --> E[Versioned evidence bundle]
-  X --> E
-  E --> Q[Deterministic quote comparison]
-  E --> S[Model-assisted claim support assessment]
-  Q --> G[Evidence and scope guards]
-  S --> G
-  G --> O[Report, revision or human-review package]
-  O --> UI
-```
-
-## Scope
-
-- Short Arabic posts and a bounded, approved reference set of 30–50 passages.
-- Claim confirmation, quote/source comparison, three reasoning-error categories, evidence-linked findings, editing and rechecking, export and human-review package.
-- No independent personal fatwa (فتوى شخصية), no judgments about people, no automatic publication approval.
-- General user accounts, images/OCR and unrestricted discussion are later features. The reviewer workspace uses real staging tickets and separately versioned human reports behind Clerk sign-in. Its default authorization is a server-side reviewer allowlist; the temporary hackathon staging mode admits any authenticated user. Full live publication, email and subsequent retrieval acceptance remain pending.
-- Provider failure is not a false-claim verdict; lack of evidence is not proof of falsity.
-
-## Challenge and disclosure
-
-Track 4: **Knowledge and verification tools empowering those introducing Islam** — أدوات المعرفة والتحقق لتمكين المعرّفين بالإسلام.
-
-The supplied participant guide sets delivery from **4 October 2026, 09:00 to 6 October 2026, 23:59, Asia/Riyadh**. Preparatory work before 4 October is explicitly disclosed. Reconfirm organizer announcements before submission.
-
-This repository is **private at the owner's request**. It must become public before committee handoff, following an owner-approved secrets, history and rights review. Never upload beneficiary data or credentials.
-
-## Collaboration and licensing
-
-Issue → branch from `development` as `saleh/<issue>-<slug>` → pull request to `development` → staging → human acceptance → `development` to `main` release pull request → manual production gate. GitHub merge commits preserve branch history; squash and rebase merges are disabled. Branch protection remains unverified while GitHub denies protection for this private repository, so written policy and CI are not represented as technical enforcement. See [Contributing](CONTRIBUTING.md).
-
-Project-authored software is [MIT-licensed](LICENSE). Third-party reference texts, datasets and challenge documents retain their own rights; see [rights and attribution](docs/governance/RIGHTS.md). Documentation is English-first; Arabic remains the product language and the language of Islamic examples and terminology.
+Project-authored software is [MIT-licensed](LICENSE). Third-party editions, API payloads, models, fonts, marks and challenge materials retain independent rights; see [rights/attribution](docs/governance/RIGHTS.md). Public reachability is not redistribution permission. Keep private credentials in owning platforms/ignored environment files; all `VITE_*` values are browser-visible.
