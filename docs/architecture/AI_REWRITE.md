@@ -6,6 +6,14 @@ The owner-authorized staging iteration exposes the existing generator/verifier a
 
 This does not promise scholarly review delivery or validated accuracy. The candidate is still a ten-minute transient session-bound object; saved reports and original revisions remain unchanged. Turning the staging flag off restores the unavailable-generation state without removing the final section or ticket route. No database or corpus mutation is included.
 
+For a completely evidenced quotation-only report, the server now selects exact
+recorded citations without requesting an author rewrite. There is no author
+wording to improve or new meaning to verify. The same protected quotation,
+length, fresh report, ownership and copy validation applies; an attribution that
+cannot fit is withheld. Supported author writing still uses the separate pinned
+generator and meaning/source verifier. See the
+[quotation attribution follow-up](../evidence/2026-10-06-rewrite-attribution.md).
+
 Status: supported author wording and citation/layout slices implemented
 behind an explicit flag, with complete-evidence gating on hosted staging. Related: #38, #13, #18,
 #68. Preserve the 3,000-character review scope and original revision.

@@ -205,6 +205,23 @@ export function validateRewrite(report: FoundationReport, raw: unknown) {
   };
 }
 
+/** Attribution requires no model inference when there is no eligible author wording. */
+function quotationCitationOperations(input: ReturnType<typeof rewriteInput>): RewriteOperations {
+  const citations: RewriteOperations['citations'] = [];
+  const offsets = new Set<number>();
+  let remaining = input.remainingUtf16Units;
+  for (const citation of input.allowedCitations) {
+    if (offsets.has(citation.offset)) continue;
+    const addition = ` [${citation.reference}${citation.pending ? ' — مصدر بحثي غير معتمد' : ''}]`;
+    if (addition.length > remaining) continue;
+    citations.push({ offset: citation.offset, evidenceKey: citation.evidenceKey });
+    offsets.add(citation.offset);
+    remaining -= addition.length;
+    if (citations.length === 12) break;
+  }
+  return { replacements: [], paragraphBreaks: [], citations };
+}
+
 const binding = (context: RewriteContext) =>
   sha256(canonical({ report: context.report, attempt: context.attempt }));
 function unresolved(report: FoundationReport) {
@@ -337,10 +354,18 @@ export function createRewriteService(
       void Promise.race([
         Promise.resolve().then(async () => {
           signal.throwIfAborted();
-          const input = options.verifier
-            ? authorRewriteInput(context.report)
-            : rewriteInput(context.report);
-          const output = await generate(input, signal);
+          const authorInput = options.verifier ? authorRewriteInput(context.report) : undefined;
+          const input = authorInput ?? rewriteInput(context.report);
+          // A fully evidenced quotation-only draft needs exact attribution, not
+          // an author-rewrite request whose empty output may omit that citation.
+          const quotationOnly =
+            options.requireCompleteEvidence &&
+            options.verifier &&
+            authorInput?.authorClaims.length === 0 &&
+            (context.report.semanticAssessment?.claims.length ?? 0) === 0;
+          const output = quotationOnly
+            ? quotationCitationOperations(input)
+            : await generate(input, signal);
           signal.throwIfAborted();
           const fresh = await reload();
           signal.throwIfAborted();
@@ -364,6 +389,7 @@ export function createRewriteService(
             if (row.binding !== binding(after)) throw new RewriteError('REWRITE_STALE_REPORT');
             row.verification = { raw, hash };
           }
+          if (quotationOnly) candidate.mode = 'citation_and_layout_only';
           return valid;
         }),
         new Promise<never>((_resolve, reject) => {
