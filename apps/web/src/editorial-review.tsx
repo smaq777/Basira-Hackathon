@@ -3,6 +3,56 @@ import {
   type ReviewedRecord,
 } from '../../../packages/contracts/src/editorial-review.js';
 import { useState } from 'react';
+import type { ZodIssue } from 'zod';
+
+export function reviewPublicationValidationMessages(issues: readonly ZodIssue[]): string[] {
+  return [
+    ...new Set(
+      issues.map((issue) => {
+        const [section, index, field] = issue.path;
+        const record =
+          section === 'records' && typeof index === 'number' ? `السجل ${index + 1}` : 'السجل';
+        const source =
+          section === 'evidence' && typeof index === 'number' ? `المصدر ${index + 1}` : 'المصدر';
+        if (issue.message === 'SUGGESTION_REQUIRES_EVIDENCE')
+          return 'النص المعدل المقترح من المراجع: لا يمكن نشر صياغة بديلة دون سجل محسوم مرتبط بدليل. اترك هذا الحقل الاختياري فارغًا لنشر الملاحظات فقط، أو أضف الدليل والتعليل واربطهما بسجل محسوم.';
+        if (issue.message === 'MISSING_REVIEW_EVIDENCE')
+          return `${record}: يوجد ارتباط بدليل غير موجود. اختر دليلًا من المصادر الحالية أو أزل الارتباط المفقود.`;
+        if (issue.message === 'RESOLVED_RECORD_REQUIRES_EVIDENCE_AND_REASON')
+          return `${record}: الحالة محسومة؛ أكمل العبارة محل المراجعة، واختر دليلًا مرتبطًا واكتب التعليل وحدوده. إذا لم يُحسم السجل، اختر «مطابقة غير محسومة» أو «لم يُقيّم».`;
+        if (issue.message === 'DUPLICATE_REVIEW_RECORD')
+          return 'توجد سجلات أو مصادر بمعرّفات مكررة. أعد تحميل النسخة المحفوظة بعد الاحتفاظ بتعديلاتك.';
+        const labels: Record<string, string> = {
+          summary: 'خلاصة المراجعة',
+          limitations: 'حدود المقارنة',
+          suggestedText: 'النص المعدل المقترح من المراجع',
+          work: 'اسم الكتاب أو المصدر',
+          reference: 'المرجع المحدد',
+          edition: 'الطبعة',
+          sourceUrl: 'رابط المصدر HTTPS',
+          originalText: section === 'evidence' ? 'النص الأصلي في المصدر' : 'العبارة محل المراجعة',
+          context: 'السياق المرتبط',
+          author: 'اسم المؤلف',
+          sourceRole: 'نوع المصدر',
+          kind: 'نوع السجل',
+          status: 'حالة السجل',
+          correctedText: 'التصحيح أو التصنيف المعتمد',
+          explanation: 'التعليل وحدود الدليل',
+          evidenceIds: 'الأدلة المرتبطة بهذا السجل',
+        };
+        if (section === 'evidence' && field === 'sourceUrl')
+          return `${source} — رابط المصدر HTTPS: أدخل رابطًا صالحًا يبدأ بـ https:// أو اترك الرابط فارغًا إن لم يكن متاحًا.`;
+        const location =
+          section === 'evidence'
+            ? `${source} — ${labels[String(field)] ?? 'بيانات المصدر'}`
+            : section === 'records'
+              ? `${record} — ${labels[String(field)] ?? 'بيانات السجل'}`
+              : (labels[String(section)] ?? 'التقرير');
+        return `${location}: ${issue.code === 'too_small' ? 'أكمل هذا الحقل؛ لا يمكن تركه فارغًا.' : issue.code === 'too_big' ? 'تجاوز الحد المسموح. اختصر المحتوى قبل النشر.' : 'راجع القيمة المدخلة قبل النشر.'}`;
+      }),
+    ),
+  ];
+}
 
 export const reviewStatusLabels: Record<ReviewedRecord['status'], string> = {
   unresolved: 'مطابقة غير محسومة',
@@ -89,10 +139,12 @@ export function EditorialReviewEditor({
   value,
   onChange,
   disabled = false,
+  validationMessages = [],
 }: {
   value: EditorialReview;
   onChange: (value: EditorialReview) => void;
   disabled?: boolean;
+  validationMessages?: string[];
 }) {
   const updateRecord = (index: number, patch: Partial<ReviewedRecord>) =>
     onChange({
@@ -102,6 +154,16 @@ export function EditorialReviewEditor({
   return (
     <section className="editorial-editor reviewer-panel">
       <h2>تحرير التقرير والأدلة</h2>
+      {validationMessages.length > 0 && (
+        <div className="analysis-error" role="alert" aria-label="أخطاء نشر التقرير">
+          <p>لم يُنشر التقرير. بقيت تعديلاتك كما هي؛ صحح ما يلي ثم أعد النشر:</p>
+          <ul>
+            {validationMessages.map((message) => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <p>
         هذه نسخة بشرية مستقلة. لا يتغير النص المرسل أو التقرير الآلي المحفوظ. الحسم يحتاج دليلًا
         وتعليلًا.
