@@ -1,14 +1,25 @@
 import type { TicketStore } from './ticket-store.js';
 import { decryptTicketContact } from './ticket-crypto.js';
+import {
+  EditorialReviewSchema,
+  type EditorialReview,
+} from '../../../packages/contracts/src/editorial-review.js';
 
 export type TicketMailer = {
-  sendReceipt(input: { email: string; name?: string; ticketCode: string }): Promise<void>;
+  sendReceipt(input: {
+    email: string;
+    name?: string;
+    ticketCode: string;
+  }): Promise<{ messageId: string } | void>;
   send(input: {
     email: string;
     name?: string;
     ticketCode: string;
     responseText: string;
-  }): Promise<void>;
+    editorial?: EditorialReview;
+    notificationId?: number;
+  }): Promise<{ messageId: string } | void>;
+  delivery?(messageId: string): Promise<{ event: string; occurredAt: string } | null>;
 };
 
 function escapeHtml(value: string): string {
@@ -22,6 +33,30 @@ function escapeHtml(value: string): string {
     };
     return entities[character] ?? character;
   });
+}
+
+function brandedEmail(content: string): string {
+  return `<!doctype html><html lang="ar" dir="rtl"><body style="margin:0;background:#f4f7fa;color:#15385e;font-family:Tahoma,Arial,sans-serif"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="600" style="max-width:100%;background:#fff;border:1px solid #d8e5ef;border-radius:12px"><tr><td style="padding:24px;border-bottom:1px solid #d8e5ef;font-size:28px;font-weight:bold">بصيرة <span style="color:#008e89;font-size:15px">مراجعة النص والمصدر</span></td></tr><tr><td style="padding:24px;line-height:1.9;text-align:right">${content}</td></tr><tr><td style="padding:20px;color:#6482a2;font-size:12px;border-top:1px solid #d8e5ef">هذه نتيجة مراجعة تحريرية للنص المحدد، وليست فتوى عامة. لا يحتوي رابط المتابعة على بيانات الدخول.</td></tr></table></td></tr></table></body></html>`;
+}
+
+function reviewedEmail(review: EditorialReview | undefined): string {
+  if (!review) return '';
+  return `<h2>خلاصة التقرير</h2><p style="white-space:pre-wrap">${escapeHtml(review.summary)}</p>${review.records
+    .filter((row) => row.status !== 'removed')
+    .map(
+      (row) =>
+        `<div style="padding:16px;margin-bottom:12px;border:1px solid #d8e5ef;border-radius:8px"><strong>${escapeHtml(row.originalText)}</strong><p style="white-space:pre-wrap">${escapeHtml(row.correctedText)}</p><p style="white-space:pre-wrap">${escapeHtml(row.explanation)}</p>${row.evidenceIds
+          .map((id) => {
+            const source = review.evidence.find((item) => item.id === id);
+            return source
+              ? `<p style="background:#edf8f4;padding:12px"><strong>${escapeHtml(source.work)} — ${escapeHtml(source.reference)}</strong><br>${escapeHtml(source.originalText)}</p>`
+              : '';
+          })
+          .join('')}</div>`,
+    )
+    .join(
+      '',
+    )}<h3>حدود المقارنة</h3><p>${escapeHtml(review.limitations)}</p>${review.suggestedText ? `<h3>النص المقترح من المراجع</h3><p style="white-space:pre-wrap">${escapeHtml(review.suggestedText)}</p>` : ''}`;
 }
 
 export function createBrevoMailer(options: {
@@ -44,6 +79,12 @@ export function createBrevoMailer(options: {
       signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) throw new Error(`BREVO_HTTP_${response.status}`);
+    const result: unknown = await response.json();
+    const messageId =
+      result && typeof result === 'object' && 'messageId' in result ? result.messageId : null;
+    if (typeof messageId !== 'string' || !messageId || messageId.length > 500)
+      throw new Error('BREVO_SEND_RESULT_UNKNOWN');
+    return { messageId };
   };
   return {
     async sendReceipt(input) {
@@ -51,12 +92,14 @@ export function createBrevoMailer(options: {
       const safeName = input.name ? escapeHtml(input.name) : '';
       const safeCode = escapeHtml(input.ticketCode);
       const safeUrl = escapeHtml(followUpUrl);
-      await sendMessage({
+      return sendMessage({
         sender: { email: options.senderEmail, name: options.senderName },
         to: [{ email: input.email, ...(input.name ? { name: input.name } : {}) }],
         subject: `تم إنشاء تذكرتك ${input.ticketCode}`,
         textContent: `مرحبًا${input.name ? ` ${input.name}` : ''}،\n\nتم إنشاء تذكرتك ${input.ticketCode}. احتفظ بالرقم، ثم افتح ${followUpUrl} وأدخل رقم التذكرة مع البريد الإلكتروني نفسه لمتابعة المراجعة.\n\nبصيرة`,
-        htmlContent: `<div dir="rtl" lang="ar"><p>مرحبًا${safeName ? ` ${safeName}` : ''}،</p><p>تم إنشاء تذكرتك <strong>${safeCode}</strong>. احتفظ بهذا الرقم لمتابعة المراجعة.</p><p><a href="${safeUrl}">متابعة التذكرة في بصيرة</a> باستخدام رقم التذكرة والبريد الإلكتروني نفسه.</p><p>بصيرة</p></div>`,
+        htmlContent: brandedEmail(
+          `<p>مرحبًا${safeName ? ` ${safeName}` : ''}،</p><h2>تم استلام طلب المراجعة</h2><p>رقم التذكرة: <strong dir="ltr">${safeCode}</strong>. احتفظ بهذا الرقم.</p><p><a style="color:#008e89" href="${safeUrl}">متابعة التذكرة في بصيرة</a> باستخدام رقم التذكرة والبريد الإلكتروني نفسه.</p>`,
+        ),
         tags: ['basirah-ticket-receipt'],
       });
     },
@@ -65,14 +108,54 @@ export function createBrevoMailer(options: {
       const safeName = input.name ? escapeHtml(input.name) : '';
       const safeCode = escapeHtml(input.ticketCode);
       const safeUrl = escapeHtml(followUpUrl);
-      await sendMessage({
+      return sendMessage({
         sender: { email: options.senderEmail, name: options.senderName },
         to: [{ email: input.email, ...(input.name ? { name: input.name } : {}) }],
         subject: `اكتملت مراجعة تذكرتك ${input.ticketCode}`,
-        textContent: `مرحبًا${input.name ? ` ${input.name}` : ''}،\n\nاكتملت المراجعة البشرية للتذكرة ${input.ticketCode}. لمتابعة النتيجة، افتح ${followUpUrl} وأدخل رقم التذكرة مع البريد الإلكتروني نفسه.\n\nبصيرة`,
-        htmlContent: `<div dir="rtl" lang="ar"><p>مرحبًا${safeName ? ` ${safeName}` : ''}،</p><p>اكتملت المراجعة البشرية للتذكرة <strong>${safeCode}</strong>.</p><p><a href="${safeUrl}">افتح بصيرة</a> ثم أدخل رقم التذكرة مع البريد الإلكتروني نفسه لعرض النتيجة.</p><p>بصيرة</p></div>`,
+        textContent: `مرحبًا${input.name ? ` ${input.name}` : ''}،\n\nاكتملت المراجعة البشرية للتذكرة ${input.ticketCode}.\n\nملاحظات المراجع:\n${input.responseText}\n\n${input.editorial?.summary ?? ''}\n\nلعرض التقرير الكامل والأدلة وما تغير، افتح ${followUpUrl} وأدخل رقم التذكرة مع البريد الإلكتروني نفسه.\n\nبصيرة`,
+        htmlContent: brandedEmail(
+          `<p>مرحبًا${safeName ? ` ${safeName}` : ''}،</p><h2>اكتملت المراجعة البشرية</h2><p>التذكرة <strong dir="ltr">${safeCode}</strong></p><h3>ملاحظات المراجع ونصيحته</h3><p style="white-space:pre-wrap">${escapeHtml(input.responseText)}</p>${reviewedEmail(input.editorial)}<p><a style="display:inline-block;padding:12px 20px;background:#008e89;color:#fff;text-decoration:none;border-radius:8px" href="${safeUrl}">عرض التقرير والأدلة والتغييرات</a></p><p>أدخل رقم التذكرة مع البريد الإلكتروني نفسه. احتفظ بهذه الرسالة للمراجعة.</p>`,
+        ),
         tags: ['basirah-review-ticket'],
+        ...(input.notificationId
+          ? {
+              headers: {
+                idempotencyKey: `basirah-review-${input.ticketCode}-${input.notificationId}`,
+              },
+            }
+          : {}),
       });
+    },
+    async delivery(messageId) {
+      const url = new URL('https://api.brevo.com/v3/smtp/statistics/events');
+      url.searchParams.set('messageId', messageId);
+      url.searchParams.set('limit', '50');
+      url.searchParams.set('days', '7');
+      const response = await request(url, {
+        headers: { accept: 'application/json', 'api-key': options.apiKey },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) throw new Error(`BREVO_HTTP_${response.status}`);
+      const result = (await response.json()) as {
+        events?: { messageId?: string; event?: string; date?: string }[];
+      };
+      const events = (result.events ?? []).filter(
+        (row) =>
+          row.messageId === messageId &&
+          typeof row.date === 'string' &&
+          Number.isFinite(Date.parse(row.date)),
+      );
+      // Opens/clicks are not needed: only retain bounded transport events, never
+      // recipient addresses, IPs, raw provider reasons or tracking payloads.
+      const terminal = events.find((row) =>
+        ['delivered', 'hardBounces', 'softBounces', 'blocked', 'invalid', 'error'].includes(
+          row.event ?? '',
+        ),
+      );
+      const selected = terminal ?? events.find((row) => row.event === 'deferred');
+      return selected
+        ? { event: selected.event!, occurredAt: new Date(selected.date!).toISOString() }
+        : null;
     },
   };
 }
@@ -93,15 +176,62 @@ export function createTicketNotificationWorker(options: {
       for (const job of await options.store.claimNotifications(10)) {
         try {
           const contact = decryptTicketContact(job.contactCiphertext, options.dataKey);
-          await options.mailer.send({
+          const ticket = await options.store.get(job.ticketCode);
+          if (!ticket || ticket.status === 'closed') throw new Error('TICKET_ARCHIVED');
+          // Bind the email to the exact outbox response, never to matching notes
+          // (two published versions may legitimately contain identical notes).
+          const editorial = EditorialReviewSchema.safeParse(job.editorial);
+          if (job.editorial != null && !editorial.success)
+            throw new Error('INVALID_EDITORIAL_REPORT');
+          const receipt = await options.mailer.send({
             ...contact,
             ticketCode: job.ticketCode,
             responseText: job.responseText,
+            notificationId: job.notificationId,
+            ...(editorial.success ? { editorial: editorial.data } : {}),
           });
+          if (receipt && options.store.recordEmailReceipt) {
+            try {
+              if (
+                !(await options.store.recordEmailReceipt(
+                  job.ticketCode,
+                  job.notificationId,
+                  receipt.messageId,
+                ))
+              )
+                throw new Error('receipt not persisted');
+            } catch {
+              throw new Error('EMAIL_ACCEPTED_AUDIT_FAILED');
+            }
+          }
           await options.store.completeNotification(job.notificationId, true);
         } catch (error) {
-          const code = error instanceof Error ? error.message.slice(0, 120) : 'EMAIL_SEND_FAILED';
+          const message = error instanceof Error ? error.message : '';
+          const code =
+            /^(BREVO_HTTP_\d{3}|BREVO_SEND_RESULT_UNKNOWN|EMAIL_ACCEPTED_AUDIT_FAILED|TICKET_ARCHIVED|INVALID_EDITORIAL_REPORT)$/u.test(
+              message,
+            )
+              ? message
+              : 'EMAIL_SEND_RESULT_UNKNOWN';
           await options.store.completeNotification(job.notificationId, false, code);
+        }
+      }
+      if (
+        options.mailer.delivery &&
+        options.store.pendingEmailDeliveries &&
+        options.store.recordEmailDelivery
+      ) {
+        for (const item of await options.store.pendingEmailDeliveries(10)) {
+          try {
+            const event = await options.mailer.delivery(item.messageId);
+            await options.store.recordEmailDelivery(
+              item.id,
+              event?.event ?? 'accepted',
+              event?.occurredAt ?? null,
+            );
+          } catch {
+            /* Provider observability failure is not a resend request. */
+          }
         }
       }
     } finally {
@@ -111,15 +241,21 @@ export function createTicketNotificationWorker(options: {
   return {
     start() {
       if (timer || stopped) return;
-      timer = setInterval(() => void drain(), options.intervalMs ?? 30_000);
+      timer = setInterval(() => void drain().catch(() => {}), options.intervalMs ?? 30_000);
       timer.unref();
-      void drain();
+      void drain().catch(() => {});
     },
     notify() {
-      void drain();
+      void drain().catch(() => {});
     },
     async sendReceipt(input: { email: string; name?: string; ticketCode: string }) {
-      await options.mailer.sendReceipt(input);
+      const receipt = await options.mailer.sendReceipt(input);
+      if (
+        receipt &&
+        options.store.recordEmailReceipt &&
+        !(await options.store.recordEmailReceipt(input.ticketCode, null, receipt.messageId))
+      )
+        throw new Error('EMAIL_ACCEPTED_AUDIT_FAILED');
     },
     async stop() {
       stopped = true;

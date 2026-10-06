@@ -2,12 +2,89 @@ import { expect, it } from 'vitest';
 import {
   createHostedDraftAdapter,
   foundationRuntimeMode,
+  closeQuotationAlignment,
 } from '../apps/api/src/hosted-foundation.js';
 import { sha256 } from '../apps/api/src/foundation.js';
 import type { SourceEvidence } from '../packages/contracts/src/foundation.js';
 import { extractQuranReferences } from '../apps/api/src/quran-reference.js';
 
 const revisionId = '33333333-3333-4333-8333-333333333333';
+
+const charityOriginal =
+  'إِن تُبْدُوا الصَّدَقَاتِ فَنِعِمَّا هِيَ وَإِن تُخْفُوهَا وَتُؤْتُوهَا الْفُقَرَاءَ فَهُوَ خَيْرٌ لَكُمْ وَيُكَفِّرُ عَنكُم مِّن سَيِّئَاتِكُمْ وَاللَّهُ بِمَا تَعْمَلُونَ خَبِيرٌ';
+const charitySource: SourceEvidence = {
+  snapshotKey: 'lexical-charity',
+  sourceId: 'quran',
+  sourceVersion: 'fixture',
+  sourceRole: 'quran_text',
+  reference: '2:271',
+  originalText: charityOriginal,
+  originalSha256: sha256(charityOriginal),
+  work: 'القرآن الكريم',
+  author: null,
+  edition: null,
+  sourceUrl: 'https://quran.com/2/271',
+  approvalStatus: 'approved',
+  researchOnly: false,
+  parentSnapshotKey: null,
+  delivery: 'snapshot',
+  retrievalModes: ['lexical'],
+  provenance: {},
+};
+
+it('locates an unreferenced altered Quran excerpt and isolates لهم versus لكم', async () => {
+  const text = 'وَإِن تُخْفُوهَا وَتُؤْتُوهَا الْفُقَرَاءَ فَهُوَ خَيْرٌ لهم';
+  const result = await createHostedDraftAdapter('fixture', {
+    search: async () => [charitySource],
+    restore: async () => [],
+  }).analyze(text, revisionId);
+  expect(result.originalText).toBe(text);
+  expect(result.quotationFindings).toHaveLength(1);
+  expect(result.quotationFindings[0]).toMatchObject({
+    status: 'mismatch',
+    comparison: {
+      extent: 'excerpt',
+      differences: [{ kind: 'replace', quotedText: 'لهم', sourceText: 'لَكُمْ' }],
+    },
+  });
+  expect(result.evidence.map((row) => row.reference)).toEqual(['2:271']);
+});
+
+it('accepts the corrected excerpt without calling an omitted verse prefix an alteration', async () => {
+  const text = 'وإن تخفوها وتؤتوها الفقراء فهو خير لكم';
+  const result = await createHostedDraftAdapter('fixture', {
+    search: async () => [charitySource],
+    restore: async () => [],
+  }).analyze(text, revisionId);
+  expect(result.quotationFindings[0]).toMatchObject({
+    status: 'partial',
+    comparison: { fidelity: 'orthographic', extent: 'excerpt', differences: [] },
+  });
+});
+
+it('abstains from a tied source identity and a thematic neighbor', async () => {
+  const text = 'وإن تخفوها وتؤتوها الفقراء فهو خير لهم';
+  const alternate = {
+    ...charitySource,
+    snapshotKey: 'alternate',
+    originalText: charityOriginal.replace('لَكُمْ', 'لهم'),
+  };
+  alternate.originalSha256 = sha256(alternate.originalText);
+  const result = await createHostedDraftAdapter('fixture', {
+    search: async () => [charitySource, alternate],
+    restore: async () => [],
+  }).analyze(text, revisionId);
+  expect(result.quotationFindings).toEqual([]);
+  expect(result.evidence).toEqual([]);
+  expect(
+    closeQuotationAlignment(
+      'الاحتفاء بالنعم والإعلان عنها في حفلات الزواج أمر مباح',
+      charityOriginal,
+    ),
+  ).toBeNull();
+  expect(closeQuotationAlignment('خير لهم', charityOriginal)).toBeNull();
+  expect(closeQuotationAlignment(text, `${charityOriginal} ${charityOriginal}`)).toBeNull();
+});
 
 it('uses the existing hadith cues and binds only contiguous quotation matches', async () => {
   const quoted = 'أعلنوا هذا النكاح';

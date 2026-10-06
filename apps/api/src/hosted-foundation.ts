@@ -228,6 +228,20 @@ function compareQuote(quote: string, source: string) {
       },
     };
   }
+  const alignment = closeQuotationAlignment(quote, source);
+  if (alignment)
+    return {
+      status: 'mismatch' as const,
+      reason: 'anchored_wording_difference',
+      matchedStart: alignment.start,
+      matchedEnd: alignment.end,
+      comparison: {
+        fidelity: 'different' as const,
+        extent: alignment.full ? ('full' as const) : ('excerpt' as const),
+        differences: alignment.differences,
+        basis: 'canonical' as const,
+      },
+    };
   return {
     status: 'mismatch' as const,
     reason: 'explicit_reference_text_mismatch',
@@ -239,6 +253,50 @@ function compareQuote(quote: string, source: string) {
       differences: [{ kind: 'replace' as const, quotedText: quote, sourceText: source }],
       basis: 'canonical' as const,
     },
+  };
+}
+
+/** Candidate discovery is not evidence: require one near-identical contiguous
+ * token window, at least five consecutive exact words, and <=15% replacements.
+ * Short/common phrases, tied alignments and purely thematic matches abstain.
+ * This detects wording differences, never authorship intent or hadith grading. */
+export function closeQuotationAlignment(quote: string, source: string) {
+  const supplied = comparisonTokens(quote);
+  const original = comparisonTokens(source);
+  if (supplied.length < 6 || supplied.length > 100) return null;
+  const candidates: Array<{
+    at: number;
+    differences: Array<{ kind: 'replace'; quotedText: string; sourceText: string }>;
+  }> = [];
+  for (let at = 0; at <= original.length - supplied.length; at++) {
+    let run = 0,
+      longest = 0;
+    const differences: Array<{ kind: 'replace'; quotedText: string; sourceText: string }> = [];
+    for (let i = 0; i < supplied.length; i++) {
+      const left = supplied[i]!,
+        right = original[at + i]!;
+      if (left.value === right.value) {
+        run++;
+        longest = Math.max(longest, run);
+      } else {
+        run = 0;
+        differences.push({
+          kind: 'replace',
+          quotedText: quote.slice(left.start, left.end),
+          sourceText: source.slice(right.start, right.end),
+        });
+      }
+    }
+    if (longest >= 5 && differences.length <= Math.min(2, Math.floor(supplied.length * 0.15)))
+      candidates.push({ at, differences });
+  }
+  if (candidates.length !== 1) return null;
+  const candidate = candidates[0]!;
+  return {
+    start: original[candidate.at]!.start,
+    end: original[candidate.at + supplied.length - 1]!.end,
+    full: candidate.at === 0 && supplied.length === original.length,
+    differences: candidate.differences,
   };
 }
 
@@ -331,6 +389,52 @@ export function createHostedDraftAdapter(
           evidenceKey: source.snapshotKey,
           ...compareQuote(quote.originalText, source.originalText),
         });
+      }
+      // Standalone, unreferenced Quran excerpts have no quotation cue. Search
+      // only a bounded short input, then bind only a unique lexical alignment.
+      // Never borrow a topical verse to explain an otherwise unbound paragraph.
+      if (
+        corpus &&
+        !locators.length &&
+        !/["«»﴿﴾()]/u.test(text) &&
+        text.length <= 700 &&
+        comparisonTokens(text).length >= 6
+      ) {
+        const candidates = (await corpus.search(text, [], signal))
+          .filter(
+            (source) =>
+              source.sourceRole === 'quran_text' &&
+              sha256(source.originalText) === source.originalSha256,
+          )
+          .map((source) => ({
+            source,
+            alignment: closeQuotationAlignment(text, source.originalText),
+          }))
+          .filter((row) => row.alignment);
+        const identities = new Set(
+          candidates.map((row) => `${row.source.reference}:${row.source.originalSha256}`),
+        );
+        if (identities.size === 1) {
+          const matched = candidates[0]!;
+          const startOffset = text.search(/\S/u),
+            endOffset = text.trimEnd().length;
+          const quote = text.slice(startOffset, endOffset);
+          const id = `hosted-ayah-${sha256(`${revisionId}:${startOffset}:${endOffset}:${matched.source.snapshotKey}`).slice(0, 24)}`;
+          spans.push({
+            startOffset,
+            endOffset,
+            role: 'ayah',
+            method: 'hosted_unreferenced_lexical_alignment',
+            sourceKey: matched.source.snapshotKey,
+          });
+          quotationFindings.push({
+            segmentId: id,
+            evidenceKey: matched.source.snapshotKey,
+            ...compareQuote(quote, matched.source.originalText),
+          });
+          if (!evidence.some((source) => source.snapshotKey === matched.source.snapshotKey))
+            evidence.push(matched.source);
+        }
       }
       // Reuse the existing bounded structural detector, without software fixture
       // matching. Visible quotation/attribution cues are not authenticity verdicts.
@@ -465,7 +569,7 @@ export function createHostedDraftAdapter(
       const unresolvedExplicit = references.filter((reference) => !quranByReference.has(reference));
       const intake: FoundationIntake = {
         schemaVersion: 1,
-        pipelineVersion: 'hosted-explicit-source-intake-v3',
+        pipelineVersion: 'hosted-explicit-source-intake-v4',
         revisionId,
         revisionSha256: sha256(text),
         corpusVersion: selectedVersion,

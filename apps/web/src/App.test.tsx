@@ -504,7 +504,7 @@ describe('Basirah web flow', () => {
     );
     expect(
       screen.getByRole('link', { name: 'كيف نعرض المصادر في النتيجة' }).getAttribute('href'),
-    ).toBe('#sources');
+    ).toBe('#/sources');
     expect(screen.getByRole('heading', { name: 'مصادر موثقة' })).not.toBeNull();
   });
 
@@ -539,11 +539,21 @@ describe('Basirah web flow', () => {
     expect(location.reload).toHaveBeenCalledOnce();
   });
 
-  it('shows a useful empty state while the reviewer queue has no rows', () => {
+  it('shows a useful empty state after the reviewer API returns no rows', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          tickets: [],
+          total: 0,
+          counts: { pending: 0, inReview: 0, published: 0, total: 0 },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
     window.location.hash = '#/reviewer/queue';
     render(<ReviewerShell route="queue" navigate={vi.fn()} onSignOut={vi.fn()} />);
 
-    expect(screen.getByText('لا توجد طلبات هنا')).not.toBeNull();
+    expect(await screen.findByText('لا توجد طلبات هنا')).not.toBeNull();
     expect(screen.getByText('جرّب تغيير التصفية أو البحث بكلمات أخرى.')).not.toBeNull();
   });
 
