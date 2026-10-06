@@ -165,3 +165,21 @@ author assertion and explicit identification of unavailable narration or attribu
 evidence; unrelated passages cannot stand in for the requested quotation. See the
 [selected comparison and limits](../evidence/2026-10-05-qualifier-field-consistency.md)
 and the [submission acceptance procedure](../operations/SUBMISSION_ACCEPTANCE.md).
+
+## Immutable assessment passage selection
+
+Semantic prompt and pipeline version 1.14 select `immutable-passage-v1` in the
+enabled server adapter. Both initial and gap assessment return only request-owned
+passage selectors for citations. The server binds those selectors to the exact
+complete contiguous source passages, retaining inline footnotes and source hashes,
+then applies the unchanged public finding validator. Empty evidence permits only
+an unavailable or outside-scope choice; it cannot produce a supported, contradicted
+or unestablished verdict. Alias ownership, strict schemas, size bounds and duplicate
+checks reject invalid selections without citation repair or another model opinion.
+Assessment input hashes cover the actual protocol packet and its binding hash.
+
+The shared relevance instruction explicitly retains evidence addressing the same
+proposition with opposite polarity; relevance is independent of agreement. This
+changes model instructions while preserving strict source selection and validation.
+See the [captured failures and bounded acceptance](../evidence/2026-10-06-semantic-grounding-protocol.md)
+for exact-byte controls, measured local provider outcomes and deployment limits.

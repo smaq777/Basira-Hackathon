@@ -324,6 +324,7 @@ async function initializeFoundation() {
           researchPreview: researchEvidence,
           claimRetrieval,
           relevanceFiltering: true,
+          assessmentCitationProtocol: 'immutable-passage-v1',
           gapDiscovery,
         })
       : undefined;
