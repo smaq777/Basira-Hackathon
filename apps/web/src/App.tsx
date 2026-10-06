@@ -173,9 +173,13 @@ function pathFor(route: Route) {
   return `#/${route}`;
 }
 
-export function reloadSignedOutHome(location: Pick<Location, 'hash' | 'reload'> = window.location) {
+export function reloadPublicHome(location: Pick<Location, 'hash' | 'reload'> = window.location) {
   location.hash = '#/home';
   location.reload();
+}
+
+export function reloadSignedOutHome(location: Pick<Location, 'hash' | 'reload'> = window.location) {
+  reloadPublicHome(location);
 }
 
 function useRoute() {
@@ -1800,14 +1804,16 @@ function UnresolvedScreen({ onHome, onTicket }: { onHome: () => void; onTicket: 
   );
 }
 
-function TicketScreen({
+export function TicketScreen({
   onHome,
   reviewId,
   revisionId,
+  onFollowUpSaved = reloadPublicHome,
 }: {
   onHome: () => void;
   reviewId: string | null;
   revisionId: string | null;
+  onFollowUpSaved?: () => void;
 }) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -1818,6 +1824,13 @@ function TicketScreen({
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!saved) return;
+    const timer = window.setTimeout(onFollowUpSaved, 5000);
+    return () => window.clearTimeout(timer);
+  }, [saved, onFollowUpSaved, reviewId, revisionId]);
+
+  useEffect(() => {
+    setSaved(false);
     if (!reviewId && !revisionId) return;
     let active = true;
     setLoading(true);
@@ -1837,7 +1850,7 @@ function TicketScreen({
   }, [reviewId, revisionId]);
 
   const saveContact = async () => {
-    if (!receipt || !email || saving) return;
+    if (!receipt || !email || saving || saved) return;
     setSaving(true);
     setError('');
     try {
@@ -1889,6 +1902,7 @@ function TicketScreen({
               <b dir="ltr">#{receipt.ticketCode}</b>
             </button>
             <p className="hero-copy">احتفظ برقم التذكرة للرجوع إلى طلبك.</p>
+            {saved && <p role="status">ستعود إلى الصفحة الرئيسية خلال ٥ ثوانٍ.</p>}
           </>
         )}
         {receipt && (
@@ -1901,19 +1915,24 @@ function TicketScreen({
               <p>أضف بياناتك اختياريًا لنرسل لك تحديثًا عند اكتمال المراجعة.</p>
               <label>
                 الاسم (اختياري)
-                <input value={name} onChange={(event) => setName(event.target.value)} />
+                <input
+                  disabled={saved}
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                />
               </label>
               <label>
                 البريد الإلكتروني
                 <input
                   type="email"
+                  disabled={saved}
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                 />
               </label>
               <button
                 className="button button--primary"
-                disabled={!email || saving}
+                disabled={!email || saving || saved}
                 onClick={() => void saveContact()}
               >
                 {saving ? 'جار الحفظ…' : 'حفظ وإرسال التحديثات'}
