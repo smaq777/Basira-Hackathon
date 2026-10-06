@@ -97,6 +97,15 @@ denial, then is removed. Synthetic rows roll back and original passage counts mu
 remain unchanged. This does not switch `.env`, link the workspace or migrate the
 shared staging corpus.
 
+`scripts/rollout-reviewer-staging.mjs inspect` validates the explicit Railway
+project/service/environment identities, the API-to-report database binding and
+the API-to-Neon child/endpoint binding. It checks every recorded checksum before
+planning any change. `apply` executes only missing checked-in migrations on those
+same staging targets and verifies that the corpus passage count and immutable
+content-hash identities are unchanged. It does not provision or elevate roles,
+write local environment files, reset data or deploy an application. Inspect first;
+use this only after the isolated rehearsals and owner-authorized rollout.
+
 Ticket removal is recoverable archival: hidden from active queue and public lookup,
 with original revisions and audit preserved. It stops unclaimed email work; an
 already accepted message cannot be recalled. Restore requires reviewer permission.
