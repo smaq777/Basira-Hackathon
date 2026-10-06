@@ -169,6 +169,155 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+it('filters topic-only corpus candidates before assessment and preserves the frozen originals', async () => {
+  const input = fixture();
+  const unrelated = {
+    ...evidence('unrelated'),
+    originalText: 'نص عن موضوع مختلف',
+    originalSha256: sha256('نص عن موضوع مختلف'),
+  };
+  const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+    const { body, data } = requestData(init);
+    const stage = body.response_format.json_schema.name;
+    if (stage === 'extraction') return response(proposal(), body.model);
+    if (stage === 'relevance') {
+      expect(data.claims[0].evidence).toHaveLength(1);
+      expect(data.claims[0].evidence[0].passages[0].originalText).toBe(unrelated.originalText);
+      return response({ selections: [{ claimId: 'C1', evidenceKeys: [] }] }, body.model);
+    }
+    expect(data.claims[0].evidence).toEqual([]);
+    expect(body.messages[0].content).toContain('clause by clause');
+    return response(
+      {
+        assessments: [
+          {
+            ...finding(data.claims[0].claim.id),
+            status: 'insufficient_context',
+            citations: [],
+            explanation: 'لا يتوفر دليل مرتبط بالعبارة المطلوبة.',
+          },
+        ],
+      },
+      body.model,
+    );
+  });
+  const result = await createSemanticAssessmentAdapter(
+    options(fetch, {
+      researchPreview: true,
+      relevanceFiltering: true,
+      claimRetrieval: {
+        async retrieve(intake, claims) {
+          return {
+            evidence: [...intake.evidence, unrelated],
+            claims: claims.map((row) => ({ ...row, evidenceKeys: ['unrelated'] })),
+            trace: {
+              corpusVersion: 'owned',
+              mode: 'local_research',
+              queries: [
+                {
+                  claimId: claims[0]!.id,
+                  querySha256: sha256(CLAIM),
+                  modes: ['semantic'],
+                  candidateKeys: ['unrelated'],
+                  selectedCandidateKeys: ['unrelated'],
+                },
+              ],
+            },
+          };
+        },
+      },
+    }),
+  ).assessWithEvidence(input);
+  expect(result.report.status).toBe('completed');
+  expect(result.report.trace.requests.map((row) => row.stage)).toEqual([
+    'extraction',
+    'relevance',
+    'assessment',
+  ]);
+  expect(result.report.trace.retrieval!.queries[0]!.selectedCandidateKeys).toEqual([]);
+  expect(result.intake.evidence).toEqual(input.evidence);
+  expect(result.intake.originalText).toBe(input.originalText);
+  expect(result.report.trace.finalEvidenceSha256).toBe(sha256(canonical(input.evidence)));
+});
+
+it('does not assess unfiltered candidates after relevance selection failure', async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+    const { body } = requestData(init);
+    return response(
+      body.response_format.json_schema.name === 'extraction'
+        ? proposal()
+        : { selections: [{ claimId: 'C1', evidenceKeys: ['E99'] }] },
+      body.model,
+    );
+  });
+  const input = fixture();
+  const result = await createSemanticAssessmentAdapter(
+    options(fetch, {
+      relevanceFiltering: true,
+      researchPreview: true,
+      claimRetrieval: {
+        retrieve: async (intake, claims) => ({
+          evidence: [...intake.evidence, evidence('unfiltered-neighbor')],
+          claims: claims.map((claim) => ({ ...claim, evidenceKeys: ['unfiltered-neighbor'] })),
+          trace: { corpusVersion: 'owned', mode: 'local_research', queries: [] },
+        }),
+      },
+    }),
+  ).assessWithEvidence(input);
+  expect(result.report.status).toBe('partial');
+  expect(result.report.assessments).toEqual([]);
+  expect(result.intake.evidence).toEqual(input.evidence);
+  expect(result.report.claims[0]!.evidenceKeys).toEqual([]);
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it('rejects unrelated discovered pages without persisting or reassessing them', async () => {
+  const input = fixture();
+  const web = {
+    ...evidence('web-unrelated'),
+    sourceRole: 'book_excerpt' as const,
+    sourceUrl: 'https://owned.example/unrelated',
+    provenance: { representation: 'extracted_markdown' },
+  };
+  const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+    const { body, data } = requestData(init);
+    const stage = body.response_format.json_schema.name;
+    if (stage === 'extraction') return response(proposal(), body.model);
+    if (stage === 'relevance')
+      return response({ selections: [{ claimId: 'C1', evidenceKeys: [] }] }, body.model);
+    expect(stage).toBe('assessment');
+    return response(
+      {
+        assessments: [
+          {
+            ...finding(data.claims[0].claim.id),
+            status: 'insufficient_context',
+            citations: [],
+            explanation: 'لا يتوفر المصدر المحدد.',
+          },
+        ],
+      },
+      body.model,
+    );
+  });
+  const result = await createSemanticAssessmentAdapter(
+    options(fetch, {
+      researchPreview: true,
+      relevanceFiltering: true,
+      gapDiscovery: { discover: async () => ({ evidence: [web], failureCodes: [] }) },
+    }),
+  ).assessWithEvidence(input);
+  expect(result.report.status).toBe('completed');
+  expect(result.report.trace.discovery).toMatchObject({ outcome: 'no_evidence', addedKeys: [] });
+  expect(result.intake.evidence).toEqual(input.evidence);
+  expect(result.report.trace.requests.map((row) => row.stage)).toEqual([
+    'extraction',
+    'relevance',
+    'assessment',
+    'relevance',
+  ]);
+});
+
 describe('bounded semantic assessment', () => {
   it('defaults off and returns missing/invalid configuration without requests', async () => {
     const fetch = successfulFetch();
@@ -343,7 +492,7 @@ describe('bounded semantic assessment', () => {
     expect(prompt).toContain('Missing evidence does not establish contradiction');
     expect(prompt).toContain('naming the missing qualifier or antecedent and why it matters');
     expect(prompt).toContain('packet has no evidence');
-    expect(prompt).toContain('Prompt evidence-support-v1.10.');
+    expect(prompt).toContain('Prompt evidence-support-v1.11.');
     expect(prompt).toContain('Each scope item must be a self-contained Arabic statement');
     expect(prompt).toContain(
       'affirmation or negation and any material condition, exception or modality',
@@ -358,8 +507,8 @@ describe('bounded semantic assessment', () => {
     expect(prompt).not.toMatch(/scholar_explanation|book_excerpt/u);
     expect(result.scholarlyApproval).toBe(false);
     expect(result.trace).toMatchObject({
-      pipelineVersion: 'provisional-semantic-v1.10',
-      promptVersion: 'evidence-support-v1.10',
+      pipelineVersion: 'provisional-semantic-v1.11',
+      promptVersion: 'evidence-support-v1.11',
     });
     expect(intake).toEqual(before);
   });

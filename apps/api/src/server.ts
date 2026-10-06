@@ -316,6 +316,7 @@ async function initializeFoundation() {
           allowedProviders: ['OpenAI'],
           researchPreview: researchEvidence,
           claimRetrieval,
+          relevanceFiltering: true,
           gapDiscovery,
         })
       : undefined;

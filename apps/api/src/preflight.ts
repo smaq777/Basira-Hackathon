@@ -177,7 +177,7 @@ function sourceCue(context: string): ContentType {
     })),
     ...[
       ...key.matchAll(
-        /قال\s+(?:رسول\s+الله|النبي|ﷺ)|قال\s*[-–]?\s*صلى\s+الله\s+عليه\s+وسلم|رواه\s+(?:البخاري|مسلم)|متفق\s+عليه/gu,
+        /(?:قال|فقال)\s+(?:له\s+)?(?:رسول\s+الله|النبي|ﷺ)|(?:رسول\s+الله|النبي)[^.!؟\n:]{0,100}\sقال|قال\s*[-–]?\s*صلى\s+الله\s+عليه\s+وسلم|رواه\s+(?:البخاري|مسلم)|متفق\s+عليه/gu,
       ),
     ].map((match) => ({ match, type: 'hadith_matn' as const })),
     ...[...key.matchAll(/قال\s+(?:الشيخ|الإمام|العالم)|ذكر\s+العلماء|أجمع\s+العلماء/gu)].map(
@@ -248,7 +248,10 @@ function annotationForCandidate(
   });
 }
 
-function structuralAnnotations(text: string): PreflightAnnotation[] {
+export function structuralAnnotations(
+  text: string,
+  allowFixtureMatches = true,
+): PreflightAnnotation[] {
   const annotations: PreflightAnnotation[] = [];
   const add = (
     startOffset: number,
@@ -319,7 +322,7 @@ function structuralAnnotations(text: string): PreflightAnnotation[] {
       !/(?:ليس|ليست|غير|لم|لا)\s/u.test(searchKey(prefix))
     )
       contentType = 'quran';
-    const matchedType = quotationFixtureType(quote, contentType);
+    const matchedType = allowFixtureMatches ? quotationFixtureType(quote, contentType) : undefined;
     contentType = matchedType ?? contentType;
     const quotedWrapper = !['(', '{'].includes(text[opening]!);
     if (contentType !== 'unknown' || quotedWrapper) {

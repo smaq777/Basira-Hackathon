@@ -6,6 +6,7 @@ import { sha256, type FoundationAdapter } from './foundation.js';
 import { foundationActivation } from './foundation-activation.js';
 import type { ClaimCorpusSearch } from './claim-retrieval.js';
 import { extractQuranLocators } from './quran-reference.js';
+import { structuralAnnotations } from './preflight.js';
 
 export type FoundationRuntimeMode =
   'disabled' | 'local_research' | 'hosted_research' | 'hosted_demo' | 'hosted_production';
@@ -261,9 +262,9 @@ export function createHostedDraftAdapter(
       const spans: Array<{
         startOffset: number;
         endOffset: number;
-        role: 'ayah' | 'claimed_source';
+        role: 'ayah' | 'matn' | 'isnad' | 'claimed_source' | 'unclassified';
         method: string;
-        sourceKey: string;
+        sourceKey: string | null;
       }> = [];
       const quotationFindings: FoundationIntake['quotationFindings'] = [];
       for (const locator of locators) {
@@ -319,6 +320,83 @@ export function createHostedDraftAdapter(
           ...compareQuote(quote.originalText, source.originalText),
         });
       }
+      // Reuse the existing bounded structural detector, without software fixture
+      // matching. Visible quotation/attribution cues are not authenticity verdicts.
+      let quotationSearches = 0;
+      for (const annotation of structuralAnnotations(text, false).slice(0, 60)) {
+        if (
+          spans.some(
+            (span) =>
+              annotation.startOffset < span.endOffset && annotation.endOffset > span.startOffset,
+          )
+        )
+          continue;
+        const roles: Partial<
+          Record<typeof annotation.contentType, (typeof spans)[number]['role']>
+        > = {
+          quran: 'ayah',
+          hadith_matn: 'matn',
+          isnad: 'isnad',
+          claimed_source: 'claimed_source',
+          unknown: 'unclassified',
+        };
+        const role = roles[annotation.contentType];
+        if (!role) continue;
+        let sourceKey: string | null = null;
+        if (role === 'matn') {
+          const candidates =
+            corpus && quotationSearches++ < 5
+              ? await corpus.search(annotation.text, [], signal)
+              : [];
+          const matches = candidates
+            .filter((source) => source.sourceRole === 'hadith_matn')
+            .map((source) => ({
+              source,
+              comparison: compareQuote(annotation.text, source.originalText),
+            }))
+            .filter(({ comparison }) =>
+              ['exact', 'normalized', 'partial'].includes(comparison.status),
+            );
+          const unique = [
+            ...new Map(matches.map((match) => [match.source.snapshotKey, match])).values(),
+          ];
+          const matched = unique.length === 1 ? unique[0] : undefined;
+          if (matched) {
+            sourceKey = matched.source.snapshotKey;
+            if (!evidence.some((source) => source.snapshotKey === sourceKey))
+              evidence.push(matched.source);
+          }
+          const id = `hosted-cue-${sha256(`${revisionId}:${annotation.startOffset}:${annotation.endOffset}:${role}`).slice(0, 24)}`;
+          quotationFindings.push({
+            segmentId: id,
+            evidenceKey: sourceKey,
+            ...(matched
+              ? matched.comparison
+              : {
+                  status: 'unresolved' as const,
+                  reason:
+                    unique.length > 1
+                      ? 'ambiguous_hadith_source_identity'
+                      : 'no_contiguous_hadith_match',
+                  matchedStart: null,
+                  matchedEnd: null,
+                  comparison: {
+                    fidelity: 'unresolved' as const,
+                    extent: 'unknown' as const,
+                    differences: [],
+                    basis: 'none' as const,
+                  },
+                }),
+          });
+        }
+        spans.push({
+          startOffset: annotation.startOffset,
+          endOffset: annotation.endOffset,
+          role,
+          method: 'hosted_structural_cue',
+          sourceKey,
+        });
+      }
       spans.sort((a, b) => a.startOffset - b.startOffset || a.endOffset - b.endOffset);
       const segments: FoundationIntake['segments'] = [];
       let cursor = 0;
@@ -343,12 +421,14 @@ export function createHostedDraftAdapter(
         if (span.startOffset < cursor) continue;
         addAuthor(cursor, span.startOffset);
         const id =
-          span.role === 'ayah'
-            ? quotationFindings.find((finding) => {
-                const expected = `hosted-ayah-${sha256(`${revisionId}:${span.startOffset}:${span.endOffset}:${span.sourceKey}`).slice(0, 24)}`;
-                return finding.segmentId === expected;
-              })!.segmentId
-            : `hosted-reference-${sha256(`${revisionId}:${span.startOffset}:${span.endOffset}:${span.sourceKey}`).slice(0, 24)}`;
+          span.method === 'hosted_structural_cue'
+            ? `hosted-cue-${sha256(`${revisionId}:${span.startOffset}:${span.endOffset}:${span.role}`).slice(0, 24)}`
+            : span.role === 'ayah'
+              ? quotationFindings.find((finding) => {
+                  const expected = `hosted-ayah-${sha256(`${revisionId}:${span.startOffset}:${span.endOffset}:${span.sourceKey}`).slice(0, 24)}`;
+                  return finding.segmentId === expected;
+                })!.segmentId
+              : `hosted-reference-${sha256(`${revisionId}:${span.startOffset}:${span.endOffset}:${span.sourceKey}`).slice(0, 24)}`;
         segments.push({
           id,
           startOffset: span.startOffset,
@@ -357,10 +437,10 @@ export function createHostedDraftAdapter(
           codePointEnd: Array.from(text.slice(0, span.endOffset)).length,
           originalText: text.slice(span.startOffset, span.endOffset),
           role: span.role,
-          roleStatus: 'source_matched',
+          roleStatus: span.sourceKey ? 'source_matched' : 'candidate',
           method: span.method,
-          sourceKeys: [span.sourceKey],
-          roleProposal: span.role,
+          sourceKeys: span.sourceKey ? [span.sourceKey] : [],
+          roleProposal: span.role === 'unclassified' ? 'other' : span.role,
           conflict: false,
         });
         cursor = span.endOffset;
@@ -370,7 +450,7 @@ export function createHostedDraftAdapter(
       const unresolvedExplicit = references.filter((reference) => !quranByReference.has(reference));
       const intake: FoundationIntake = {
         schemaVersion: 1,
-        pipelineVersion: 'hosted-explicit-source-intake-v2',
+        pipelineVersion: 'hosted-explicit-source-intake-v3',
         revisionId,
         revisionSha256: sha256(text),
         corpusVersion: selectedVersion,

@@ -110,11 +110,13 @@ function OriginalText({
   report,
   selected,
   showTypes,
+  highlightedRole,
   onSelect,
 }: {
   report: FoundationReport;
   selected: string | undefined;
   showTypes: boolean;
+  highlightedRole: IntakeSegment['role'] | null;
   onSelect: (row: ReportFinding) => void;
 }) {
   const { originalText, segments } = report.intake;
@@ -139,6 +141,7 @@ function OriginalText({
               ? `semantic-highlight semantic-highlight--${roleColorClasses[segment.role]}`
               : 'foundation-highlight',
             active ? 'foundation-highlight--active' : '',
+            highlightedRole === segment.role ? 'foundation-type-highlight--active' : '',
           ]
             .filter(Boolean)
             .join(' ')}
@@ -162,7 +165,9 @@ function OriginalText({
           {text}
         </button>
       ) : (
-        <span key={segment.id}>{text}</span>
+        <span key={segment.id} data-segment-role={segment.role}>
+          {text}
+        </span>
       ),
     );
     cursor = segment.endOffset;
@@ -391,6 +396,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
       : null,
   );
   const [showTypes, setShowTypes] = useState(true);
+  const [highlightedRole, setHighlightedRole] = useState<IntakeSegment['role'] | null>(null);
   const [activeSection, setActiveSection] = useState('summary');
   const [flashSection, setFlashSection] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState({
@@ -892,6 +898,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
             report={report}
             selected={selected?.segment.id}
             showTypes={showTypes}
+            highlightedRole={highlightedRole}
             onSelect={select}
           />
           <footer className="foundation-original-footer">
@@ -906,15 +913,39 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
             <ul className="foundation-type-legend" aria-label="دليل ألوان أنواع العبارات">
               {legendRoles.map((role) => (
                 <li key={role}>
-                  <span
-                    className={`foundation-legend-swatch semantic-highlight--${roleColorClasses[role]}`}
-                    aria-hidden="true"
-                  />
-                  {roleLabels[role]}
+                  <button
+                    type="button"
+                    className="foundation-type-legend-button"
+                    aria-pressed={showTypes && highlightedRole === role}
+                    onClick={() => {
+                      setShowTypes(true);
+                      setHighlightedRole(role);
+                      window.requestAnimationFrame(() => {
+                        document
+                          .querySelector(
+                            `#report-original .semantic-highlight--${roleColorClasses[role]}`,
+                          )
+                          ?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+                      });
+                    }}
+                  >
+                    <span
+                      className={`foundation-legend-swatch semantic-highlight--${roleColorClasses[role]}`}
+                      aria-hidden="true"
+                    />
+                    {roleLabels[role]}
+                  </button>
                 </li>
               ))}
               <li>كلام الكاتب بلا تلوين</li>
             </ul>
+            {highlightedRole && (
+              <p role="status">
+                {intake.segments.some((segment) => segment.role === highlightedRole)
+                  ? `تم إبراز مواضع ${roleLabels[highlightedRole]} بلونها في النص.`
+                  : `لم يُحدَّد موضع من نوع ${roleLabels[highlightedRole]} في هذا التقرير.`}
+              </p>
+            )}
             <p>الألوان توضح نوع العبارة، ولا تحكم على صحتها.</p>
           </footer>
         </section>

@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { SourceContentSelectionSchema } from './source-content.js';
 const CacheChunkerVersion = z.enum(['cache-sentence-context-v1', 'exact-content-block-context-v1']);
 
-export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.10';
-export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.10';
+export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.11';
+export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.11';
 
 const EvidenceKeys = z.array(z.string().min(1).max(160)).max(20);
 const Details = z.array(z.string().min(1).max(500)).max(6);
@@ -255,7 +255,7 @@ export type SemanticErrorCode = z.infer<typeof SemanticErrorCodeSchema>;
 export const SemanticRequestTraceSchema = z
   .object({
     requestId: z.string().uuid(),
-    stage: z.enum(['extraction', 'assessment', 'gap_assessment']),
+    stage: z.enum(['extraction', 'relevance', 'assessment', 'gap_assessment']),
     modelId: z.string().min(1).max(160),
     providerId: z.string().min(1).max(120),
     fallback: z.boolean(),
@@ -302,6 +302,7 @@ export const SemanticAssessmentReportSchema = z
           'provisional-semantic-v1.7',
           'provisional-semantic-v1.8',
           'provisional-semantic-v1.9',
+          'provisional-semantic-v1.10',
           SEMANTIC_PIPELINE_VERSION,
         ]),
         promptVersion: z.enum([
@@ -314,6 +315,7 @@ export const SemanticAssessmentReportSchema = z
           'evidence-support-v1.7',
           'evidence-support-v1.8',
           'evidence-support-v1.9',
+          'evidence-support-v1.10',
           SEMANTIC_PROMPT_VERSION,
         ]),
         inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),
@@ -452,7 +454,7 @@ export const SemanticAssessmentReportSchema = z
           })
           .strict()
           .optional(),
-        requests: z.array(SemanticRequestTraceSchema).max(5),
+        requests: z.array(SemanticRequestTraceSchema).max(9),
       })
       .strict(),
     limitations: z.array(z.string().min(1).max(1000)).max(10),

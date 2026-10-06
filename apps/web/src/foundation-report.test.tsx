@@ -906,6 +906,22 @@ describe('readable report comparison refinements', () => {
     expect(original.querySelectorAll('mark')).toHaveLength(1);
   });
 
+  it('activates existing segment colors from the legend and reports absent types honestly', () => {
+    const report = actionableFixture();
+    report.intake.segments[0]!.role = 'ayah';
+    render(<FoundationReportContent report={report} />);
+    const original = screen.getByLabelText('النص الأصلي مع مواضع النقل');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'إظهار أنواع العبارات المنقولة' }));
+    fireEvent.click(screen.getByRole('button', { name: 'آية' }));
+    expect(
+      original.querySelector('.semantic-highlight--quran.foundation-type-highlight--active'),
+    ).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'آية' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'غير مصنّف' }));
+    expect(screen.getByText('لم يُحدَّد موضع من نوع غير مصنّف في هذا التقرير.')).not.toBeNull();
+    expect(original.textContent).toBe(report.intake.originalText);
+  });
+
   it('separates assessment not run from outage, no conclusion and provisional assessment', () => {
     const report = foundationReportFixture();
     expect(interpretationPresentation(report).label).toBe(
