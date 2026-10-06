@@ -70,7 +70,11 @@ import {
   initialEditorialReview,
   type EditorialReview,
 } from '../../../packages/contracts/src/editorial-review.js';
-import { EditorialReviewEditor, ReviewedReportContent } from './editorial-review.js';
+import {
+  EditorialReviewEditor,
+  ReviewedReportContent,
+  reviewPublicationValidationMessages,
+} from './editorial-review.js';
 import {
   eligibleReviewedSources,
   ReviewerSourceFields,
@@ -2466,7 +2470,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function ReviewerDetail({
+export function ReviewerDetail({
   navigate,
   ticketCode,
 }: {
@@ -2479,6 +2483,7 @@ function ReviewerDetail({
   );
   const [note, setNote] = useState('');
   const [editorial, setEditorial] = useState<EditorialReview>(initialEditorialReview(null));
+  const [validationMessages, setValidationMessages] = useState<string[]>([]);
   const [confirmPublish, setConfirmPublish] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [sourceId, setSourceId] = useState('');
@@ -2499,6 +2504,7 @@ function ReviewerDetail({
         setConfirmSource(false);
         const latest = value.responses.at(-1);
         setEditorial(latest?.editorial ?? initialEditorialReview(value.report));
+        setValidationMessages([]);
         if (latest) {
           setDecision(latest.decision);
           setNote(latest.text);
@@ -2519,12 +2525,11 @@ function ReviewerDetail({
     setSaving(true);
     setError('');
     setMessage('');
+    setValidationMessages([]);
     try {
       const parsed = EditorialReviewSchema.safeParse(editorial);
       if (!parsed.success) {
-        setError(
-          'أكمل بيانات المصادر. السجل المحسوم يحتاج دليلًا وتعليلًا، والروابط يجب أن تكون HTTPS.',
-        );
+        setValidationMessages(reviewPublicationValidationMessages(parsed.error.issues));
         return;
       }
       await saveReviewerResponse(ticketCode, {
@@ -2579,7 +2584,11 @@ function ReviewerDetail({
             </article>
             <EditorialReviewEditor
               value={editorial}
-              onChange={setEditorial}
+              onChange={(value) => {
+                setEditorial(value);
+                setValidationMessages([]);
+              }}
+              validationMessages={validationMessages}
               disabled={saving || ticket.status === 'closed'}
             />
             {ticket.report ? (

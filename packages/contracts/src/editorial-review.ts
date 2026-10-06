@@ -59,14 +59,22 @@ export const EditorialReviewSchema = z
       new Set(review.records.map((row) => row.id)).size !== review.records.length
     )
       ctx.addIssue({ code: 'custom', message: 'DUPLICATE_REVIEW_RECORD' });
-    for (const row of review.records) {
+    for (const [index, row] of review.records.entries()) {
       if (row.evidenceIds.some((id) => !ids.has(id)))
-        ctx.addIssue({ code: 'custom', message: 'MISSING_REVIEW_EVIDENCE' });
+        ctx.addIssue({
+          code: 'custom',
+          message: 'MISSING_REVIEW_EVIDENCE',
+          path: ['records', index, 'evidenceIds'],
+        });
       if (
         ['matched', 'different', 'supported', 'contradicted'].includes(row.status) &&
         (!row.originalText.trim() || !row.evidenceIds.length || !row.explanation.trim())
       )
-        ctx.addIssue({ code: 'custom', message: 'RESOLVED_RECORD_REQUIRES_EVIDENCE_AND_REASON' });
+        ctx.addIssue({
+          code: 'custom',
+          message: 'RESOLVED_RECORD_REQUIRES_EVIDENCE_AND_REASON',
+          path: ['records', index],
+        });
     }
     if (
       review.suggestedText.trim() &&
@@ -76,7 +84,11 @@ export const EditorialReviewSchema = z
           row.evidenceIds.length,
       )
     )
-      ctx.addIssue({ code: 'custom', message: 'SUGGESTION_REQUIRES_EVIDENCE' });
+      ctx.addIssue({
+        code: 'custom',
+        message: 'SUGGESTION_REQUIRES_EVIDENCE',
+        path: ['suggestedText'],
+      });
   });
 export type EditorialReview = z.infer<typeof EditorialReviewSchema>;
 export type ReviewedRecord = z.infer<typeof ReviewedRecordSchema>;
