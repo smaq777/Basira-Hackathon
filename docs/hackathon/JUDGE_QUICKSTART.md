@@ -1,60 +1,79 @@
 # Judge quickstart
 
-This path lets a reviewer reproduce exactly what the repository currently claims without receiving team credentials or private notes.
+Open [Basirah staging](https://api-staging-42bc.up.railway.app/) as a guest. The post-PR179 deployment failed, and the latest readiness checks timed out. The recorded 30e25db acceptance below does not establish current availability. No team account, provider API key or local MCP setup is required.
 
-## 1. Verify the release identity
+Basirah checks two distinct things: **quotation fidelity** and **whether the evidence supports the author's conclusion**. Source access and generated findings do not constitute scholarly approval. The public demonstration uses a 175-passage research corpus with pending source approvals.
 
-Record the repository URL, release tag, commit SHA, and release notes. Compare [current status](../STATUS.md) with the delivered tag. Planned architecture is not evidence of a working integration.
+The [dated release evidence](../evidence/2026-10-06-verified-judge-quickstart.md) identifies the observed deployment, report receipts, rewrite success and retained failures. A merged PR or green build alone does not establish deployment.
 
-## 2. Run the credential-free checks
+Before a live demonstration, require HTTP 200 from `/health`, `/ready` and `/api/v1/capabilities` on the recorded deployment. If that gate fails, inspect the retained evidence instead of counting an unavailable run as acceptance. Once ready, paste one example below, start its review, then inspect the original quotation, author claim, selected sources and provisional assessment.
 
-The committee can open [Railway staging](https://api-staging-42bc.up.railway.app/)
-without a team account or API key. The current site creates real expiring guest
-reviews with recorded Quran/source evidence and provisional model assessment.
-Selected supported/contradicted, altered quotation and unavailable-evidence
-cases were observed online. These are research results, not scholarly approval.
-The [submission checkpoint](../evidence/2026-10-06-submission-blockers.md) records
-the observed release and remaining corpus/rewrite deployment checks. Reviewer
-publication and email acceptance remain deferred.
+## 1. Conditional support and a useful rewrite
 
-Install Node.js 24 LTS and npm 11, then run from the repository root:
+Paste this exact case:
+
+> قال تعالى: «وإن تخفوها وتؤتوها الفقراء فهو خير لكم» [البقرة: 271]. إخفاء الصدقة وإعطاؤها للفقراء خير للمتصدق.
+
+Expected: the quotation aligns with Quran 2:271; the author claim is **supported** within the linked conditions of hiding the charity **and giving it to the poor**. The recorded release retrieved the Quran plus Muyassar and Saadi Tafsir. Inspect attributed source text and exact cited excerpts separately from the generated explanation. This result does not establish that giving to the poor is better than every other charitable use.
+
+Request an AI-ReWrite. Inspect the proposed author change before copying: the quoted words must remain verbatim, and the original meaning, hiding and poor-recipient conditions must remain intact. Do not add a comparison target absent from the author's wording, even when a source explains that comparison. A controlled live result changed:
+
+> إخفاء الصدقة وإعطاؤها للفقراء خير للمتصدق
+
+to:
+
+> إخفاء الصدقة وإعطاؤها للفقراء أفضل للمتصدق
+
+Wording may vary on a new run. The first recorded attempt was withheld; a separate controlled attempt passed generation, preservation and independent verification. Copy only a validated result after the copy action succeeds. Its displayed text and clipboard must match, including its recorded attribution. The original report remains unchanged. Cancellation must withhold candidate text and copying.
+
+A separate pending-code control improved the rough author wording `لما نخفي الصدقة ونعطيها للفقراء فهذا خير للمتصدق` to `إخفاء الصدقة وإعطاؤها للفقراء خيرٌ للمتصدّق.` while preserving scope. This was a local frozen-source control; its generation policy is not yet deployed. See the dated evidence rather than expecting this new result from the current website.
+
+## 2. A correct quotation can carry a wrong conclusion
+
+First paste:
+
+> قال تعالى: «وكلوا واشربوا ولا تسرفوا» [الأعراف: 31]. تدل الآية على النهي عن الإسراف في الأكل والشرب.
+
+Expected: **supported**, with the prohibition against excess preserved.
+
+Then paste the contrasting case:
+
+> قال تعالى: «وكلوا واشربوا ولا تسرفوا» [الأعراف: 31]. تدل الآية على أن الإسراف في الطعام والشراب مطلوب شرعًا.
+
+Expected: the same quotation remains aligned, while the author's inference is **contradicted**. The explanation and scope must identify the claim as contradicted rather than endorse it. Inspect the exact source excerpt containing `ولا تسرفوا`. On the recorded restored release, both reviews included Quran 7:31 and two live Tafsir works.
+
+This is the central distinction: accurate quotation does not establish the conclusion drawn from it.
+
+## 3. Missing evidence produces bounded abstention
+
+Paste:
+
+> قال رسول الله صلى الله عليه وسلم: «أعلنوا هذا النكاح». وقال لعبد الرحمن بن عوف رضي الله عنه: «أولم ولو بشاة». إقامة وليمة النكاح من إظهار الفرح بنعمة الزواج.
+
+Expected: **insufficient_context** with no selected sources or citations in the recorded packet. The report should explain that evidence for the exact narration/claim was unavailable. A verse about marriage, love or mercy must not become a substitute for evidence about a wedding feast.
+
+Zero references here is an abstention, not a verdict that the narrations are false or unauthentic. A provider failure is different: `unavailable`/`gateway_blocked` means assessment did not complete and cannot count as successful abstention. Preserve the original and the first outcome.
+
+These inputs are copied from the [bounded acceptance runner](../../scripts/acceptance-submission-staging.mjs). The runner makes live provider calls only with explicit scoped authorization; judges can use the website directly.
+
+## Evidence and limits to inspect
+
+- Confirm the displayed source identity, reference, edition/provenance and research status. Quotation text, generated explanation and suggested rewrite have different roles.
+- Reload the saved report in the same guest session. Guest reports are protected by ownership; report IDs are not public share links. Expiring sessions and transient rewrite candidates can limit later access.
+- The ambiguous Tawhid example with `(سورة النحل، الآية: )` is a limitation case, not a successful demonstration. Its Quran excerpt matches both 31:25 and 39:38; neither reference may be chosen silently. Its quoted Muadh wording remained unresolved. See the dated evidence.
+- Selected live successes do not measure broad recall, general Arabic accuracy, scholarly reliability or 100% rewrite success. Mobile and reviewer/publication/email acceptance remain deferred.
+
+After readiness, an optional five-minute editor-benefit pilot uses three matched cases: conditional charity, correct quotation with a contradicted inference, and unavailable narration. Counterbalance manual-first versus tool-first review between participants and vary case order. Record citation errors, missed conditions, false endorsements, abstentions, completion times and unfinished tasks. Report participant/task counts and individual outcomes; no measured impact score is currently claimed.
+
+## Repository and operating instructions
+
+The [public repository](https://github.com/smaq777/Basira-Hackathon) exposes the source and merge history. Use [requirements](../product/REQUIREMENTS.md), [system blueprint](../architecture/SYSTEM_BLUEPRINT.md), [provider registry](../api/PROVIDERS.md), [test strategy](../testing/STRATEGY.md) and [rights policy](../governance/RIGHTS.md) to inspect scope and trust boundaries. The [alignment page](ALIGNMENT.md) lists the supplied final judging weights.
+
+For credential-free software checks, install Node 24 and npm 11, then run:
 
 ```bash
 npm ci
 npm run check
-npm run dev:api
 ```
 
-In a second terminal, run `npm run dev:web`. Open `http://localhost:5173`.
-With a configured migrated database, `/ready` returns `200`; guest document,
-revision and review-run endpoints work. A credential-free checkout does not
-enable the hosted evidence/model providers. The shared staging service has those
-providers configured server-side; guests never supply provider credentials.
-
-## 3. Configure only delivered integrations
-
-Read the [credential and service onboarding guide](../operations/CREDENTIALS.md)
-and [Foundation setup](../operations/SETUP.md). Live staging uses its existing
-Neon reader, Tafsir MCP and OpenRouter configuration. Store credentials outside
-Git and never send them to the committee. Do not enable optional providers merely
-because their tool inventories are reachable.
-
-## 4. Inspect evidence
-
-- Product scope and exclusions: [requirements](../product/REQUIREMENTS.md)
-- System call order and trust boundaries: [system blueprint](../architecture/SYSTEM_BLUEPRINT.md)
-- Physical schema and query paths: [data model](../architecture/DATA_MODEL.md)
-- Provider/source status: [provider registry](../api/PROVIDERS.md)
-- Software and scientific gates: [test strategy](../testing/STRATEGY.md)
-- Rights and attribution: [rights policy](../governance/RIGHTS.md)
-- Baseline versus hackathon work: [evidence log](../evidence/2026-09-30.md), [provider/deployment record](../evidence/2026-10-02-provider-setup.md) and Git history
-
-## 5. Interpret deployment evidence
-
-A deployment is verified only when the exact commit SHA, environment, URL, UTC timestamp, smoke result, and rollback target are recorded. A workflow file, passing build, bot installation, preview editor, or loading page is not a verified deployment.
-
-The intended route is issue branch → `development` → staging → accepted `development` to `main` pull request → manual production deployment. GitHub merge commits preserve the contribution and promotion history.
-
-## 6. Security and privacy
-
-No judge should need a team member's token, account password, local MCP configuration, conversation transcript, unpublished user post, or private dataset. Report any suspected credential privately and allow the owner to revoke it before public discussion.
+Local hosted database/provider operation is a separate operator setup described in [setup](../operations/SETUP.md) and [credentials](../operations/CREDENTIALS.md). Guests never supply service credentials. Do not send judges team tokens, private drafts, conversation transcripts or local environment files. Production promotion and final portal submission require separate recorded acceptance.
