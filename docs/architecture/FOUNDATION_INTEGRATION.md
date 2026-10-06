@@ -155,9 +155,13 @@ normalization policy or source approval. See the
 
 ## Self-contained semantic qualifier fields
 
-Semantic prompt v1.10 asks each scope item to state the bounded assessed proposition
+Semantic prompt v1.11 retains the v1.10 requirement that each scope item state the bounded assessed proposition
 with its polarity, modality and material conditions, rather than a bare subject
 label. Contradicted/unestablished and unavailable/ambiguous cases retain their
 explicit limitations. Citation and span validators are unchanged; no keyword rule
 forces a verdict or rewrites returned findings. Historical matching trace versions
-remain readable. See the [selected comparison and limits](../evidence/2026-10-05-qualifier-field-consistency.md).
+remain readable. Version 1.11 also requires clause-by-clause analysis of the exact
+author assertion and explicit identification of unavailable narration or attribution
+evidence; unrelated passages cannot stand in for the requested quotation. See the
+[selected comparison and limits](../evidence/2026-10-05-qualifier-field-consistency.md)
+and the [submission acceptance procedure](../operations/SUBMISSION_ACCEPTANCE.md).

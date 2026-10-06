@@ -8,7 +8,14 @@ Record the repository URL, release tag, commit SHA, and release notes. Compare [
 
 ## 2. Run the credential-free checks
 
-The committee can first open the public mobile-ready staging build at [api-staging-42bc.up.railway.app](https://api-staging-42bc.up.railway.app/). It requires no team account or API key. This URL demonstrates the accepted Arabic interaction and labelled dummy reviewer workspace; it does not claim a live Islamic verification result.
+The committee can open [Railway staging](https://api-staging-42bc.up.railway.app/)
+without a team account or API key. The current site creates real expiring guest
+reviews with recorded Quran/source evidence and provisional model assessment.
+Selected supported/contradicted, altered quotation and unavailable-evidence
+cases were observed online. These are research results, not scholarly approval.
+The [submission checkpoint](../evidence/2026-10-06-submission-blockers.md) records
+the observed release and remaining corpus/rewrite deployment checks. Reviewer
+publication and email acceptance remain deferred.
 
 Install Node.js 24 LTS and npm 11, then run from the repository root:
 
@@ -18,11 +25,19 @@ npm run check
 npm run dev:api
 ```
 
-In a second terminal, run `npm run dev:web`. Open `http://localhost:5173`. With a configured migrated database, `/ready` returns `200`; guest document/revision endpoints and the recoverable review-run lifecycle work. Review runs do not execute a live evidence-verification worker yet, so no scholarly result is claimed.
+In a second terminal, run `npm run dev:web`. Open `http://localhost:5173`.
+With a configured migrated database, `/ready` returns `200`; guest document,
+revision and review-run endpoints work. A credential-free checkout does not
+enable the hosted evidence/model providers. The shared staging service has those
+providers configured server-side; guests never supply provider credentials.
 
 ## 3. Configure only delivered integrations
 
-Read the [credential and service onboarding guide](../operations/CREDENTIALS.md). The current foundation needs no key. For a later tagged release, create credentials only for providers explicitly marked implemented and required. Store them outside Git and never send them to the committee.
+Read the [credential and service onboarding guide](../operations/CREDENTIALS.md)
+and [Foundation setup](../operations/SETUP.md). Live staging uses its existing
+Neon reader, Tafsir MCP and OpenRouter configuration. Store credentials outside
+Git and never send them to the committee. Do not enable optional providers merely
+because their tool inventories are reachable.
 
 ## 4. Inspect evidence
 

@@ -87,7 +87,11 @@ no running process was restarted. Shared Vercel/Railway configuration and
 deployment remain Saleh-owned and were neither changed nor polled.
 
 For the repository API, retain the existing research database/runtime login and
-compatible embedding space, and select the new hash in `SOURCE_CORPUS_VERSION`.
+compatible embedding space, and select the new hash in `FOUNDATION_CORPUS_VERSION`.
+The morning submission audit corrected the previous `SOURCE_CORPUS_VERSION`
+handoff typo: the repository API reads `FOUNDATION_CORPUS_VERSION`. See the
+[exact staging activation steps](../operations/SUBMISSION_CORPUS_ACTIVATION.md),
+including the optional `CORPUS_VERSION` consistency declaration.
 Do not substitute the report database, administrative `postgres` database,
 production branch or cleaning-preview child. See the
 [branch inventory](../operations/NEON_BRANCH_INVENTORY.md) and

@@ -131,6 +131,72 @@ it('allows a real recorded citation with fresh validated copy but withholds evid
   empty.close();
 });
 
+it('attributes a complete faithful quotation without author-generation or verification calls and freshly validates copy', async () => {
+  const report = completeQuotationFixture(),
+    context = { report, attempt: 1 };
+  const generate = vi.fn(async () => {
+    throw new Error('quotation attribution must not depend on an author model');
+  });
+  const verifier = vi.fn(async () => {
+    throw new Error('no changed author meaning to verify');
+  });
+  const reload = vi.fn(async () => context);
+  const service = createRewriteService(generate, { verifier, requireCompleteEvidence: true });
+  const task = service.create('owner', 'quote', context, reload);
+  await settle();
+  const candidate = service.get('owner', task.id, context);
+  expect(candidate).toMatchObject({
+    status: 'validated',
+    mode: 'citation_and_layout_only',
+    operations: { replacements: [], paragraphBreaks: [] },
+  });
+  expect(candidate.operations!.citations).toHaveLength(1);
+  const allowed = rewriteInput(report).allowedCitations[0]!;
+  const addition = ` [${allowed.reference}${allowed.pending ? ' — مصدر بحثي غير معتمد' : ''}]`;
+  expect(candidate.text!.replace(addition, '')).toBe(report.intake.originalText);
+  expect(reload).toHaveBeenCalledOnce();
+  expect(generate).not.toHaveBeenCalled();
+  expect(verifier).not.toHaveBeenCalled();
+  expect(service.copy('owner', task.id, context)).toBe(candidate.text);
+  expect(() => service.copy('foreign', task.id, context)).toThrow('REWRITE_NOT_FOUND');
+  expect(() => service.copy('owner', task.id, { ...context, attempt: 2 })).toThrow(
+    'REWRITE_STALE_REPORT',
+  );
+  service.close();
+});
+
+it('still withholds quotation-only output when attribution cannot fit or the report becomes stale', async () => {
+  const report = completeQuotationFixture();
+  report.intake.originalText += ' '.repeat(3000 - report.intake.originalText.length);
+  report.inputSha256 = report.intake.revisionSha256 = sha256(report.intake.originalText);
+  report.semanticAssessment!.trace.inputSha256 = report.inputSha256;
+  const context = { report, attempt: 1 };
+  const generate = vi.fn(),
+    verifier = vi.fn();
+  const service = createRewriteService(generate, { verifier, requireCompleteEvidence: true });
+  const task = service.create('owner', 'budget', context, async () => context);
+  await settle();
+  expect(service.get('owner', task.id, context)).toMatchObject({
+    status: 'failed',
+    text: null,
+    errorCode: 'invalid_candidate',
+  });
+  expect(() => service.copy('owner', task.id, context)).toThrow('REWRITE_NOT_VALIDATED');
+  service.close();
+  const fresh = { report: completeQuotationFixture(), attempt: 1 };
+  const stale = createRewriteService(generate, { verifier, requireCompleteEvidence: true });
+  const other = stale.create('owner', 'stale', fresh, async () => ({ ...fresh, attempt: 2 }));
+  await settle();
+  expect(stale.get('owner', other.id, fresh)).toMatchObject({
+    status: 'failed',
+    text: null,
+    errorCode: 'stale_report',
+  });
+  expect(generate).not.toHaveBeenCalled();
+  expect(verifier).not.toHaveBeenCalled();
+  stale.close();
+});
+
 it('does not warn about unavailable claim assessment when the report identifies quotation-only writing', async () => {
   const report = rewriteFixture();
   report.interpretation.status = 'not_applicable';
