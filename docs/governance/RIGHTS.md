@@ -2,6 +2,8 @@
 
 MIT covers Basirah-authored software. It does not relicense Quran editions, tafsir works, hadith databases, API payloads, logos, challenge guides or user submissions.
 
+For submission, use the [component and rights ledger](SUBMISSION_COMPONENTS.md): verified direct runtime package metadata, actual service/data uses and explicitly pending permissions. This inventory does not certify all source or transitive-component rights.
+
 Before ingesting a source, record: work/author, edition, provider URL, license or explicit permission, permitted caching/redistribution, attribution format, reviewer approval and withdrawal procedure. Keep permission evidence privately if it contains personal data; publish only an appropriate summary.
 
 The organizer reference package is a source-selection guide, not blanket API or republication authorization. Submitted proposal PDFs and organizer PDFs remain outside this repository until publication rights and personal metadata are reviewed. Relevant requirements are summarized in [challenge alignment](../hackathon/ALIGNMENT.md).

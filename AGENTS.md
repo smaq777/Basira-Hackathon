@@ -1,9 +1,9 @@
 # Basirah project rules
 
-- Work against a GitHub Issue; follow CONTRIBUTING.md. Use the owner-requested `saleh/` branch prefix, not an assistant-branded prefix.
+- Work against a GitHub Issue; follow CONTRIBUTING.md. Use a short-lived `codex/` branch for Codex-managed work, or the contributor's agreed `saleh/` or `ahmed/` prefix.
 - `development` is the integration branch and `main` is the production branch. Branch from current `development`, merge feature pull requests into `development`, then promote an accepted release through a `development` to `main` pull request.
 - Preserve merge commits. Do not squash, rebase-merge or force-push shared branches.
-- Branch protection is currently blocked by the private-repository entitlement. Treat CI and this policy as advisory until both branch rules are written and read back successfully.
+- The repository is public. On 6 October 2026, `main` protection read-back confirmed one approval and `quality`, `policy`, `dependency-audit`, with force pushes/deletions disabled; admins are not enforced. Do not infer identical protection for other branches or bypass written acceptance policy.
 - Documentation, issues and code comments are English-first. Keep Islamic terminology, quotations and Arabic UI examples in Arabic where appropriate; define terms in English.
 - Preserve the narrow short-post review scope. Do not silently expand to general religious advice, personal fatwas, OCR, accounts or an unrestricted chat assistant.
 - Never fabricate source references, empirical scores, scholarly approval, uptime, deployment success or submission receipts.
