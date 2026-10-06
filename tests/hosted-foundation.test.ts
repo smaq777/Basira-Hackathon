@@ -152,20 +152,18 @@ it('keeps the local research preview and hosted demo mutually exclusive', () => 
   ).toThrow('FOUNDATION_RUNTIME_MODE_CONFLICT');
 });
 
-it.each(['FOUNDATION_REWRITE_ENABLED'] as const)(
-  'keeps %s disabled in the hosted staging demo',
-  (key) => {
-    expect(() =>
-      foundationRuntimeMode({
-        FOUNDATION_ENABLED: 'true',
-        FOUNDATION_HOSTED_DEMO: 'true',
-        FOUNDATION_SEMANTIC_ENABLED: 'true',
-        FOUNDATION_CLAIM_RETRIEVAL_ENABLED: 'true',
-        [key]: 'true',
-      }),
-    ).toThrow('HOSTED_DEMO_REQUIRES_READ_ONLY_RETRIEVAL');
-  },
-);
+it('allows explicitly enabled rewrite only inside the valid staging boundary', () => {
+  expect(
+    foundationRuntimeMode({ ...hostedDemoEnvironment, FOUNDATION_REWRITE_ENABLED: 'true' }),
+  ).toBe('hosted_demo');
+  expect(() =>
+    foundationRuntimeMode({
+      ...hostedDemoEnvironment,
+      FOUNDATION_REWRITE_ENABLED: 'true',
+      RAILWAY_ENVIRONMENT_NAME: 'production',
+    }),
+  ).toThrow('HOSTED_DEMO_ENVIRONMENT_MISMATCH');
+});
 
 it('allows read-only MCP and web discovery in hosted production', () => {
   expect(

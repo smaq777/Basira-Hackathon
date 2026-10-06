@@ -94,7 +94,7 @@ describe('explicit foundation research activation', () => {
       'HOSTED_STAGING_ENVIRONMENT_MISMATCH',
     );
   });
-  it('integrates the full staging mode while preserving the accepted read-only hosted demo', () => {
+  it('integrates staging retrieval and explicit evidence-guarded rewrite inside the hosted demo', () => {
     expect(foundationRuntimeMode(staging, '0.0.0.0')).toBe('hosted_research');
     expect(() =>
       foundationRuntimeMode({ ...staging, FOUNDATION_HOSTED_DEMO: 'true' }, '0.0.0.0'),
@@ -118,9 +118,9 @@ describe('explicit foundation research activation', () => {
         '0.0.0.0',
       ),
     ).toBe('hosted_demo');
-    expect(() =>
-      foundationRuntimeMode({ ...demo, FOUNDATION_REWRITE_ENABLED: 'true' }, '0.0.0.0'),
-    ).toThrow('HOSTED_DEMO_REQUIRES_READ_ONLY_RETRIEVAL');
+    expect(foundationRuntimeMode({ ...demo, FOUNDATION_REWRITE_ENABLED: 'true' }, '0.0.0.0')).toBe(
+      'hosted_demo',
+    );
   });
   it.each([
     [{ ...staging, RAILWAY_ENVIRONMENT_NAME: 'production' }, 'HOSTED_STAGING_ENVIRONMENT_MISMATCH'],

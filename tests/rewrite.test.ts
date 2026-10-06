@@ -6,7 +6,7 @@ import {
   SYNTHETIC_QUOTE,
 } from '../apps/web/src/foundation-report.fixtures.js';
 import { createRewriteGenerator, REWRITE_MODEL } from '../apps/api/src/rewrite-provider.js';
-import { RewriteCandidateSchema } from '../packages/contracts/src/rewrite.js';
+import { RewriteCandidateSchema, rewriteEvidenceReady } from '../packages/contracts/src/rewrite.js';
 import {
   SEMANTIC_PIPELINE_VERSION,
   SEMANTIC_PROMPT_VERSION,
@@ -19,6 +19,97 @@ export function rewriteFixture() {
   return report;
 }
 const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
+
+function completeQuotationFixture() {
+  const report = rewriteFixture();
+  report.semanticAssessment = {
+    schemaVersion: 1,
+    status: 'not_applicable',
+    provisional: true,
+    scholarlyApproval: false,
+    errorCode: null,
+    assessments: [],
+    limitations: [],
+    claims: [],
+    trace: {
+      pipelineVersion: SEMANTIC_PIPELINE_VERSION,
+      promptVersion: SEMANTIC_PROMPT_VERSION,
+      inputSha256: report.inputSha256,
+      evidenceSha256: 'd'.repeat(64),
+      extractionInputSha256: null,
+      assessmentInputSha256: null,
+      requests: [],
+    },
+  };
+  return report;
+}
+
+it('requires complete evidence before hosted generation and rejects missing, stale and unresolved findings without calling AI', () => {
+  const report = completeQuotationFixture();
+  expect(rewriteEvidenceReady(report)).toBe(true);
+  for (const mutate of [
+    (r: typeof report) => {
+      r.semanticAssessment = undefined;
+    },
+    (r: typeof report) => {
+      r.semanticAssessment!.status = 'partial';
+    },
+    (r: typeof report) => {
+      r.semanticAssessment!.trace.inputSha256 = 'f'.repeat(64);
+    },
+    (r: typeof report) => {
+      r.intake.quotationFindings[0]!.status = 'unresolved';
+    },
+    (r: typeof report) => {
+      r.intake.quotationFindings = [];
+    },
+    (r: typeof report) => {
+      r.intake.evidence = [];
+    },
+    (r: typeof report) => {
+      r.intake.evidence[0]!.approvalStatus = 'revoked';
+    },
+  ]) {
+    const invalid = structuredClone(report);
+    mutate(invalid);
+    const generate = vi.fn(async () => ({ paragraphBreaks: [], citations: [] }));
+    const service = createRewriteService(generate, { requireCompleteEvidence: true });
+    const context = { report: invalid, attempt: 1 };
+    expect(rewriteEvidenceReady(invalid)).toBe(false);
+    expect(() => service.create('owner', 'key', context, async () => context)).toThrow(
+      'REWRITE_EVIDENCE_REQUIRED',
+    );
+    expect(generate).not.toHaveBeenCalled();
+    service.close();
+  }
+});
+
+it('allows a real recorded citation with fresh validated copy but withholds evidence-free layout output', async () => {
+  const report = completeQuotationFixture(),
+    context = { report, attempt: 1 };
+  const citation = rewriteInput(report).allowedCitations[0]!;
+  const service = createRewriteService(
+    async () => ({
+      paragraphBreaks: [],
+      citations: [citation].map(({ offset, evidenceKey }) => ({ offset, evidenceKey })),
+    }),
+    { requireCompleteEvidence: true },
+  );
+  const task = service.create('owner', 'key', context, async () => context);
+  await settle();
+  const valid = service.get('owner', task.id, context);
+  expect(valid.status).toBe('validated');
+  expect(service.copy('owner', task.id, context)).toBe(valid.text);
+  service.close();
+  const empty = createRewriteService(async () => ({ paragraphBreaks: [], citations: [] }), {
+    requireCompleteEvidence: true,
+  });
+  const failed = empty.create('owner', 'empty', context, async () => context);
+  await settle();
+  expect(empty.get('owner', failed.id, context)).toMatchObject({ status: 'failed', text: null });
+  expect(() => empty.copy('owner', failed.id, context)).toThrow('REWRITE_NOT_VALIDATED');
+  empty.close();
+});
 
 it('does not warn about unavailable claim assessment when the report identifies quotation-only writing', async () => {
   const report = rewriteFixture();

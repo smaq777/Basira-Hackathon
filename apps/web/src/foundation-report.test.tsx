@@ -61,6 +61,10 @@ describe('foundation report presentation', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /إرسال النص للمراجعة$/ }));
     expect(onTicket).toHaveBeenCalledOnce();
+    const finalSection = document.getElementById('report-rewrite');
+    expect(finalSection).not.toBeNull();
+    expect(finalSection?.nextElementSibling).toBeNull();
+    expect(finalSection?.textContent).toContain('النص المقترح المبني على الأدلة');
   });
 
   it('hides human review when a completed report has approved evidence and no open issue', () => {

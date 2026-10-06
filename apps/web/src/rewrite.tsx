@@ -3,6 +3,7 @@ import type { FoundationReport } from '../../../packages/contracts/src/foundatio
 import { readableSourceCitation } from '../../../packages/contracts/src/source-citation.js';
 import {
   RewriteCandidateSchema,
+  rewriteEvidenceReady,
   type RewriteCandidate,
 } from '../../../packages/contracts/src/rewrite.js';
 
@@ -31,8 +32,17 @@ function candidateFrom(body: unknown, report: FoundationReport) {
     throw new Error('تغيّر التقرير المرتبط بالاقتراح. حدّث التقرير قبل المحاولة.');
   return value;
 }
-export function RewritePanel({ report }: { report: FoundationReport }) {
+export function RewritePanel({
+  report,
+  evidenceRequired = false,
+  onReview,
+}: {
+  report: FoundationReport;
+  evidenceRequired?: boolean;
+  onReview?: () => void;
+}) {
   const [enabled, setEnabled] = useState(false);
+  const [capabilityLoaded, setCapabilityLoaded] = useState(false);
   const [wordingMode, setWordingMode] = useState(false);
   const [candidate, setCandidate] = useState<RewriteCandidate | null>(null);
   const [busy, setBusy] = useState(false);
@@ -54,6 +64,7 @@ export function RewritePanel({ report }: { report: FoundationReport }) {
     setBusy(false);
     setMessage('');
     setEnabled(false);
+    setCapabilityLoaded(false);
     void request('/api/v1/capabilities', {}, abort.signal)
       .then((body) => {
         if (!abort.signal.aborted) {
@@ -66,7 +77,10 @@ export function RewritePanel({ report }: { report: FoundationReport }) {
           setWordingMode(body.draftRewriteMode === 'supported_author_wording');
         }
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (!abort.signal.aborted) setCapabilityLoaded(true);
+      });
     return () => {
       abort.abort();
       controller.current?.abort();
@@ -81,7 +95,7 @@ export function RewritePanel({ report }: { report: FoundationReport }) {
     };
   }, [base, reportBinding]);
   const generate = async () => {
-    if (busy) return;
+    if (busy || (evidenceRequired && !rewriteEvidenceReady(report))) return;
     // Let an earlier cancellation reach the server, but ignore its late UI result.
     if (cancelController.current) {
       cancelController.current = null;
@@ -249,13 +263,40 @@ export function RewritePanel({ report }: { report: FoundationReport }) {
         setMessage('تعذر نسخ الاقتراح أو انتهت صلاحيته. بقي الأصل كما هو.');
     }
   };
+  if (evidenceRequired && (!rewriteEvidenceReady(report) || !enabled))
+    return (
+      <section
+        className="source-panel foundation-rewrite-panel"
+        aria-label="النص المقترح المبني على الأدلة"
+      >
+        <h2>النص المقترح المبني على الأدلة</h2>
+        <p>
+          {!rewriteEvidenceReady(report)
+            ? 'لم تتوفر أدلة كافية لصياغة نص مقترح يمكن إعادة استخدامه. لم نُنشئ اقتراحًا، وبقي النص الأصلي كما هو.'
+            : !capabilityLoaded
+              ? 'جار التحقق من توفر خدمة اقتراح النص.'
+              : 'خدمة اقتراح النص غير متاحة الآن. لم نُنشئ اقتراحًا، وبقي النص الأصلي كما هو.'}
+        </p>
+        {onReview && (
+          <button className="button button--primary" type="button" onClick={onReview}>
+            إرسال النص للمراجعة البشرية
+          </button>
+        )}
+      </section>
+    );
   if (!enabled) return null;
   return (
     <section
       className="source-panel foundation-rewrite-panel"
       aria-label={wordingMode ? 'اقتراح تحسين صياغة النص' : 'اقتراح تنسيق وتوثيق النص'}
     >
-      <h2>{wordingMode ? 'تحسين الصياغة وإضافة التوثيق' : 'تنسيق النص وإضافة التوثيق'}</h2>
+      <h2>
+        {evidenceRequired
+          ? 'النص المقترح المبني على الأدلة'
+          : wordingMode
+            ? 'تحسين الصياغة وإضافة التوثيق'
+            : 'تنسيق النص وإضافة التوثيق'}
+      </h2>
       <p>
         {wordingMode
           ? 'اقتراح بحثي يحسّن ألفاظ الكاتب في العبارات المدعومة فقط، مع فحص مستقل لحفظ المعنى والشروط والتوثيق. يحفظ الاقتباسات كما وردت، ويبقي النص غير المدعوم أو غير المراجع دون تغيير. لا يمثل اعتمادًا علميًا.'
@@ -348,6 +389,11 @@ export function RewritePanel({ report }: { report: FoundationReport }) {
         </>
       )}
       {message && <p role="status">{message}</p>}
+      {onReview && message && !busy && candidate?.status !== 'validated' && (
+        <button className="button button--primary" type="button" onClick={onReview}>
+          إرسال النص للمراجعة البشرية
+        </button>
+      )}
     </section>
   );
 }

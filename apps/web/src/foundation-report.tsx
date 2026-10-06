@@ -1307,12 +1307,6 @@ export function FoundationResultScreen({
               key={`${report.reviewId}:${report.evidenceStateSha256}`}
               report={report}
             />
-            <div id="report-rewrite" className="foundation-external-section">
-              <RewritePanel
-                key={`${report.reviewId}:${report.inputSha256}:${report.evidenceStateSha256}`}
-                report={report}
-              />
-            </div>
             <div className="foundation-report-actions" aria-label="إجراءات التقرير">
               <button
                 className="button button--outline foundation-refresh"
@@ -1367,6 +1361,14 @@ export function FoundationResultScreen({
             )}
             <p>إعادة التحليل تنشئ تقريرًا جديدًا للنص نفسه بالمقارنة الحالية.</p>
             {rerunError && <p role="alert">تعذر بدء التحليل الجديد. {rerunError}</p>}
+            <div id="report-rewrite" className="foundation-external-section">
+              <RewritePanel
+                key={`${report.reviewId}:${report.inputSha256}:${report.evidenceStateSha256}`}
+                report={report}
+                evidenceRequired
+                onReview={ticketAvailable ? onTicket : undefined}
+              />
+            </div>
           </>
         )}
       </main>

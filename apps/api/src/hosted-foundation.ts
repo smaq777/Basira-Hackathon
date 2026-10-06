@@ -78,8 +78,6 @@ export function foundationRuntimeMode(
   const activation = foundationActivation(environment, host);
   if (!localResearch && !hostedDemo && !hostedProduction)
     throw new Error('FOUNDATION_RUNTIME_MODE_REQUIRED');
-  if (hostedDemo && [environment.FOUNDATION_REWRITE_ENABLED].some((value) => value === 'true'))
-    throw new Error('HOSTED_DEMO_REQUIRES_READ_ONLY_RETRIEVAL');
   if (
     hostedProduction &&
     [environment.FOUNDATION_REWRITE_ENABLED].some((value) => value === 'true')
