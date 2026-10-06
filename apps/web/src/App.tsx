@@ -835,7 +835,7 @@ const CHALLENGE_PARTNERS = [
 function PartnerLogoGroup({ duplicate = false }: { duplicate?: boolean }) {
   return (
     <div className="partner-logo-group" aria-hidden={duplicate || undefined}>
-      {CHALLENGE_PARTNERS.map((partner) => (
+      {[...CHALLENGE_PARTNERS, ...CHALLENGE_MARKS].map((partner) => (
         <img
           key={partner.src}
           src={partner.src}
@@ -865,22 +865,17 @@ function PublicFooter() {
       </section>
       <section className="trust-strip">
         <div className="partner-marquee" aria-label="شعارات شركاء التحدي">
-          <div className="partner-marquee-track">
+          <a
+            className="partner-marquee-track"
+            href="https://islamicaich.org/"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="الموقع الرسمي لتحدي الذكاء الاصطناعي في خدمة المحتوى الإسلامي"
+          >
             <PartnerLogoGroup />
             <PartnerLogoGroup duplicate />
-          </div>
+          </a>
         </div>
-        <a
-          className="challenge-marks page-shell"
-          href="https://islamicaich.org/"
-          target="_blank"
-          rel="noreferrer"
-          aria-label="الموقع الرسمي لتحدي الذكاء الاصطناعي في خدمة المحتوى الإسلامي"
-        >
-          {CHALLENGE_MARKS.map((mark) => (
-            <img key={mark.src} src={mark.src} alt={mark.alt} className={mark.className} />
-          ))}
-        </a>
       </section>
       <div className="footer-main page-shell">
         <div className="footer-brand">
