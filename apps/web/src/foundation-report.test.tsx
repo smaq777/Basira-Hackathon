@@ -108,6 +108,19 @@ describe('foundation report presentation', () => {
     expect(sources.classList.contains('is-focus-pulse')).toBe(true);
   });
 
+  it('lets the reader choose every quotation directly from the top comparison', () => {
+    const report = actionableFixture();
+    render(<FoundationReportContent report={report} />);
+    const picker = screen.getByRole('combobox', { name: 'اختر النقل للمقارنة' });
+    const comparison = screen.getByRole('region', { name: 'مقارنة النقل المحدد' });
+    expect(comparison.contains(picker)).toBe(true);
+    fireEvent.change(picker, { target: { value: 'segment-2' } });
+    expect(
+      comparison.querySelector('.foundation-compare-card--draft blockquote')?.textContent,
+    ).toBe('نص تجريبي مطابق');
+    expect(comparison.classList.contains('is-focus-pulse')).toBe(true);
+  });
+
   it('never labels normalized, partial, mismatched or invalid exact comparisons accurate', () => {
     for (const status of ['normalized', 'partial', 'mismatch', 'unresolved', 'exact'] as const) {
       const report = foundationReportFixture();
@@ -652,9 +665,31 @@ it('shows provisional semantic findings with readable sources and no model trace
   };
   render(<FoundationReportContent report={report} />);
   expect(screen.getByText('تقييم دلالي أولي')).not.toBeNull();
+  expect(
+    screen.getByRole('region', { name: 'مؤشر كفاية الاستدلال' }).closest('details'),
+  ).toBeNull();
   expect(screen.getByText('الدليل المعروض لا يثبت هذا التعميم.')).not.toBeNull();
   expect(screen.getByText('شرط تجريبي')).not.toBeNull();
   expect(screen.queryByText('evidence-support-v1.1')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'مقارنة العبارة بالدليل' }));
+  const comparison = screen.getByRole('region', { name: 'مقارنة النقل المحدد' });
+  expect(comparison.querySelector('.foundation-compare-card--draft blockquote')?.textContent).toBe(
+    'عبارة الكاتب التجريبية',
+  );
+  expect(
+    comparison.querySelector('.foundation-compare-card--reference blockquote')?.textContent,
+  ).toBe(SYNTHETIC_QUOTE);
+  expect(comparison.querySelector('.foundation-word-difference')).toBeNull();
+  expect(screen.getByRole('region', { name: 'تحليل الفرق' }).textContent).toContain(
+    'لم يثبت هذا الاستنتاج',
+  );
+  expect(screen.getByRole('button', { name: 'مقارنة النصوص' }).getAttribute('aria-current')).toBe(
+    'true',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'نقل مطابق (1)' }));
+  expect(comparison.querySelector('.foundation-compare-card--draft blockquote')?.textContent).toBe(
+    SYNTHETIC_QUOTE,
+  );
 });
 
 describe('readable report comparison refinements', () => {
@@ -674,7 +709,9 @@ describe('readable report comparison refinements', () => {
     expect(comparison.querySelector('.foundation-compare-caption')?.textContent).toBe(
       'بداية النص المرجعي؛ موضع المقتطف غير محدد',
     );
-    expect(comparison.querySelector('blockquote')?.textContent).toBe('ب'.repeat(399) + '…');
+    expect(
+      comparison.querySelector('.foundation-compare-card--reference blockquote')?.textContent,
+    ).toBe('ب'.repeat(399) + '…');
     const inspector = screen.getByRole('region', { name: 'تفاصيل المصدر المحدد' });
     expect(inspector.querySelector('.foundation-full-source blockquote')?.textContent).toBe(text);
   });

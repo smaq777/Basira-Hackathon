@@ -4155,8 +4155,8 @@ mark {
 /* Result report v2: navigable comparison workspace based on the selected visual target. */
 .foundation-report-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 190px;
-  grid-template-areas: 'report nav';
+  grid-template-areas: 'nav report';
+  grid-template-columns: 190px minmax(0, 1fr);
   gap: clamp(20px, 3vw, 34px);
   align-items: start;
 }
@@ -4223,7 +4223,7 @@ mark {
 }
 
 .foundation-report-intro > .status-pill {
-  float: inline-end;
+  float: inline-start;
   margin-block-end: 8px;
 }
 
@@ -4233,7 +4233,14 @@ mark {
 }
 
 .foundation-report-intro > h1 {
-  font-size: clamp(2rem, 4vw, 3rem);
+  font-size: clamp(1.75rem, 2.4vw, 2.25rem);
+}
+
+@media (min-width: 981px) {
+  .result-page > .public-header,
+  .result-page > .result-main {
+    width: min(1440px, calc(100% - 48px));
+  }
 }
 
 .foundation-action-summary {
@@ -4334,8 +4341,6 @@ mark {
 
 .foundation-compare-card > blockquote {
   min-height: 100px;
-  display: flex;
-  align-items: center;
   margin-block: 16px;
   padding: 16px;
   border: 1px solid var(--line);
@@ -4343,6 +4348,37 @@ mark {
   background: var(--surface-warm);
   font-size: 1.05rem;
   line-height: 2.2;
+}
+
+.foundation-quote-picker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-block-end: 14px;
+  color: var(--navy);
+  font-weight: 700;
+}
+
+.foundation-quote-picker select {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: white;
+  color: var(--navy);
+  font: inherit;
+}
+
+.foundation-assessment-panel {
+  margin-block: 16px;
+  padding: 18px 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: white;
+  scroll-margin-top: 24px;
 }
 
 .foundation-difference-analysis {

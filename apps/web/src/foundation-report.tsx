@@ -58,6 +58,13 @@ const roleColorClasses: Record<IntakeSegment['role'], string> = {
   unclassified: 'unknown',
 };
 const legendRoles = ['ayah', 'matn', 'isnad', 'claimed_source', 'unclassified'] as const;
+const assessmentLabels = {
+  supported: 'الدليل المعروض يؤيد العبارة مبدئيًا',
+  contradicted: 'تعارض ظاهر بين العبارة والدليل المعروض',
+  not_established: 'لم يثبت هذا الاستنتاج من الدليل المعروض',
+  insufficient_context: 'السياق المتاح لا يكفي للتقييم',
+  not_applicable: 'لا يوجد استنتاج واضح للتقييم',
+};
 
 export function shouldOfferHumanReview(report: FoundationReport): boolean {
   return materialReviewReasons(report).length > 0;
@@ -373,8 +380,15 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
     rows.find((row) => row.group === 'different') ??
     rows.find((row) => row.group === 'unresolved') ??
     rows[0];
+  const initialClaim = initial ? null : report.semanticAssessment?.claims[0];
   const [selectedId, setSelectedId] = useState<string | undefined>(initial?.segment.id);
-  const [sourceOverride, setSourceOverride] = useState<string | null>(null);
+  const [selectedClaimId, setSelectedClaimId] = useState<string | null>(initialClaim?.id ?? null);
+  const [sourceOverride, setSourceOverride] = useState<string | null>(
+    initialClaim
+      ? (report.semanticAssessment?.assessments.find((row) => row.claimId === initialClaim.id)
+          ?.citations[0]?.evidenceKey ?? null)
+      : null,
+  );
   const [showTypes, setShowTypes] = useState(true);
   const [activeSection, setActiveSection] = useState('summary');
   const [flashSection, setFlashSection] = useState<string | null>(null);
@@ -387,6 +401,10 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
   const assessmentHeadingRef = useRef<HTMLHeadingElement>(null);
   const flashTimer = useRef<number | null>(null);
   const selected = rows.find((row) => row.segment.id === selectedId);
+  const selectedClaim = report.semanticAssessment?.claims.find((row) => row.id === selectedClaimId);
+  const selectedAssessment = report.semanticAssessment?.assessments.find(
+    (row) => row.claimId === selectedClaimId,
+  );
   const source = sourceOverride
     ? intake.evidence.find((row) => row.snapshotKey === sourceOverride)
     : selected?.source;
@@ -395,12 +413,21 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
   const retrievalNotice = retrievalLimitation(report);
   const collections = sourceCollections(report);
   const notes = editorialNotes(report);
-  const comparisonText = source ? sourceComparisonText(source, selected?.finding) : null;
+  const selectedCitation = selectedAssessment?.citations.find(
+    (citation) => citation.evidenceKey === source?.snapshotKey,
+  );
+  const comparisonText =
+    source && selectedClaim && selectedCitation
+      ? { text: selectedCitation.excerpt, label: 'الشاهد المرتبط بعبارة الكاتب', truncated: false }
+      : source
+        ? sourceComparisonText(source, selected?.finding)
+        : null;
   const highlightedDifferences = selected
     ? comparisonHighlights(report, selected, source)
     : { draft: [], source: [] };
   const select = (row: ReportFinding) => {
     setSelectedId(row.segment.id);
+    setSelectedClaimId(null);
     setSourceOverride(null);
     setActiveSection('comparison');
     setFlashSection('comparison');
@@ -413,6 +440,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
       rows.find((row) => row.finding.evidenceKey === item.snapshotKey) ??
       rows.find((row) => row.segment.sourceKeys.includes(item.snapshotKey));
     setSelectedId(linked?.segment.id);
+    setSelectedClaimId(null);
     setSourceOverride(item.snapshotKey);
     setActiveSection('comparison');
     setFlashSection('comparison');
@@ -438,7 +466,15 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
   );
 
   const navigateTo = (
-    key: 'summary' | 'comparison' | 'analysis' | 'sources' | 'context' | 'limits' | 'review',
+    key:
+      | 'summary'
+      | 'comparison'
+      | 'analysis'
+      | 'assessment'
+      | 'sources'
+      | 'context'
+      | 'limits'
+      | 'review',
   ) => {
     if (key === 'sources' || key === 'context' || key === 'limits') {
       setOpenSections((current) => ({ ...current, [key]: true }));
@@ -461,6 +497,16 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
     }, 1_400);
   };
 
+  const selectClaim = (claimId: string, evidenceKey?: string) => {
+    const assessment = report.semanticAssessment?.assessments.find(
+      (row) => row.claimId === claimId,
+    );
+    setSelectedId(undefined);
+    setSelectedClaimId(claimId);
+    setSourceOverride(evidenceKey ?? assessment?.citations[0]?.evidenceKey ?? null);
+    navigateTo('comparison');
+  };
+
   const differenceExplanation = selected
     ? comparisonIsBound
       ? selected.presentation.explanation
@@ -476,6 +522,7 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
           ['summary', 'الملخص والنتائج'],
           ['comparison', 'مقارنة النصوص'],
           ['analysis', 'تحليل الفرق'],
+          ['assessment', 'تحليل الاستدلال'],
           ['sources', 'المصادر والمراجع'],
           ['context', 'التفسير والسياق'],
           ['limits', 'حدود المقارنة'],
@@ -486,7 +533,14 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
             aria-current={activeSection === key ? 'true' : undefined}
             onClick={() =>
               navigateTo(
-                key as 'summary' | 'comparison' | 'analysis' | 'sources' | 'context' | 'limits',
+                key as
+                  | 'summary'
+                  | 'comparison'
+                  | 'analysis'
+                  | 'assessment'
+                  | 'sources'
+                  | 'context'
+                  | 'limits',
               )
             }
           >
@@ -556,6 +610,27 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
           aria-label="مقارنة النقل المحدد"
           ref={comparisonRef}
         >
+          {rows.length > 1 && (
+            <label className="foundation-quote-picker">
+              اختر النقل للمقارنة
+              <select
+                aria-label="اختر النقل للمقارنة"
+                value={selectedId ?? ''}
+                onChange={(event) => {
+                  const row = rows.find((item) => item.segment.id === event.target.value);
+                  if (row) select(row);
+                }}
+              >
+                {!selectedId && <option value="">اختر نقلًا</option>}
+                {rows.map((row) => (
+                  <option key={row.segment.id} value={row.segment.id}>
+                    {row.position}. {row.presentation.label} —{' '}
+                    {row.segment.originalText.slice(0, 90)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {selected && (
             <>
               <div className="foundation-compare-texts">
@@ -638,18 +713,45 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
               )}
             </>
           )}
-          {!selected && source && comparisonText && (
-            <article className="foundation-compare-card foundation-compare-card--reference">
-              <h2>{sourceCitation(source, intake.evidence)}</h2>
-              <p>هذا النص متاح للقراءة؛ لم تُعرض هنا مطابقة لنقل محدد من المسودة.</p>
-              <p className="foundation-compare-caption">{comparisonText.label}</p>
-              <blockquote>
-                {comparisonText.text}
-                {comparisonText.truncated ? '…' : ''}
-              </blockquote>
-            </article>
+          {!selected && (
+            <div className="foundation-compare-texts">
+              <article className="foundation-compare-card foundation-compare-card--draft">
+                <header>
+                  <FileText size={24} aria-hidden="true" />
+                  <div>
+                    <h2>{selectedClaim ? 'عبارة الكاتب' : 'النص في المسودة'}</h2>
+                    <p>
+                      {selectedClaim ? 'العبارة المحددة في التقرير' : 'النص كما ورد في المسودة'}
+                    </p>
+                  </div>
+                </header>
+                <blockquote>{selectedClaim?.originalText ?? intake.originalText}</blockquote>
+              </article>
+              <article className="foundation-compare-card foundation-compare-card--reference">
+                <header>
+                  <BookOpen size={24} aria-hidden="true" />
+                  <div>
+                    <h2>{selectedClaim ? 'الدليل المرتبط بالعبارة' : 'النص المرجعي'}</h2>
+                    <p>{source ? sourceCitation(source, intake.evidence) : 'لم يتحدد مصدر بعد'}</p>
+                  </div>
+                </header>
+                {source && comparisonText ? (
+                  <>
+                    <p className="foundation-compare-caption">{comparisonText.label}</p>
+                    <blockquote>
+                      {comparisonText.text}
+                      {comparisonText.truncated ? '…' : ''}
+                    </blockquote>
+                    {!selectedClaim && <p>هذا المصدر متاح للقراءة؛ لم تثبت مطابقته لنقل محدد.</p>}
+                  </>
+                ) : (
+                  <p>
+                    لم يرد شاهد مرتبط بهذه المقارنة في التقرير. يمكنك مراجعة المصادر المتاحة أدناه.
+                  </p>
+                )}
+              </article>
+            </div>
           )}
-          {!selected && !source && <p>اختر نقلًا أو مصدرًا لعرض تفاصيله هنا.</p>}
         </section>
 
         <section
@@ -663,13 +765,21 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
             <strong
               className={`foundation-result-label foundation-result-label--${comparisonIsBound && selected ? selected.group : 'unresolved'}`}
             >
-              {selected
-                ? comparisonIsBound
-                  ? selected.presentation.label
-                  : 'مطابقة غير محسومة'
-                : 'اختر نقلًا للمقارنة'}
+              {selectedClaim
+                ? selectedAssessment
+                  ? assessmentLabels[selectedAssessment.status]
+                  : 'لم يكتمل تقييم هذه العبارة'
+                : selected
+                  ? comparisonIsBound
+                    ? selected.presentation.label
+                    : 'مطابقة غير محسومة'
+                  : 'اختر نقلًا للمقارنة'}
             </strong>
-            <p>{differenceExplanation}</p>
+            <p>
+              {selectedClaim
+                ? (selectedAssessment?.explanation ?? 'لم يتوفر تقييم لهذه العبارة في التقرير.')
+                : differenceExplanation}
+            </p>
             {(highlightedDifferences.draft.length > 0 ||
               highlightedDifferences.source.length > 0) && (
               <p className="foundation-difference-key">
@@ -692,6 +802,84 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
           </div>
         </section>
 
+        <section
+          id="report-assessment"
+          className={`foundation-interpretation foundation-assessment-panel ${flashSection === 'assessment' ? 'is-focus-pulse' : ''}`}
+          aria-label="مؤشر كفاية الاستدلال"
+        >
+          <p className="foundation-eyebrow">تحليل الدليل</p>
+          <h2 id="foundation-evidence-assessment" ref={assessmentHeadingRef} tabIndex={-1}>
+            مؤشر كفاية الاستدلال
+          </h2>
+          <strong>{interpretation.label}</strong>
+          <p>{interpretation.explanation}</p>
+          {retrievalNotice && <p role="note">{retrievalNotice}</p>}
+          {report.semanticAssessment?.claims.map((claim) => {
+            const finding = report.semanticAssessment!.assessments.find(
+              (row) => row.claimId === claim.id,
+            );
+            return (
+              <details key={claim.id} className="foundation-semantic-claim">
+                <summary>
+                  {claim.originalText.length > 140
+                    ? claim.originalText.slice(0, 140) + '…'
+                    : claim.originalText}
+                  <span>
+                    {' '}
+                    — {finding ? assessmentLabels[finding.status] : 'لم يكتمل تقييم هذه العبارة'}
+                  </span>
+                </summary>
+                <blockquote>{claim.originalText}</blockquote>
+                <button
+                  type="button"
+                  className="text-action"
+                  aria-pressed={selectedClaimId === claim.id}
+                  onClick={() => selectClaim(claim.id)}
+                >
+                  مقارنة العبارة بالدليل
+                </button>
+                {finding && (
+                  <>
+                    <p>{finding.explanation}</p>
+                    {(
+                      [
+                        ['الشروط', finding.conditions],
+                        ['النفي', finding.negations],
+                        ['الاستثناءات', finding.exceptions],
+                        ['نطاق الدلالة', finding.scope],
+                      ] as const
+                    )
+                      .filter(([, items]) => items.length)
+                      .map(([label, items]) => (
+                        <p key={label}>
+                          <strong>{label}: </strong>
+                          {items.join('؛ ')}
+                        </p>
+                      ))}
+                    {finding.citations.map((citation, index) => {
+                      const citationSource = report.intake.evidence.find(
+                        (row) => row.snapshotKey === citation.evidenceKey,
+                      );
+                      return citationSource ? (
+                        <div key={`${citation.evidenceKey}-${index}`}>
+                          <button
+                            type="button"
+                            className="text-action"
+                            aria-label={`عرض شاهد: ${sourceCitation(citationSource, report.intake.evidence)}`}
+                            onClick={() => selectClaim(claim.id, citation.evidenceKey)}
+                          >
+                            {sourceCitation(citationSource, report.intake.evidence)}
+                          </button>
+                          <blockquote>{citation.excerpt}</blockquote>
+                        </div>
+                      ) : null;
+                    })}
+                  </>
+                )}
+              </details>
+            );
+          })}
+        </section>
         <section id="report-original" className="source-panel foundation-draft">
           <header>
             <FileText size={24} aria-hidden="true" />
@@ -827,74 +1015,6 @@ export function FoundationReportContent({ report }: { report: FoundationReport }
               ) : (
                 <p>اختر نقلًا أو مصدرًا لعرض نصه وسياقه هنا.</p>
               )}
-            </section>
-            <section className="foundation-interpretation" aria-label="مؤشر كفاية الاستدلال">
-              <p className="foundation-eyebrow">تحليل الدليل</p>
-              <h2 id="foundation-evidence-assessment" ref={assessmentHeadingRef} tabIndex={-1}>
-                مؤشر كفاية الاستدلال
-              </h2>
-              <strong>{interpretation.label}</strong>
-              <p>{interpretation.explanation}</p>
-              {retrievalNotice && <p role="note">{retrievalNotice}</p>}
-              {report.semanticAssessment?.claims.map((claim) => {
-                const finding = report.semanticAssessment!.assessments.find(
-                  (row) => row.claimId === claim.id,
-                );
-                const labels = {
-                  supported: 'الدليل المعروض يؤيد العبارة مبدئيًا',
-                  contradicted: 'تعارض ظاهر بين العبارة والدليل المعروض',
-                  not_established: 'لم يثبت هذا الاستنتاج من الدليل المعروض',
-                  insufficient_context: 'السياق المتاح لا يكفي للتقييم',
-                  not_applicable: 'لا يوجد استنتاج واضح للتقييم',
-                };
-                return (
-                  <details key={claim.id} className="foundation-semantic-claim">
-                    <summary>
-                      {claim.originalText.length > 140
-                        ? claim.originalText.slice(0, 140) + '…'
-                        : claim.originalText}
-                      <span>
-                        {' '}
-                        — {finding ? labels[finding.status] : 'لم يكتمل تقييم هذه العبارة'}
-                      </span>
-                    </summary>
-                    <blockquote>{claim.originalText}</blockquote>
-                    {finding && (
-                      <>
-                        <p>{finding.explanation}</p>
-                        {(
-                          [
-                            ['الشروط', finding.conditions],
-                            ['النفي', finding.negations],
-                            ['الاستثناءات', finding.exceptions],
-                            ['نطاق الدلالة', finding.scope],
-                          ] as const
-                        )
-                          .filter(([, items]) => items.length)
-                          .map(([label, items]) => (
-                            <p key={label}>
-                              <strong>{label}: </strong>
-                              {items.join('؛ ')}
-                            </p>
-                          ))}
-                        {finding.citations.map((citation, index) => {
-                          const citationSource = report.intake.evidence.find(
-                            (row) => row.snapshotKey === citation.evidenceKey,
-                          );
-                          return citationSource ? (
-                            <div key={`${citation.evidenceKey}-${index}`}>
-                              <strong>
-                                {sourceCitation(citationSource, report.intake.evidence)}
-                              </strong>
-                              <blockquote>{citation.excerpt}</blockquote>
-                            </div>
-                          ) : null;
-                        })}
-                      </>
-                    )}
-                  </details>
-                );
-              })}
             </section>
             {notes.length > 0 && (
               <details className="foundation-editorial-notes">
@@ -1129,7 +1249,10 @@ export function FoundationResultScreen({
         )}
         {report && !loading && !error && (
           <>
-            <FoundationReportContent report={report} />
+            <FoundationReportContent
+              key={`${report.reviewId}:${report.evidenceStateSha256}`}
+              report={report}
+            />
             <div id="report-rewrite" className="foundation-external-section">
               <RewritePanel
                 key={`${report.reviewId}:${report.inputSha256}:${report.evidenceStateSha256}`}
