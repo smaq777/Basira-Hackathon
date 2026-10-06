@@ -3,6 +3,7 @@ import { createApp } from './app.js';
 import { createRewriteService } from './rewrite.js';
 import { rewriteDiagnosticSink } from './rewrite-diagnostics.js';
 import { createAuthorRewriteGenerator, createAuthorRewriteVerifier } from './rewrite-provider.js';
+import { geminiBackupConfiguration } from './gemini-backup.js';
 import { createDatabase, databaseTls, DatabaseUnavailable } from './database.js';
 import { Pool } from 'pg';
 import { createClerkReviewerAuth } from './reviewer-auth.js';
@@ -44,6 +45,7 @@ const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
 const host = process.env.HOST ?? '0.0.0.0';
 if (!['127.0.0.1', '0.0.0.0', '::1'].includes(host)) throw new Error('Invalid HOST');
+const geminiBackup = geminiBackupConfiguration(process.env);
 const connectionString = process.env.DATABASE_URL;
 if (process.env.NODE_ENV === 'production' && !connectionString)
   throw new Error('DATABASE_URL is required in production');
@@ -311,6 +313,7 @@ async function initializeFoundation() {
           ...semanticBudget,
           apiKey: process.env.OPENROUTER_API_KEY,
           extractor: { modelId: 'openai/gpt-6-luna', providerId: 'OpenAI', reasoningEffort: 'low' },
+          geminiBackup,
           assessor: {
             modelId: process.env.FOUNDATION_ASSESSOR_MODEL || 'openai/gpt-6.1-sol',
             providerId: 'OpenAI',
@@ -362,12 +365,19 @@ if (
 )
   throw new Error('REWRITE_REQUIRES_RESEARCH_PREVIEW');
 const rewrite = rewriteEnabled
-  ? createRewriteService(createAuthorRewriteGenerator(process.env.OPENROUTER_API_KEY ?? ''), {
-      verifier: createAuthorRewriteVerifier(process.env.OPENROUTER_API_KEY ?? ''),
-      timeoutMs: 90_000,
-      requireCompleteEvidence: foundation?.runtimeMode === 'hosted_demo',
-      onFailureDiagnostic: rewriteDiagnosticSink(process.env),
-    })
+  ? createRewriteService(
+      createAuthorRewriteGenerator(process.env.OPENROUTER_API_KEY ?? '', undefined, geminiBackup),
+      {
+        verifier: createAuthorRewriteVerifier(
+          process.env.OPENROUTER_API_KEY ?? '',
+          undefined,
+          geminiBackup,
+        ),
+        timeoutMs: 90_000,
+        requireCompleteEvidence: foundation?.runtimeMode === 'hosted_demo',
+        onFailureDiagnostic: rewriteDiagnosticSink(process.env),
+      },
+    )
   : undefined;
 const corpusAccessMode = reviewerCorpusAccessMode(process.env);
 const reviewerCorpus = foundation?.corpusPool

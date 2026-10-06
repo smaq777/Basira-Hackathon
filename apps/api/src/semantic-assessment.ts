@@ -7,6 +7,14 @@ import type {
 } from '../../../packages/contracts/src/foundation.js';
 import { evidencePacketFits } from './evidence-budget.js';
 import {
+  GEMINI_BACKUP_ENDPOINT,
+  GEMINI_BACKUP_MODEL,
+  GEMINI_BACKUP_PROVIDER,
+  geminiBackupBody,
+  parseGeminiBackupEnvelope,
+  type GeminiBackup,
+} from './gemini-backup.js';
+import {
   AliasedClaimSelectionOutputSchema,
   EvidenceSupportOutputSchema,
   SemanticAssessmentReportSchema,
@@ -60,6 +68,7 @@ export interface SemanticAssessmentOptions {
   extractor?: SemanticRoute;
   assessor?: SemanticRoute;
   fallback?: SemanticRoute;
+  geminiBackup?: GeminiBackup;
   allowedModels?: readonly string[];
   allowedProviders?: readonly string[];
   overallTimeoutMs?: number;
@@ -207,23 +216,47 @@ function validateFinding(
   }
 }
 
-async function boundedBody(response: Response): Promise<string> {
+function discardResponse(response: Response): void {
+  void response.body?.cancel().catch(() => undefined);
+}
+
+async function boundedBody(response: Response, signal: AbortSignal): Promise<string> {
   if (!response.body) throw new PhaseError('invalid_response');
   const reader = response.body.getReader();
+  const cancelReader = () => {
+    void reader.cancel().catch(() => undefined);
+  };
+  signal.addEventListener('abort', cancelReader, { once: true });
   let bytes = 0;
   const chunks: Uint8Array[] = [];
   try {
+    if (signal.aborted) {
+      cancelReader();
+      throw new PhaseError('timeout', true);
+    }
     while (true) {
-      const { done, value } = await reader.read();
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await reader.read();
+      } catch (error) {
+        if (signal.aborted) throw new PhaseError('timeout', true);
+        // Only network interruption of the reader is retriable. Fatal UTF8
+        // decoding remains outside this catch and must fail without fallback.
+        if (error instanceof TypeError) throw new PhaseError('upstream_unavailable', true);
+        throw error;
+      }
+      if (signal.aborted) throw new PhaseError('timeout', true);
+      const { done, value } = chunk;
       if (done) break;
       bytes += value.byteLength;
       if (bytes > MAX_RESPONSE_BYTES) {
-        await reader.cancel().catch(() => undefined);
+        cancelReader();
         throw new PhaseError('body_too_large');
       }
       chunks.push(value);
     }
   } finally {
+    signal.removeEventListener('abort', cancelReader);
     reader.releaseLock();
   }
   return new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks));
@@ -341,6 +374,14 @@ export function createSemanticAssessmentAdapter(
       if (!options.enabled) return report('disabled');
       if (!options.apiKey || !options.extractor || !options.assessor)
         return report('unavailable', 'configuration_missing');
+      if (options.geminiBackup && !options.geminiBackup.apiKey?.trim())
+        return report('unavailable', 'configuration_invalid');
+      if (
+        options.geminiBackup?.secondaryApiKey !== undefined &&
+        (!options.geminiBackup.secondaryApiKey.trim() ||
+          options.geminiBackup.secondaryApiKey === options.geminiBackup.apiKey)
+      )
+        return report('unavailable', 'configuration_invalid');
       if (
         !routeAllowed(options.extractor, options) ||
         !routeAllowed(options.assessor, options) ||
@@ -414,6 +455,8 @@ export function createSemanticAssessmentAdapter(
         return report('not_applicable');
       const deadline = now() + overallMs;
       let fallbackUsed = false;
+      let geminiActive = false;
+      let selectedGeminiKeyIndex = 0;
 
       async function request(
         stage: SemanticRequestTrace['stage'],
@@ -422,11 +465,14 @@ export function createSemanticAssessmentAdapter(
         schema: z.ZodType,
         instruction: string,
         fallback: boolean,
+        directGemini = geminiActive,
+        geminiKeyIndex = selectedGeminiKeyIndex,
+        sharedStageDeadline?: number,
       ): Promise<unknown> {
         if (externalSignal?.aborted) throw new PhaseError('cancelled');
         const remaining = deadline - now();
         if (remaining <= 0) throw new PhaseError('deadline_exceeded');
-        const body = JSON.stringify({
+        const primaryBody = JSON.stringify({
           model: route.modelId,
           stream: false,
           max_tokens: ['extraction', 'relevance'].includes(stage) ? 2400 : 7000,
@@ -448,14 +494,32 @@ export function createSemanticAssessmentAdapter(
             { role: 'user', content: JSON.stringify({ untrustedData: data }) },
           ],
         });
+        const body = directGemini ? geminiBackupBody(primaryBody) : primaryBody;
         if (Buffer.byteLength(body, 'utf8') > MAX_REQUEST_BYTES)
           throw new PhaseError('body_too_large');
+        const actualRoute = directGemini
+          ? { modelId: GEMINI_BACKUP_MODEL, providerId: GEMINI_BACKUP_PROVIDER }
+          : route;
+        const stageCap =
+          stage === 'extraction'
+            ? extractionMs
+            : stage === 'relevance'
+              ? Math.min(20000, assessmentMs)
+              : stage === 'gap_assessment'
+                ? gapAssessmentMs
+                : assessmentMs;
+        // Direct backup shares the primary stage's budget, including request timeouts.
+        const stageDeadline =
+          sharedStageDeadline ??
+          (stage === 'extraction' ? extractionDeadline : undefined) ??
+          now() + stageCap;
+        if (stageDeadline <= now()) throw new PhaseError('timeout');
         const trace: SemanticRequestTrace = {
           requestId: randomUUID(),
           stage,
-          modelId: route.modelId,
-          providerId: route.providerId,
-          fallback,
+          modelId: actualRoute.modelId,
+          providerId: actualRoute.providerId,
+          fallback: directGemini || fallback,
           requestSha256: sha256(body),
           responseSha256: null,
           responseId: null,
@@ -480,18 +544,20 @@ export function createSemanticAssessmentAdapter(
               ),
             );
           controller.signal.addEventListener('abort', cancellation, { once: true });
-          const stageCap =
-            stage === 'extraction'
-              ? Math.max(
-                  1,
-                  Math.min(extractionMs, (extractionDeadline ?? now() + extractionMs) - now()),
-                )
-              : stage === 'relevance'
-                ? Math.min(20000, assessmentMs)
-                : stage === 'gap_assessment'
-                  ? gapAssessmentMs
-                  : assessmentMs;
-          const stageMs = Math.min(requestMs ?? stageCap, stageCap);
+          const availableAttempts = options.geminiBackup
+            ? (directGemini ? 1 : 2) +
+              (options.geminiBackup.secondaryApiKey && geminiKeyIndex === 0 ? 1 : 0)
+            : 1;
+          const reservedRequestMs = Math.max(
+            1,
+            Math.floor(Math.min(remaining, stageDeadline - now()) / availableAttempts),
+          );
+          const stageMs = Math.min(
+            requestMs ?? stageCap,
+            stageCap,
+            stageDeadline - now(),
+            reservedRequestMs,
+          );
           timer = setTimeout(() => controller.abort(), Math.min(stageMs, remaining));
         });
         try {
@@ -499,12 +565,19 @@ export function createSemanticAssessmentAdapter(
             (async () => {
               let response: Response;
               try {
-                response = await fetcher(ENDPOINT, {
+                response = await fetcher(directGemini ? GEMINI_BACKUP_ENDPOINT : ENDPOINT, {
                   method: 'POST',
                   redirect: 'error',
                   signal: controller.signal,
                   headers: {
-                    Authorization: `Bearer ${options.apiKey}`,
+                    ...(directGemini
+                      ? {
+                          'x-goog-api-key':
+                            geminiKeyIndex === 1
+                              ? options.geminiBackup!.secondaryApiKey!
+                              : options.geminiBackup!.apiKey,
+                        }
+                      : { Authorization: `Bearer ${options.apiKey}` }),
                     'Content-Type': 'application/json',
                     'X-Request-Id': trace.requestId,
                   },
@@ -514,13 +587,20 @@ export function createSemanticAssessmentAdapter(
                 if (error instanceof TypeError) throw new PhaseError('upstream_unavailable', true);
                 throw error;
               }
+              if (controller.signal.aborted) {
+                discardResponse(response);
+                throw new PhaseError(externalSignal?.aborted ? 'cancelled' : 'timeout');
+              }
               trace.httpStatus = response.status;
+              if (!response.ok) discardResponse(response);
               if ([401, 402, 403].includes(response.status))
                 throw new PhaseError('gateway_blocked');
               if (response.status === 429) throw new PhaseError('rate_limited', true);
               if (response.status >= 500) throw new PhaseError('upstream_unavailable', true);
               if (!response.ok) throw new PhaseError('invalid_response');
-              const raw = await boundedBody(response);
+              const raw = await boundedBody(response, controller.signal);
+              if (controller.signal.aborted)
+                throw new PhaseError(externalSignal?.aborted ? 'cancelled' : 'timeout');
               trace.responseSha256 = sha256(raw);
               const envelope = z
                 .object({
@@ -553,10 +633,10 @@ export function createSemanticAssessmentAdapter(
                     .optional(),
                 })
                 .passthrough()
-                .parse(JSON.parse(raw));
+                .parse(directGemini ? parseGeminiBackupEnvelope(raw) : JSON.parse(raw));
               if (
-                envelope.model !== route.modelId ||
-                providerKey(envelope.provider) !== providerKey(route.providerId)
+                envelope.model !== actualRoute.modelId ||
+                providerKey(envelope.provider) !== providerKey(actualRoute.providerId)
               )
                 throw new PhaseError('invalid_response');
               trace.responseId = envelope.id ?? null;
@@ -585,6 +665,31 @@ export function createSemanticAssessmentAdapter(
                 ? error
                 : new PhaseError('invalid_response');
           trace.outcome = failure.code;
+          if (
+            options.geminiBackup &&
+            (!directGemini || (geminiKeyIndex === 0 && options.geminiBackup.secondaryApiKey)) &&
+            (!directGemini || trace.httpStatus !== 402) &&
+            ['gateway_blocked', 'rate_limited', 'upstream_unavailable', 'timeout'].includes(
+              failure.code,
+            ) &&
+            !externalSignal?.aborted &&
+            now() < deadline &&
+            now() < stageDeadline
+          ) {
+            geminiActive = true;
+            if (directGemini) selectedGeminiKeyIndex = 1;
+            return request(
+              stage,
+              route,
+              data,
+              schema,
+              instruction,
+              true,
+              true,
+              selectedGeminiKeyIndex,
+              stageDeadline,
+            );
+          }
           throw failure;
         } finally {
           if (timer) clearTimeout(timer);
@@ -607,6 +712,7 @@ export function createSemanticAssessmentAdapter(
             !(error instanceof PhaseError) ||
             !error.retriable ||
             fallbackUsed ||
+            options.geminiBackup ||
             !options.fallback ||
             externalSignal?.aborted
           )
