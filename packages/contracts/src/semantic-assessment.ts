@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { SourceContentSelectionSchema } from './source-content.js';
 const CacheChunkerVersion = z.enum(['cache-sentence-context-v1', 'exact-content-block-context-v1']);
 
-export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.12';
-export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.12';
+export const SEMANTIC_PROMPT_VERSION = 'evidence-support-v1.13';
+export const SEMANTIC_PIPELINE_VERSION = 'provisional-semantic-v1.13';
 
 const EvidenceKeys = z.array(z.string().min(1).max(160)).max(20);
 const Details = z.array(z.string().min(1).max(500)).max(6);
@@ -304,6 +304,7 @@ export const SemanticAssessmentReportSchema = z
           'provisional-semantic-v1.9',
           'provisional-semantic-v1.10',
           'provisional-semantic-v1.11',
+          'provisional-semantic-v1.12',
           SEMANTIC_PIPELINE_VERSION,
         ]),
         promptVersion: z.enum([
@@ -318,6 +319,7 @@ export const SemanticAssessmentReportSchema = z
           'evidence-support-v1.9',
           'evidence-support-v1.10',
           'evidence-support-v1.11',
+          'evidence-support-v1.12',
           SEMANTIC_PROMPT_VERSION,
         ]),
         inputSha256: z.string().regex(/^[a-f0-9]{64}$/u),

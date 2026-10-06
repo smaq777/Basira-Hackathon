@@ -171,6 +171,25 @@ function validateFinding(
     throw new PhaseError('invalid_citations');
   if (!evidence.length && !['insufficient_context', 'not_applicable'].includes(finding.status))
     throw new PhaseError('invalid_citations');
+  if (!evidence.length) {
+    // Identity, status and citation checks above must pass first. With no source
+    // packet there are no source-derived conditions or factual explanations to
+    // generate. Keep the original claim untouched and state only the limitation.
+    const characters = Array.from(claim.originalText);
+    const excerpt = characters.slice(0, 280).join('') + (characters.length > 280 ? '…' : '');
+    finding.conditions = [];
+    finding.negations = [];
+    finding.exceptions = [];
+    finding.scope = [
+      finding.status === 'not_applicable'
+        ? 'صنّف التقييم الأولي هذه العبارة خارج نطاق مراجعة الاستناد إلى المصادر الدينية.'
+        : 'لم تتوفر أدلة أصلية مرتبطة بالعبارة المحددة؛ لم تُحسم دلالتها أو صحة نسبتها.',
+    ];
+    finding.explanation =
+      finding.status === 'not_applicable'
+        ? `صنّف التقييم الأولي العبارة «${excerpt}» خارج نطاق مراجعة الاستناد إلى المصادر الدينية. لم تُستخدم مصادر أو اقتباسات لإثباتها، ولا يمثل هذا التصنيف حكمًا على صحتها.`
+        : `لم تتوفر في حزمة هذه المراجعة أدلة أصلية مرتبطة بالعبارة «${excerpt}». لذلك لم نحسم دلالتها أو صحة نسبتها، ولم نستبدل الدليل المطلوب بمصدر مشابه في الموضوع. يمكنك طلب مراجعة بشرية وإرفاق المصدر المقصود.`;
+  }
   if (
     (finding.status === 'supported' || finding.status === 'contradicted') &&
     !finding.citations.some((citation) => {

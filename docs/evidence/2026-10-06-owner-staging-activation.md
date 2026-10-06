@@ -42,3 +42,23 @@ controls unchanged. Historical1.11 reports remain readable. Off-topic acceptance
 permits empty findings or explicit not_applicable only, never evidence/citations.
 Fresh post-deployment receipts and remaining UI acceptance belong on issues162/165.
 No benchmark accuracy or expert approval is inferred from these engineering checks.
+
+## Post-relevance first run
+
+PR166 deployed semantic1.12 at accepted development
+`e17b9028d694d0fa6b590926af6c7c5ea67d2d71`, Railway deployment
+`0e8dc1db-4f5b-4989-acd0-702a4643836d`. Exact merge CI, health and readiness
+passed. The fresh six-case run passed all structural assertions, retaining175
+and exact reload/anonymous denial; wedding evidence was empty and its finding
+insufficient_context. Reports remain in ignored
+`test-results/submission-acceptance-2026-10-06T09-56-39.776Z`.
+
+Manual reading then found the no-evidence Arabic explanation malformed despite
+its correct abstention decision. Issue167 adds server-owned Arabic limitation
+messages only after existing identity, status and citation checks pass. With an
+empty evidence packet it clears generated conditions, negations and exceptions;
+it names a bounded excerpt of the unchanged original claim and offers human
+review. It cannot convert an invalid verdict/citation into acceptance. Version1.13
+identifies this behavior; historical reports remain readable. Fresh final release
+receipts belong on issues162/165/167. A fresh supported-author rewrite also failed
+its checks and was withheld; no positive author-rewrite acceptance is claimed.

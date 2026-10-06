@@ -493,7 +493,7 @@ describe('bounded semantic assessment', () => {
     expect(prompt).toContain('Missing evidence does not establish contradiction');
     expect(prompt).toContain('naming the missing qualifier or antecedent and why it matters');
     expect(prompt).toContain('packet has no evidence');
-    expect(prompt).toContain('Prompt evidence-support-v1.12.');
+    expect(prompt).toContain('Prompt evidence-support-v1.13.');
     expect(prompt).toContain('Each scope item must be a self-contained Arabic statement');
     expect(prompt).toContain(
       'affirmation or negation and any material condition, exception or modality',
@@ -508,8 +508,8 @@ describe('bounded semantic assessment', () => {
     expect(prompt).not.toMatch(/scholar_explanation|book_excerpt/u);
     expect(result.scholarlyApproval).toBe(false);
     expect(result.trace).toMatchObject({
-      pipelineVersion: 'provisional-semantic-v1.12',
-      promptVersion: 'evidence-support-v1.12',
+      pipelineVersion: 'provisional-semantic-v1.13',
+      promptVersion: 'evidence-support-v1.13',
     });
     expect(intake).toEqual(before);
   });
@@ -814,17 +814,78 @@ describe('bounded semantic assessment', () => {
               ...finding(data.claims[0].claim.id),
               status: 'insufficient_context',
               citations: [],
-              explanation: 'لم يتوفر دليل مرتبط كافٍ.',
+              explanation: 'لم تُ supplied',
+              conditions: ['شرط غير مسند'],
+              negations: ['نفي غير مسند'],
+              exceptions: ['استثناء غير مسند'],
             },
           ],
         },
         assessor.modelId,
       );
     });
-    expect(
-      (await createSemanticAssessmentAdapter(options(fetch)).assess(fixture())).assessments[0]!
-        .status,
-    ).toBe('insufficient_context');
+    const result = await createSemanticAssessmentAdapter(options(fetch)).assess(fixture());
+    expect(result.assessments[0]).toMatchObject({
+      status: 'insufficient_context',
+      conditions: [],
+      negations: [],
+      exceptions: [],
+      citations: [],
+    });
+    expect(result.assessments[0]!.explanation).toContain(CLAIM);
+    expect(result.assessments[0]!.explanation).toContain('يمكنك طلب مراجعة بشرية');
+    expect(result.assessments[0]!.explanation).not.toContain('supplied');
+    expect(result.claims[0]!.originalText).toBe(CLAIM);
+  });
+
+  it.each(['supported', 'contradicted', 'not_established'])(
+    'does not normalize a false empty-packet verdict %s into acceptance',
+    async (status) => {
+      const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+        const { body, data } = requestData(init);
+        if (body.model === extractor.modelId) return response(proposal(CLAIM, []));
+        return response(
+          { assessments: [{ ...finding(data.claims[0].claim.id), status, citations: [] }] },
+          assessor.modelId,
+        );
+      });
+      const result = await createSemanticAssessmentAdapter(options(fetch)).assess(fixture());
+      expect(result).toMatchObject({
+        status: 'partial',
+        errorCode: 'invalid_citations',
+        assessments: [],
+      });
+    },
+  );
+
+  it('renders explicit not-applicable empty evidence as a preliminary classification, not a religious verdict', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+      const { body, data } = requestData(init);
+      if (body.model === extractor.modelId) return response(proposal(CLAIM, []));
+      return response(
+        {
+          assessments: [
+            {
+              ...finding(data.claims[0].claim.id),
+              status: 'not_applicable',
+              citations: [],
+              explanation: 'لم تُ supplied',
+            },
+          ],
+        },
+        assessor.modelId,
+      );
+    });
+    const result = await createSemanticAssessmentAdapter(options(fetch)).assess(fixture());
+    expect(result.assessments[0]).toMatchObject({
+      status: 'not_applicable',
+      conditions: [],
+      negations: [],
+      exceptions: [],
+      citations: [],
+    });
+    expect(result.assessments[0]!.explanation).toContain('صنّف التقييم الأولي');
+    expect(result.assessments[0]!.explanation).not.toContain('supplied');
   });
 
   it('uses only one fallback total, with pinned distinct provider/model', async () => {

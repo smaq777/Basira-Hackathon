@@ -68,8 +68,8 @@ function harness(
           claims: offTopic ? [] : [{ id: 'claim-owned' }],
           assessments: offTopic ? [] : [{ status: 'supported' }],
           trace: {
-            promptVersion: 'evidence-support-v1.12',
-            pipelineVersion: 'provisional-semantic-v1.12',
+            promptVersion: 'evidence-support-v1.13',
+            pipelineVersion: 'provisional-semantic-v1.13',
             ...(!offTopic ? { retrieval: { corpusVersion: CORPUS } } : {}),
           },
         },
