@@ -1,6 +1,6 @@
 # Judge quickstart
 
-Open [Basirah staging](https://api-staging-42bc.up.railway.app/) as a guest. The 6 October recovery restored HTTP 200 readiness on accepted source `0434cf45`; Gemini availability backup is activated. **Fresh full submission acceptance remains failed: 2/6 runner cases passed.** Invalid citations, one invalid primary-provider response and one API timeout remain visible in the dated evidence. Neither readiness nor the historical 30e25db acceptance establishes complete current acceptance. No team account, provider API key or local MCP setup is required.
+Open [Basirah staging](https://api-staging-42bc.up.railway.app/) as a guest. The 6 October version 1.14 recovery passed **all six fresh bounded submission cases**, plus a useful website author rewrite, validated copying, cancellation and original-report reload. Health, readiness and capabilities returned HTTP 200 on accepted source `f29b3145`. See the [fresh acceptance receipt](../evidence/2026-10-06-staging-1.14-acceptance.md) and the latest deployment identity on [issue169](https://github.com/smaq777/Basira-Hackathon/issues/169). Earlier failures remain retained; these selected checks do not establish general scholarly accuracy. No team account, provider API key or local MCP setup is required.
 
 Basirah checks two distinct things: **quotation fidelity** and **whether the evidence supports the author's conclusion**. Source access and generated findings do not constitute scholarly approval. The public demonstration uses a 175-passage research corpus with pending source approvals.
 
@@ -18,15 +18,15 @@ Expected: the quotation aligns with Quran 2:271; the author claim is **supported
 
 Request an AI-ReWrite. Inspect the proposed author change before copying: the quoted words must remain verbatim, and the original meaning, hiding and poor-recipient conditions must remain intact. Do not add a comparison target absent from the author's wording, even when a source explains that comparison. A controlled live result changed:
 
-> إخفاء الصدقة وإعطاؤها للفقراء خير للمتصدق
+> لما نخفي الصدقة ونعطيها للفقراء فهذا خير للمتصدق
 
 to:
 
-> إخفاء الصدقة وإعطاؤها للفقراء أفضل للمتصدق
+> حين نخفي الصدقة ونعطيها للفقراء، فهذا خير للمتصدق
 
-Wording may vary on a new run. The first recorded attempt was withheld; a separate controlled attempt passed generation, preservation and independent verification. Copy only a validated result after the copy action succeeds. Its displayed text and clipboard must match, including its recorded attribution. The original report remains unchanged. Cancellation must withhold candidate text and copying.
+The fresh website fixture used the rough author span `لما نخفي الصدقة ونعطيها للفقراء فهذا خير للمتصدق` for this improvement. Wording may vary; an already clear author sentence can legitimately remain unchanged. Copy only a validated result after the copy action succeeds. Its displayed text and clipboard must match, including its recorded attribution. The original report remains unchanged. Cancellation must withhold candidate text and copying.
 
-A fresh website control on recovered source `0434cf45` used the rough author wording `لما نخفي الصدقة ونعطيها للفقراء فهذا خير للمتصدق`. The first proposal improved it to `عندما نخفي الصدقة ونعطيها للفقراء، يكون ذلك خيرًا للمتصدق`, with an independently verified author edit, unchanged quotation, preserved conditions and exact server-validated UI/clipboard equality. A separate immediate cancellation hid candidate text and copying; the original remained unchanged after reload. The PR182 generation policy is deployed. This selected success does not override the failed full acceptance gate or guarantee a new proposal's wording.
+The first proposal on accepted version 1.14 improved that rough span to the wording above, preserving the quotation and linked hiding/poor-recipient conditions without adding `من إظهارها`. Independent verification and exact server-validated UI/clipboard equality passed; a separate immediate cancellation hid candidate text and copying, and reload preserved the original. Historical rejected proposals and version 1.13's 2/6 gate remain documented. No rejected semantic outcome was retried until it passed.
 
 ## 2. A correct quotation can carry a wrong conclusion
 

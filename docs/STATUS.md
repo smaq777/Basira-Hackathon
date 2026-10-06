@@ -1,5 +1,22 @@
 # Current delivery status
 
+**Fresh version 1.14 staging acceptance (#169), 6 October, 15:55 UTC:** Accepted
+development `f29b3145c0b5a0b6af888fe79c060f91b1fcdfdb` was restored on the exact
+Railway staging service after a concurrent automatic deployment hit the preserved
+SHA guard. All six fresh bounded semantic cases passed, including contradicted
+negation/condition, wedding abstention without unrelated sources and valid
+off-topic classification. Exact report reload and anonymous denial passed for
+every case. The first website author improvement passed independent verification,
+exact validated copy and quotation/condition preservation; cancellation and
+original reload passed. One approved synthetic ticket's confirmation has actual
+provider delivery proof, not merely a queued status. See the
+[fresh receipt and Ahmed handoff](evidence/2026-10-06-staging-1.14-acceptance.md).
+This is selected software acceptance, not source approval, scholarly accuracy,
+continuous uptime, production promotion or portal submission. Full reviewer/
+publication/email workflow, mobile and presentation remain deferred. Later
+documentation-only release identity is recorded on issue169. Entries below are
+retained historical checkpoints.
+
 **Independent submission check (#165/#169), 6 October:** Saleh's accepted
 development `9838bc285065c7e6301baf5ae2800c85950f9d80` is deployed on Railway
 staging with the175-passage corpus and semantic1.13. Five fresh selected semantic
