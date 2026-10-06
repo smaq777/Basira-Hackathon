@@ -65,6 +65,9 @@ describe('foundation report presentation', () => {
     expect(finalSection).not.toBeNull();
     expect(finalSection?.nextElementSibling).toBeNull();
     expect(finalSection?.textContent).toContain('النص المقترح المبني على الأدلة');
+    const stickyContainer = screen.getByRole('navigation', { name: 'أقسام التقرير' }).parentElement;
+    expect(stickyContainer?.contains(document.getElementById('report-review'))).toBe(true);
+    expect(stickyContainer?.contains(finalSection)).toBe(true);
   });
 
   it('hides human review when a completed report has approved evidence and no open issue', () => {
