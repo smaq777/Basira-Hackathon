@@ -1,9 +1,12 @@
 # Reviewer workflow staging runbook
 
 Issue [#156](https://github.com/smaq777/Basira-Hackathon/issues/156), 6 October 2026.
-This document describes the candidate implementation. **Shared staging deployment
-and full live acceptance are not yet verified.** Vercel, main and production are
-excluded from this delivery.
+The implementation is merged into `development` through PRs #159 and #160 and
+deployed on Railway staging. Health/readiness and selected live Arabic comparisons
+are verified; **full workflow acceptance is still pending**. See the
+[dated acceptance checkpoint](../evidence/2026-10-06-reviewer-staging-checkpoint.md)
+for completed checks and remaining publication, email and RAG tests. Vercel, main
+and production are excluded from this delivery.
 
 ## Review, publication and source approval
 
@@ -142,6 +145,18 @@ until their exact cleanup is authorized.
 5. Inspect actual responsive reviewer/public reports and pagination/priority.
 6. Record commit, PR checks, merge commit and Railway deployed SHA. Only then
    record live acceptance and give Ahmed the final handoff.
+
+### Hosted-demo deployment pin
+
+The hosted-demo boundary requires `BASIRAH_DEPLOYMENT_SHA` to equal Railway's
+actual `RAILWAY_GIT_COMMIT_SHA`, alongside the staging service/environment and
+`development` branch declarations. An automatic build immediately after a merge
+can start before this explicit pin is updated and fail with
+`HOSTED_DEMO_ENVIRONMENT_MISMATCH`. Preserve the boundary: update only the staging
+pin to the verified merge SHA with deploys skipped, then redeploy that exact
+Railway artifact. Read back the deployment SHA and successful state, then inspect
+`/health` and `/ready`. Do not remove the guard, infer success from the merge, or
+alter production configuration. This applies to documentation-only merges too.
 
 The public `#/sources` page distinguishes MCP acquisition, stored attributable
 snapshots, deterministic quotation comparison and provisional AI interpretation.
