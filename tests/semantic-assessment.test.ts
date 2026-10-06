@@ -601,6 +601,7 @@ describe('bounded semantic assessment', () => {
       'v1.7',
       'v1.8',
       'v1.9',
+      'v1.10',
     ] as const) {
       historical.trace.pipelineVersion = `provisional-semantic-${version}`;
       historical.trace.promptVersion = `evidence-support-${version}`;
