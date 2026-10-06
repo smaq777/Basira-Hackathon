@@ -48,7 +48,7 @@ afterEach(async () => {
       .map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
   );
 });
-async function serve(allowedUserIds = ['reviewer']) {
+async function serve(allowedUserIds = ['reviewer'], accessMode?: 'allowlist' | 'authenticated') {
   const store = {
     ...unavailableTicketStore,
     get: vi.fn().mockResolvedValue({
@@ -85,7 +85,7 @@ async function serve(allowedUserIds = ['reviewer']) {
       lookupPepper: 'p'.repeat(40),
       notifications: notification,
     },
-    reviewerCorpus: { store: corpus, allowedUserIds },
+    reviewerCorpus: { store: corpus, allowedUserIds, accessMode },
   }).listen(0, '127.0.0.1');
   servers.push(server);
   await new Promise<void>((resolve) => server.once('listening', resolve));
@@ -102,6 +102,19 @@ async function serve(allowedUserIds = ['reviewer']) {
   return { store, corpus, notification, post, base };
 }
 describe('evidence-bounded human review', () => {
+  it('lets a signed-in staging reviewer curate without an allowlist but denies anonymous writes', async () => {
+    const app = await serve([], 'authenticated');
+    const input = {
+      version: 1,
+      evidenceId: 'source-1',
+      rightsRecord: 'Synthetic test fixture permission',
+      confirmed: true,
+    };
+    expect((await app.post('source-approval', input, false)).status).toBe(401);
+    expect(app.corpus.approve).not.toHaveBeenCalled();
+    expect((await app.post('source-approval', input)).status).toBe(201);
+    expect(app.corpus.approve).toHaveBeenCalledOnce();
+  });
   it('rejects invented resolution, orphan references, unsafe links and unsupported suggestions', () => {
     expect(EditorialReviewSchema.safeParse(review).success).toBe(true);
     expect(

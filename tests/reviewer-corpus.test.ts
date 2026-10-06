@@ -1,11 +1,44 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createReviewerCorpus, reviewerCorpusConnection } from '../apps/api/src/reviewer-corpus.js';
+import {
+  createReviewerCorpus,
+  reviewerCorpusConnection,
+  reviewerCorpusAccessMode,
+} from '../apps/api/src/reviewer-corpus.js';
 import type { Pool } from 'pg';
 
 const reader = 'postgresql://reader:synthetic@ep-qa.eu-central-1.aws.neon.tech/corpus';
 const curator =
   'postgresql://curator:synthetic@ep-qa-pooler.eu-central-1.aws.neon.tech/corpus?sslmode=require';
 describe('separate reviewer source capability', () => {
+  it('allows authenticated curation only on explicitly identified staging', () => {
+    expect(reviewerCorpusAccessMode({})).toBe('allowlist');
+    expect(
+      reviewerCorpusAccessMode({
+        REVIEWER_CORPUS_ACCESS_MODE: 'allowlist',
+        RAILWAY_ENVIRONMENT_NAME: 'production',
+      }),
+    ).toBe('allowlist');
+    expect(
+      reviewerCorpusAccessMode({
+        REVIEWER_CORPUS_ACCESS_MODE: 'authenticated',
+        RAILWAY_ENVIRONMENT_NAME: 'staging',
+        NODE_ENV: 'production',
+      }),
+    ).toBe('authenticated');
+    for (const environment of [
+      { REVIEWER_CORPUS_ACCESS_MODE: 'authenticated' },
+      { REVIEWER_CORPUS_ACCESS_MODE: 'authenticated', RAILWAY_ENVIRONMENT_NAME: 'production' },
+      {
+        REVIEWER_CORPUS_ACCESS_MODE: 'authenticated',
+        RAILWAY_ENVIRONMENT_NAME: 'staging',
+        BASIRAH_DEPLOYMENT_ENVIRONMENT: 'production',
+      },
+      { REVIEWER_CORPUS_ACCESS_MODE: 'public', RAILWAY_ENVIRONMENT_NAME: 'staging' },
+    ])
+      expect(() => reviewerCorpusAccessMode(environment)).toThrow(
+        'REVIEWER_CORPUS_ACCESS_MODE_INVALID',
+      );
+  });
   it('never silently uses the read connection when curator configuration is absent', () => {
     expect(reviewerCorpusConnection({ FOUNDATION_CORPUS_DATABASE_URL: reader })).toBeUndefined();
   });

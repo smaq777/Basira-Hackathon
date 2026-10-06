@@ -20,8 +20,11 @@ excluded from this delivery.
 - Source edits in a report do not change the retrieval corpus. Separate source
   approval requires a published version, a resolved linked record, source author,
   edition, HTTPS reference and rights record, plus explicit curator confirmation.
-- Only `CLERK_REVIEWER_USER_IDS` can curate sources, even when hackathon staging
-  permits general authenticated reviewer access. An empty list grants no curation.
+- Source curation defaults to the `CLERK_REVIEWER_USER_IDS` allowlist. For the
+  owner-authorized hackathon test, `REVIEWER_CORPUS_ACCESS_MODE=authenticated`
+  lets any authenticated reviewer curate on Railway staging only. Anonymous
+  writes remain denied. Unknown/production environments reject this mode;
+  `NODE_ENV=production` alone does not identify Railway's deployment environment.
 - `REVIEWER_CORPUS_DATABASE_URL` is a separate curator login on the same corpus
   database/endpoint as `FOUNDATION_CORPUS_DATABASE_URL`; the read connection is
   never reused for writes. The curator receives only schema usage and the scoped
@@ -106,6 +109,17 @@ content-hash identities are unchanged. It does not provision or elevate roles,
 write local environment files, reset data or deploy an application. Inspect first;
 use this only after the isolated rehearsals and owner-authorized rollout.
 
+`scripts/provision-reviewer-staging.mjs` uses the same explicit API/environment
+and Neon child binding, then creates only the dedicated source-approval login.
+It verifies privileges through catalog OIDs, so verification does not require
+granting access to the underlying source schema. The credential is generated in
+memory and sent through stdin to the private Railway variable with deploys
+skipped. The reader connection is compared before/after and never replaced.
+It also sets staging's owner-authorized authenticated curation mode. Existing
+configured credentials are never overwritten. The explicit recovery option is
+only for this task's new, unconfigured role after an interrupted provisioning;
+it checks the role's restricted attributes and absence of memberships first.
+
 Ticket removal is recoverable archival: hidden from active queue and public lookup,
 with original revisions and audit preserved. It stops unclaimed email work; an
 already accepted message cannot be recalled. Restore requires reviewer permission.
@@ -117,7 +131,8 @@ until their exact cleanup is authorized.
 ## Verification checklist
 
 1. Check report and corpus schema versions, checksums, approved/revoked state and
-   least-privilege bindings. Confirm the sole curator account explicitly.
+   least-privilege bindings. Verify staging authenticated curation and anonymous
+   denial; retain the restricted production default.
 2. Publish, reload, update and reject a stale version; inspect unchanged original
    revision and AI baseline. Test wrong-email and archived-ticket lookup denial.
 3. Follow an evidence-linked source through approval receipt to later relevant

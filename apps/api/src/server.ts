@@ -36,7 +36,7 @@ import {
   QUERY_EMBEDDING_DIMENSIONS,
 } from './query-embedding.js';
 import { createTicketStore } from './ticket-store.js';
-import { initializeReviewerCorpus } from './reviewer-corpus.js';
+import { initializeReviewerCorpus, reviewerCorpusAccessMode } from './reviewer-corpus.js';
 import { createBrevoMailer, createTicketNotificationWorker } from './ticket-notifications.js';
 
 const port = Number(process.env.PORT ?? 3000);
@@ -365,6 +365,7 @@ const rewrite = rewriteEnabled
       requireCompleteEvidence: foundation?.runtimeMode === 'hosted_demo',
     })
   : undefined;
+const corpusAccessMode = reviewerCorpusAccessMode(process.env);
 const reviewerCorpus = foundation?.corpusPool
   ? await initializeReviewerCorpus(process.env).catch(() => {
       console.warn('REVIEWER_CORPUS_UNAVAILABLE');
@@ -376,6 +377,7 @@ const server = createApp({
   reviewerCorpus: reviewerCorpus
     ? {
         store: reviewerCorpus.store,
+        accessMode: corpusAccessMode,
         allowedUserIds: (process.env.CLERK_REVIEWER_USER_IDS ?? '')
           .split(',')
           .map((value) => value.trim())

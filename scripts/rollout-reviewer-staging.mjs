@@ -29,9 +29,22 @@ function command(args, input) {
       maxBuffer: 2_000_000,
       stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
-  } catch {
+  } catch (error) {
     // Provider stderr can contain connection details; never forward it.
-    throw new Error('STAGING_PROVIDER_COMMAND_FAILED');
+    // Report only a known error category, never arbitrary provider text or SQL.
+    const stderr = String(error.stderr ?? '');
+    const categories = [
+      ['syntax error', 'SQL_SYNTAX'],
+      ['permission denied', 'SQL_PERMISSION'],
+      ['already exists', 'SQL_ALREADY_EXISTS'],
+      ['does not exist', 'SQL_MISSING_OBJECT'],
+      ['cannot change return type', 'SQL_RETURN_TYPE'],
+      ['violates', 'SQL_CONSTRAINT'],
+    ];
+    const category =
+      categories.find(([fragment]) => stderr.includes(fragment))?.[1] ??
+      (error.signal ? 'PROCESS_TIMEOUT_OR_SIGNAL' : 'UNKNOWN');
+    throw new Error(`STAGING_PROVIDER_COMMAND_FAILED_${category}`);
   }
 }
 const railway = ['--yes', '@railway/cli'];
@@ -157,6 +170,12 @@ try {
       [(sql) => corpus.query(sql), corpusPlan],
     ]) {
       for (const version of versions) {
+        console.log(
+          JSON.stringify({
+            applying: version,
+            target: connection === report ? 'report' : 'corpus',
+          }),
+        );
         const migration = manifest.get(version);
         await connection(
           migration.canonicalSql.replace(

@@ -134,7 +134,11 @@ function setGuestCookie(
 }
 
 type AppOptions = {
-  reviewerCorpus?: { store: ReviewerCorpus; allowedUserIds: readonly string[] };
+  reviewerCorpus?: {
+    store: ReviewerCorpus;
+    allowedUserIds: readonly string[];
+    accessMode?: 'allowlist' | 'authenticated';
+  };
   rewrite?: RewriteService;
   foundation?: {
     worker: { notify(): void };
@@ -725,7 +729,10 @@ export function createApp(options: AppOptions = {}) {
       if (!actor) return;
       if (!options.reviewerCorpus || !options.tickets?.store.recordSourceReceipt)
         return res.status(503).json({ code: 'REVIEWER_CORPUS_UNAVAILABLE' });
-      if (!options.reviewerCorpus.allowedUserIds.includes(actor))
+      if (
+        options.reviewerCorpus.accessMode !== 'authenticated' &&
+        !options.reviewerCorpus.allowedUserIds.includes(actor)
+      )
         return res.status(403).json({ code: 'SOURCE_CURATOR_REQUIRED' });
       const { ticketCode: code } = ReviewerTicketParams.parse(req.params);
       const input = z

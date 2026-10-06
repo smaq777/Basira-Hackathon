@@ -4,6 +4,21 @@ import { sha256 } from './foundation.js';
 import { normalizeCorpusSearch } from './hosted-corpus.js';
 import { databaseTls } from './database.js';
 
+export function reviewerCorpusAccessMode(
+  environment: NodeJS.ProcessEnv,
+): 'allowlist' | 'authenticated' {
+  const mode = environment.REVIEWER_CORPUS_ACCESS_MODE?.trim() || 'allowlist';
+  if (mode === 'allowlist') return mode;
+  if (
+    mode === 'authenticated' &&
+    environment.RAILWAY_ENVIRONMENT_NAME === 'staging' &&
+    (!environment.BASIRAH_DEPLOYMENT_ENVIRONMENT ||
+      environment.BASIRAH_DEPLOYMENT_ENVIRONMENT === 'staging')
+  )
+    return mode;
+  throw new Error('REVIEWER_CORPUS_ACCESS_MODE_INVALID');
+}
+
 export function reviewerCorpusConnection(environment: NodeJS.ProcessEnv) {
   const configured = environment.REVIEWER_CORPUS_DATABASE_URL;
   if (!configured) return undefined;
@@ -40,8 +55,9 @@ export async function initializeReviewerCorpus(environment: NodeJS.ProcessEnv) {
     const result = await pool.query<{ scoped: boolean }>(
       `select has_function_privilege(current_user,
         'basirah_api.approve_editorial_source(text,text,text,text,text,jsonb)', 'EXECUTE')
-        and not has_table_privilege(current_user,'basirah.passage','INSERT,UPDATE,DELETE')
-        and not has_table_privilege(current_user,'basirah.source_edition','INSERT,UPDATE,DELETE')
+        and not exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
+          where n.nspname='basirah' and c.relname in ('passage','source_edition')
+          and has_table_privilege(current_user,c.oid,'INSERT,UPDATE,DELETE'))
         and not pg_has_role(current_user,'basirah_research_runtime','MEMBER')
         and not pg_has_role(current_user,'basirah_runtime','MEMBER') as scoped`,
     );
