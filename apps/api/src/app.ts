@@ -14,6 +14,7 @@ import { buildDemoPreflight, PreflightInputSchema } from './preflight.js';
 import { FoundationReportSchema } from '../../../packages/contracts/src/foundation.js';
 import {
   EditorialReviewSchema,
+  initialEditorialReview,
   reviewedSourcePublicationIssue,
 } from '../../../packages/contracts/src/editorial-review.js';
 import { isSafeDraftText, MAX_DRAFT_LENGTH } from '../../../packages/contracts/src/draft-text.js';
@@ -22,6 +23,7 @@ import { RewriteError, type RewriteService, type RewriteContext } from './rewrit
 import { sha256 } from './foundation.js';
 import type { ReviewerDecision, TicketStore } from './ticket-store.js';
 import type { ReviewerCorpus } from './reviewer-corpus.js';
+import { reviewedAnswerSource } from './reviewed-answer.js';
 import {
   emailLookupHash,
   encryptTicketContact,
@@ -141,6 +143,8 @@ type AppOptions = {
     store: ReviewerCorpus;
     allowedUserIds: readonly string[];
     accessMode?: 'allowlist' | 'authenticated';
+    reviewedAnswerDemo?: boolean;
+    publicAppUrl?: string;
   };
   rewrite?: RewriteService;
   foundation?: {
@@ -699,6 +703,7 @@ export function createApp(options: AppOptions = {}) {
       return res.json({
         ticket: {
           ...ticket,
+          reviewedAnswerDemo: options.reviewerCorpus?.reviewedAnswerDemo === true,
           sourcePublicationAvailable: Boolean(
             options.reviewerCorpus &&
             options.tickets.store.recordSourceReceipt &&
@@ -770,7 +775,7 @@ export function createApp(options: AppOptions = {}) {
       const input = z
         .object({
           version: z.number().int().positive(),
-          evidenceId: z.string().min(1).max(100),
+          evidenceId: z.string().min(1).max(160),
           rightsRecord: z.string().trim().min(1).max(2000),
           confirmed: z.literal(true),
         })
@@ -807,6 +812,70 @@ export function createApp(options: AppOptions = {}) {
         );
       } catch {
         /* retain honest corpus success */
+      }
+      return res
+        .status(auditRecorded ? 201 : 202)
+        .json({ addedToRetrieval: true, auditRecorded, ...receipt });
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.post('/api/v1/reviewer/tickets/:ticketCode/answer-approval', async (req, res, next) => {
+    try {
+      const actor = await requireReviewer(req, res);
+      if (!actor) return;
+      if (!options.reviewerCorpus?.reviewedAnswerDemo)
+        return res.status(409).json({ code: 'REVIEWED_ANSWER_DEMO_REQUIRED' });
+      if (!options.tickets?.store.recordSourceReceipt)
+        return res.status(503).json({ code: 'REVIEWER_CORPUS_UNAVAILABLE' });
+      if (
+        options.reviewerCorpus.accessMode !== 'authenticated' &&
+        !options.reviewerCorpus.allowedUserIds.includes(actor)
+      )
+        return res.status(403).json({ code: 'SOURCE_CURATOR_REQUIRED' });
+      const { ticketCode: code } = ReviewerTicketParams.parse(req.params);
+      const input = z
+        .object({ version: z.number().int().positive(), confirmed: z.literal(true) })
+        .strict()
+        .parse(req.body);
+      const ticket = await options.tickets.store.get(code);
+      const responses = ticket?.responses as
+        | Array<{ version: number; published: boolean; text: string; editorial?: unknown }>
+        | undefined;
+      const latest = responses?.filter((row) => row.published).at(-1);
+      if (!latest || ticket?.status === 'closed' || latest.version !== input.version)
+        return res.status(409).json({ code: 'PUBLISHED_REVIEW_VERSION_REQUIRED' });
+      const review = latest.editorial
+        ? EditorialReviewSchema.parse(latest.editorial)
+        : initialEditorialReview(null);
+      const source = reviewedAnswerSource({
+        ticketCode: code,
+        version: input.version,
+        actor,
+        text: latest.text,
+        review,
+        publicAppUrl: options.reviewerCorpus.publicAppUrl ?? '',
+      });
+      const receipt = await options.reviewerCorpus.store.approve({
+        actor,
+        ticketCode: code,
+        version: input.version,
+        source,
+        supportingEvidence: review.evidence,
+        rightsRecord:
+          'Reviewer explicitly approved reuse of this saved answer and its attributed source context for the staging demo.',
+      });
+      let auditRecorded = false;
+      try {
+        auditRecorded = await options.tickets.store.recordSourceReceipt(
+          code,
+          input.version,
+          'reviewer-answer',
+          receipt.snapshotKey,
+          actor,
+        );
+      } catch {
+        /* corpus write is idempotent */
       }
       return res
         .status(auditRecorded ? 201 : 202)

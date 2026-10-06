@@ -53,6 +53,7 @@ import {
   requestDraftPreflight,
   saveReviewerResponse,
   approveReviewerSource,
+  approveReviewerAnswer,
   updateReviewTicketContact,
   type DraftAnalysisReceipt,
   type PreflightAnnotation,
@@ -76,6 +77,7 @@ import {
   ReviewerSourceFields,
   reviewNotificationEmptyMessage,
 } from './reviewer-source-publication.js';
+import { ReviewerAnswerPublication } from './reviewer-answer-publication.js';
 import { SourceInformation } from './source-information.js';
 import type { FoundationReport } from '../../../packages/contracts/src/foundation.js';
 import { ReviewerAccessBoundary, ReviewerAuthUnavailable } from './reviewer-auth.js';
@@ -2761,108 +2763,150 @@ function ReviewerDetail({
               كمصدر RAG.
             </p>
             <section className="source-publication" aria-label="نشر الأدلة الموثقة إلى RAG">
-              <h3>نشر دليل موثّق إلى RAG</h3>
-              <p>
-                للمراجع المخوّل باعتماد المصادر: انشر التقرير أولًا، ثم اختر أصلًا موثّقًا مرتبطًا
-                بسجل محسوم. لا تُنشر الملاحظات أو نص المستخدم كمصدر، ولا يُستبدل نص القرآن المعتمد.
-              </p>
-              <ReviewerSourceFields
-                review={publishedReview}
-                published={ticket.status === 'published'}
-                available={ticket.sourcePublicationAvailable === true}
-                saving={saving}
-                sourceId={sourceId}
-                rights={sourceRights}
-                onSourceChange={(value) => {
-                  setSourceId(value);
-                  setConfirmSource(false);
-                }}
-                onRightsChange={(value) => {
-                  setSourceRights(value);
-                  setConfirmSource(false);
-                }}
-              />
-              <button
-                className="button button--outline"
-                disabled={
-                  saving ||
-                  !sourceEligible ||
-                  !sourceRights.trim() ||
-                  ticket.status !== 'published' ||
-                  ticket.sourcePublicationAvailable !== true
-                }
-                onClick={() => setConfirmSource(true)}
-              >
-                اعتماد الدليل ونشره إلى RAG
-              </button>
-              {confirmSource && (
-                <div role="alert">
-                  <p>
-                    تؤكد أنك تحققت من أصل المصدر ونسبته وحقوق إعادة استخدامه، وليس صياغة آلية أو
-                    نصًا خاصًا بالمستخدم؟
-                  </p>
-                  <button
-                    className="button button--primary"
-                    disabled={saving}
-                    onClick={() => {
-                      if (
-                        !ticketCode ||
-                        !sourceEligible ||
-                        ticket.sourcePublicationAvailable !== true
-                      )
-                        return;
-                      const version = ticket.responses
-                        .filter((row) => row.published)
-                        .at(-1)?.version;
-                      if (!version) return;
-                      setSaving(true);
-                      setError('');
-                      void approveReviewerSource(ticketCode, {
-                        version,
-                        evidenceId: sourceId,
-                        rightsRecord: sourceRights,
-                        confirmed: true,
+              {ticket.reviewedAnswerDemo ? (
+                <ReviewerAnswerPublication
+                  response={
+                    ticket.status === 'closed'
+                      ? undefined
+                      : ticket.responses.filter((row) => row.published).at(-1)
+                  }
+                  available={ticket.sourcePublicationAvailable === true}
+                  saving={saving}
+                  onPublish={(version) => {
+                    if (!ticketCode || saving) return;
+                    setSaving(true);
+                    setError('');
+                    setMessage('');
+                    void approveReviewerAnswer(ticketCode, { version, confirmed: true })
+                      .then((receipt) => {
+                        setMessage(
+                          receipt.auditRecorded
+                            ? 'تم نشر الإجابة ومصادرها إلى RAG وتسجيل إثبات النشر.'
+                            : 'تم النشر إلى RAG، لكن تسجيل الإيصال تعثر. أعد تأكيد النسخة نفسها لإكمال التسجيل دون تكرار الإجابة.',
+                        );
+                        load();
                       })
-                        .then((receipt) => {
-                          setMessage(
-                            receipt.auditRecorded
-                              ? 'تم نشر الدليل إلى RAG وتسجيل إثبات النشر.'
-                              : 'تم نشر الدليل إلى RAG، لكن تسجيل الإيصال تعثر. أعد تأكيد المصدر نفسه لإكمال التسجيل دون تكرار النص.',
-                          );
-                          setConfirmSource(false);
-                          load();
-                        })
-                        .catch((failure) =>
-                          setError(
-                            failure instanceof BasirahApiError &&
-                              failure.code === 'SOURCE_CURATOR_REQUIRED'
-                              ? 'نشر المصادر إلى RAG يتطلب صلاحية اعتماد المصادر.'
-                              : failure instanceof BasirahApiError &&
-                                  failure.code === 'REVIEWER_CORPUS_UNAVAILABLE'
-                                ? 'اتصال اعتماد المصادر غير متاح. لم يُؤكد نشر الدليل إلى RAG؛ راجع المشغّل.'
-                                : 'تعذر تأكيد نشر الدليل إلى RAG. تحقق من المصدر والنسخة المنشورة والاتصال.',
-                          ),
-                        )
-                        .finally(() => setSaving(false));
+                      .catch((failure) =>
+                        setError(
+                          failure instanceof BasirahApiError &&
+                            failure.code === 'PUBLISHED_REVIEW_VERSION_REQUIRED'
+                            ? 'توجد نسخة أحدث أو التذكرة غير منشورة. حدّث الصفحة ثم أعد النشر.'
+                            : 'تعذر النشر إلى RAG. أعد المحاولة بعد التحقق من النسخة المحفوظة والاتصال.',
+                        ),
+                      )
+                      .finally(() => setSaving(false));
+                  }}
+                />
+              ) : (
+                <>
+                  <h3>نشر دليل موثّق إلى RAG</h3>
+                  <p>
+                    للمراجع المخوّل باعتماد المصادر: انشر التقرير أولًا، ثم اختر أصلًا موثّقًا
+                    مرتبطًا بسجل محسوم. لا تُنشر الملاحظات أو نص المستخدم كمصدر، ولا يُستبدل نص
+                    القرآن المعتمد.
+                  </p>
+                  <ReviewerSourceFields
+                    review={publishedReview}
+                    published={ticket.status === 'published'}
+                    available={ticket.sourcePublicationAvailable === true}
+                    saving={saving}
+                    sourceId={sourceId}
+                    rights={sourceRights}
+                    onSourceChange={(value) => {
+                      setSourceId(value);
+                      setConfirmSource(false);
                     }}
-                  >
-                    تأكيد نشر الدليل
-                  </button>
+                    onRightsChange={(value) => {
+                      setSourceRights(value);
+                      setConfirmSource(false);
+                    }}
+                  />
                   <button
                     className="button button--outline"
-                    onClick={() => setConfirmSource(false)}
+                    disabled={
+                      saving ||
+                      !sourceEligible ||
+                      !sourceRights.trim() ||
+                      ticket.status !== 'published' ||
+                      ticket.sourcePublicationAvailable !== true
+                    }
+                    onClick={() => setConfirmSource(true)}
                   >
-                    إلغاء
+                    اعتماد الدليل ونشره إلى RAG
                   </button>
-                </div>
+                  {confirmSource && (
+                    <div role="alert">
+                      <p>
+                        تؤكد أنك تحققت من أصل المصدر ونسبته وحقوق إعادة استخدامه، وليس صياغة آلية أو
+                        نصًا خاصًا بالمستخدم؟
+                      </p>
+                      <button
+                        className="button button--primary"
+                        disabled={saving}
+                        onClick={() => {
+                          if (
+                            !ticketCode ||
+                            !sourceEligible ||
+                            ticket.sourcePublicationAvailable !== true
+                          )
+                            return;
+                          const version = ticket.responses
+                            .filter((row) => row.published)
+                            .at(-1)?.version;
+                          if (!version) return;
+                          setSaving(true);
+                          setError('');
+                          void approveReviewerSource(ticketCode, {
+                            version,
+                            evidenceId: sourceId,
+                            rightsRecord: sourceRights,
+                            confirmed: true,
+                          })
+                            .then((receipt) => {
+                              setMessage(
+                                receipt.auditRecorded
+                                  ? 'تم نشر الدليل إلى RAG وتسجيل إثبات النشر.'
+                                  : 'تم نشر الدليل إلى RAG، لكن تسجيل الإيصال تعثر. أعد تأكيد المصدر نفسه لإكمال التسجيل دون تكرار النص.',
+                              );
+                              setConfirmSource(false);
+                              load();
+                            })
+                            .catch((failure) =>
+                              setError(
+                                failure instanceof BasirahApiError &&
+                                  failure.code === 'SOURCE_CURATOR_REQUIRED'
+                                  ? 'نشر المصادر إلى RAG يتطلب صلاحية اعتماد المصادر.'
+                                  : failure instanceof BasirahApiError &&
+                                      failure.code === 'REVIEWER_CORPUS_UNAVAILABLE'
+                                    ? 'اتصال اعتماد المصادر غير متاح. لم يُؤكد نشر الدليل إلى RAG؛ راجع المشغّل.'
+                                    : 'تعذر تأكيد نشر الدليل إلى RAG. تحقق من المصدر والنسخة المنشورة والاتصال.',
+                              ),
+                            )
+                            .finally(() => setSaving(false));
+                        }}
+                      >
+                        تأكيد نشر الدليل
+                      </button>
+                      <button
+                        className="button button--outline"
+                        onClick={() => setConfirmSource(false)}
+                      >
+                        إلغاء
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
               {ticket.sourceApprovals?.map((approval) => (
                 <p
                   className="status-badge status-badge--ready"
                   key={`${approval.version}-${approval.evidenceId}`}
                 >
-                  نُشر إلى RAG · نسخة {approval.version} · {approval.evidenceId} ·{' '}
-                  {new Date(approval.createdAt).toLocaleString('ar-SA')}
+                  نُشر إلى RAG · نسخة {approval.version} ·{' '}
+                  {approval.evidenceId === 'reviewer-answer'
+                    ? 'الإجابة ومصادرها'
+                    : approval.evidenceId}{' '}
+                  · {new Date(approval.createdAt).toLocaleString('ar-SA')}
                 </p>
               ))}
             </section>

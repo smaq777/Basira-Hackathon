@@ -14,6 +14,7 @@ export const SourceEvidenceSchema = z
       'tafsir_footnote',
       'book_excerpt',
       'scholar_explanation',
+      'reviewer_commentary',
     ]),
     reference: z.string().min(1).max(500),
     originalText: z.string().min(1).max(30000),

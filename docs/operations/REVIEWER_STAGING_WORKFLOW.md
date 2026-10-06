@@ -57,6 +57,56 @@ expose this boundary. See [controls and diagnostic evidence](../evidence/2026-10
   receipt. Retry the identical approved source to finish the audit, not to change
   the original or create duplicates.
 
+## Saved-answer demo publication (#191)
+
+The owner chose to publish the saved reviewer answer with its supporting sources.
+`REVIEWER_CORPUS_PUBLICATION_MODE=reviewed_answer_demo` enables this alternative
+only when both `RAILWAY_ENVIRONMENT_NAME` and `BASIRAH_DEPLOYMENT_ENVIRONMENT` are
+`staging`. The default remains `original_sources`. Apply forward migration 0019
+to the selected report and corpus databases before enabling the demo flag.
+
+The demo rules are deliberately short:
+
+1. Sign in as a reviewer and update/publish the ticket first.
+2. Preview the saved version and explicitly confirm publication to RAG.
+3. Repeating approval of the same answer and sources reuses its retrieval identity.
+
+There is no resolved-record, source-role, author/edition or separate licensing-form
+requirement for this demo operation. Quran-only reviews and saved replies without
+attached sources are accepted. Existing report editing and authenticated access
+remain unchanged. The API reads the saved answer and sources itself; the browser
+cannot supply replacement text or publish an unsaved draft. Closed tickets and
+stale version requests return a clear conflict.
+
+The answer includes the saved reply, review summary, suggested wording and stated
+limitations, with every attached source retained in full. It is a distinct
+`reviewer_commentary` passage labelled **إجابة مراجع بصيرة**, not canonical Quran,
+tafsir or a scholar's original excerpt. Byte-identical supporting passages already
+in the pinned corpus receive explicit `comments_on` links. Exact reference search,
+lexical search and restoration include the answer and linked originals; unmatched
+attached originals/URLs remain in its stored context and provenance. Large source
+context is visibly truncated for retrieval, while full originals remain stored.
+The frozen submission membership and embeddings remain unchanged; no new semantic
+embedding backfill or automatic scholarly endorsement is claimed.
+
+The RAG confirmation does not send email. Updating the ticket continues the
+existing opt-in notification flow. A successful write plus report receipt returns
+201; a successful corpus write with a failed receipt returns 202 and allows an
+idempotent retry. The UI displays the actual outcome.
+
+`scripts/rehearse-reviewed-answer-demo.ts` validates an explicit expiring Neon child
+with original-text preservation, full supporting evidence, duplicate prevention,
+retrieval and the frozen 175-passage membership. `scripts/rollout-reviewed-answer-demo.mjs qa`
+copies only report schema into an explicit `basirah_qa_191_*` database and runs
+transaction-rolled-back synthetic publication/mail/receipt checks. Its `inspect`
+and `apply` modes validate explicit staging identity, database binding and recorded
+migration checksums; only checked-in migration 0019 is applied. No login, grant,
+role membership, ownership, production variable or connection target is changed.
+
+Rollback: switch the staging publication mode to `original_sources` and redeploy
+the accepted previous SHA with its matching deployment pin. Keep migration 0019
+and immutable publication receipts; use a forward fix for stored data.
+
 ## Email evidence and recovery
 
 Initial receipt and reviewed-report messages are branded Arabic RTL HTML with

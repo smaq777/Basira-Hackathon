@@ -308,6 +308,7 @@ export function sourceRoleLabel(source: SourceEvidence): string {
   if (source.sourceRole === 'hadith_matn') return 'حديث نبوي';
   if (source.sourceRole === 'book_excerpt') return 'كتاب';
   if (source.sourceRole === 'scholar_explanation') return 'شرح علمي';
+  if (source.sourceRole === 'reviewer_commentary') return 'إجابة مراجع بصيرة';
   return source.sourceRole === 'tafsir_footnote' ? 'حاشية تفسير' : 'تفسير';
 }
 

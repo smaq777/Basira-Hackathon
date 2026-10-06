@@ -40,6 +40,7 @@ import {
 import { createTicketStore } from './ticket-store.js';
 import {
   initializeReviewerCorpus,
+  reviewedAnswerDemoEnabled,
   reviewerCorpusAccessMode,
   reviewerCorpusVersion,
 } from './reviewer-corpus.js';
@@ -400,6 +401,8 @@ const server = createApp({
     ? {
         store: reviewerCorpus.store,
         accessMode: corpusAccessMode,
+        reviewedAnswerDemo: reviewedAnswerDemoEnabled(process.env),
+        publicAppUrl: process.env.PUBLIC_APP_URL,
         allowedUserIds: (process.env.CLERK_REVIEWER_USER_IDS ?? '')
           .split(',')
           .map((value) => value.trim())

@@ -194,3 +194,15 @@ export function initialEditorialReview(report: FoundationReport | null): Editori
     })),
   };
 }
+
+/** Saved reviewer wording, separate from the submitted draft and source originals. */
+export function reviewedAnswerText(text: string, review?: EditorialReview | null) {
+  return [
+    text.trim(),
+    review?.summary.trim() ? `خلاصة المراجعة:\n${review.summary}` : '',
+    review?.suggestedText.trim() ? `الصياغة المقترحة:\n${review.suggestedText}` : '',
+    review?.limitations.trim() ? `حدود المراجعة:\n${review.limitations}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}

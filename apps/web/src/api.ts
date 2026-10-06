@@ -521,6 +521,7 @@ export type ReviewerTicketSummary = {
 
 export type ReviewerTicket = ReviewerTicketSummary & {
   sourcePublicationAvailable?: boolean;
+  reviewedAnswerDemo?: boolean;
   report: FoundationReport | null;
   submission: { revisionId: string; originalText: string };
   responses: Array<{
@@ -589,6 +590,28 @@ export async function approveReviewerSource(
 ): Promise<{ addedToRetrieval: true; auditRecorded: boolean; snapshotKey: string }> {
   const value = await requestJson(
     `/api/v1/reviewer/tickets/${encodeURIComponent(code)}/source-approval`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('addedToRetrieval' in value) ||
+    value.addedToRetrieval !== true ||
+    !('snapshotKey' in value) ||
+    typeof value.snapshotKey !== 'string' ||
+    !('auditRecorded' in value) ||
+    typeof value.auditRecorded !== 'boolean'
+  )
+    throw new BasirahApiError('INVALID_RESPONSE', 0);
+  return value as { addedToRetrieval: true; auditRecorded: boolean; snapshotKey: string };
+}
+
+export async function approveReviewerAnswer(
+  code: string,
+  input: { version: number; confirmed: true },
+): Promise<{ addedToRetrieval: true; auditRecorded: boolean; snapshotKey: string }> {
+  const value = await requestJson(
+    `/api/v1/reviewer/tickets/${encodeURIComponent(code)}/answer-approval`,
     { method: 'POST', body: JSON.stringify(input) },
   );
   if (

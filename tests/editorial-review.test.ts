@@ -52,6 +52,7 @@ async function serve(
   allowedUserIds = ['reviewer'],
   accessMode?: 'allowlist' | 'authenticated',
   corpusEnabled = true,
+  reviewedAnswerDemo = false,
 ) {
   const store = {
     ...unavailableTicketStore,
@@ -89,7 +90,15 @@ async function serve(
       lookupPepper: 'p'.repeat(40),
       notifications: notification,
     },
-    reviewerCorpus: corpusEnabled ? { store: corpus, allowedUserIds, accessMode } : undefined,
+    reviewerCorpus: corpusEnabled
+      ? {
+          store: corpus,
+          allowedUserIds,
+          accessMode,
+          reviewedAnswerDemo,
+          publicAppUrl: 'https://demo.example.com',
+        }
+      : undefined,
   }).listen(0, '127.0.0.1');
   servers.push(server);
   await new Promise<void>((resolve) => server.once('listening', resolve));
@@ -106,6 +115,77 @@ async function serve(
   return { store, corpus, notification, post, base };
 }
 describe('evidence-bounded human review', () => {
+  it('publishes the saved answer with Quran sources without the original-source eligibility gate or new mail', async () => {
+    const app = await serve([], 'authenticated', true, true);
+    const editorial = {
+      ...initialEditorialReview(null),
+      summary: 'خلاصة بشرية',
+      evidence: [{ ...review.evidence[0]!, sourceRole: 'quran_text' as const, author: '' }],
+    };
+    app.store.get.mockResolvedValue({
+      status: 'published',
+      responses: [{ version: 1, published: true, text: 'الإجابة المحفوظة', editorial }],
+    });
+    const response = await app.post('answer-approval', { version: 1, confirmed: true });
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ addedToRetrieval: true, auditRecorded: true });
+    expect(app.corpus.approve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: expect.objectContaining({
+          originalText: 'الإجابة المحفوظة\n\nخلاصة المراجعة:\nخلاصة بشرية',
+          sourceRole: 'reviewer_commentary',
+          sourceUrl: `https://demo.example.com/#/reviewer/detail?ticketCode=${code}`,
+        }),
+        supportingEvidence: editorial.evidence,
+      }),
+    );
+    expect(app.store.recordSourceReceipt).toHaveBeenCalledWith(
+      code,
+      1,
+      'reviewer-answer',
+      `reviewed-${'a'.repeat(32)}`,
+      'reviewer',
+    );
+    expect(app.notification.notify).not.toHaveBeenCalled();
+  });
+  it('requires explicit demo configuration, authentication, confirmation and the saved published version', async () => {
+    const input = { version: 1, confirmed: true };
+    const normal = await serve();
+    expect((await normal.post('answer-approval', input)).status).toBe(409);
+    expect(normal.corpus.approve).not.toHaveBeenCalled();
+    const app = await serve([], 'authenticated', true, true);
+    expect((await app.post('answer-approval', input, false)).status).toBe(401);
+    expect((await app.post('answer-approval', { ...input, confirmed: false })).status).toBe(400);
+    expect(
+      (await app.post('answer-approval', { ...input, text: 'client-invented answer' })).status,
+    ).toBe(400);
+    expect((await app.post('answer-approval', { ...input, version: 2 })).status).toBe(409);
+    app.store.get.mockResolvedValueOnce({
+      status: 'closed',
+      responses: [{ version: 1, published: true, editorial: review }],
+    });
+    expect((await app.post('answer-approval', input)).status).toBe(409);
+    app.store.get.mockResolvedValueOnce({ status: 'pending', responses: [] });
+    expect((await app.post('answer-approval', input)).status).toBe(409);
+    expect(app.corpus.approve).not.toHaveBeenCalled();
+  });
+  it('supports saved legacy replies and reports a failed receipt honestly for idempotent retry', async () => {
+    const app = await serve([], 'authenticated', true, true);
+    app.store.get.mockResolvedValue({
+      status: 'published',
+      responses: [{ version: 1, published: true, text: 'Saved legacy reply' }],
+    });
+    app.store.recordSourceReceipt.mockRejectedValueOnce(new Error('temporary outage'));
+    const response = await app.post('answer-approval', { version: 1, confirmed: true });
+    expect(response.status).toBe(202);
+    expect(await response.json()).toMatchObject({ addedToRetrieval: true, auditRecorded: false });
+    expect(app.corpus.approve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: expect.objectContaining({ originalText: 'Saved legacy reply' }),
+        supportingEvidence: [],
+      }),
+    );
+  });
   it('exposes publication availability only to the authenticated reviewer and follows the writer gate', async () => {
     for (const [allowed, mode, enabled, expected] of [
       [['reviewer'], 'allowlist', true, true],

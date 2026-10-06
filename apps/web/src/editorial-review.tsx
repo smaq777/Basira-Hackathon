@@ -289,6 +289,7 @@ export function EditorialReviewEditor({
                   tafsir_footnote: 'حاشية تفسير',
                   book_excerpt: 'مقتطف كتاب',
                   scholar_explanation: 'شرح عالم',
+                  reviewer_commentary: 'إجابة مراجع بصيرة',
                 }).map(([key, label]) => (
                   <option key={key} value={key}>
                     {label}

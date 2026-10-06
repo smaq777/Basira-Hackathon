@@ -19,6 +19,14 @@ export function reviewerCorpusAccessMode(
   throw new Error('REVIEWER_CORPUS_ACCESS_MODE_INVALID');
 }
 
+export function reviewedAnswerDemoEnabled(environment: NodeJS.ProcessEnv): boolean {
+  return (
+    environment.REVIEWER_CORPUS_PUBLICATION_MODE === 'reviewed_answer_demo' &&
+    environment.RAILWAY_ENVIRONMENT_NAME === 'staging' &&
+    environment.BASIRAH_DEPLOYMENT_ENVIRONMENT === 'staging'
+  );
+}
+
 export function reviewerCorpusConnection(environment: NodeJS.ProcessEnv) {
   const configured = environment.REVIEWER_CORPUS_DATABASE_URL;
   if (!configured) return undefined;
@@ -88,6 +96,7 @@ export type ReviewerCorpus = {
     version: number;
     source: EditorialReview['evidence'][number];
     rightsRecord: string;
+    supportingEvidence?: EditorialReview['evidence'];
   }): Promise<{ snapshotKey: string }>;
 };
 export function createReviewerCorpus(
@@ -99,7 +108,9 @@ export function createReviewerCorpus(
     async approve(input) {
       const source = input.source;
       if (
-        !['hadith_matn', 'book_excerpt', 'scholar_explanation'].includes(source.sourceRole) ||
+        !['hadith_matn', 'book_excerpt', 'scholar_explanation', 'reviewer_commentary'].includes(
+          source.sourceRole,
+        ) ||
         !source.edition.trim() ||
         !source.author.trim() ||
         !source.sourceUrl.startsWith('https:') ||
@@ -115,6 +126,7 @@ export function createReviewerCorpus(
           source.sourceUrl,
           source.originalText,
           input.rightsRecord,
+          ...(source.sourceRole === 'reviewer_commentary' ? [input.supportingEvidence ?? []] : []),
         ]),
       );
       const key = `reviewed-${fingerprint.slice(0, 32)}`;
@@ -131,6 +143,12 @@ export function createReviewerCorpus(
             rightsRecord: input.rightsRecord,
             ticketCode: input.ticketCode,
             reviewVersion: input.version,
+            ...(source.sourceRole === 'reviewer_commentary'
+              ? {
+                  supportingEvidence: input.supportingEvidence ?? [],
+                  supportingContext: supportingContext(input.supportingEvidence ?? []),
+                }
+              : {}),
           }),
         ],
       );
@@ -138,4 +156,16 @@ export function createReviewerCorpus(
       return result.rows[0].value;
     },
   };
+}
+
+function supportingContext(sources: EditorialReview['evidence']) {
+  const text = sources
+    .map(
+      (source) =>
+        `${source.work} — ${source.reference}\n${source.sourceUrl}\n${source.originalText}`,
+    )
+    .join('\n\n');
+  return text.length <= 30000
+    ? text
+    : `${text.slice(0, 29500)}\n[سياق المصادر مقتطع؛ الأصول الكاملة محفوظة مع إجابة المراجع.]`;
 }

@@ -71,10 +71,18 @@ function evidence(
     parentSnapshotKey: row.parent_snapshot_key,
     delivery: 'snapshot',
     retrievalModes: modes,
-    provenance:
-      provenance.source === 'reviewer_approved_original'
-        ? { ...provenance, corpusVersion: row.corpus_version, evidenceLayer: 'reviewer_approved' }
-        : row.provenance,
+    provenance: ['reviewer_approved_original', 'reviewer_approved_answer'].includes(
+      String(provenance.source),
+    )
+      ? {
+          ...provenance,
+          corpusVersion: row.corpus_version,
+          evidenceLayer:
+            provenance.source === 'reviewer_approved_answer'
+              ? 'reviewer_answer'
+              : 'reviewer_approved',
+        }
+      : row.provenance,
     contextBefore: row.context_before,
     contextAfter: row.context_after,
     footnotes: row.footnotes,
@@ -102,8 +110,9 @@ export function createHostedCorpus(options: HostedCorpusOptions): ClaimCorpusSea
   const membership = (overlayParameter: number) =>
     `exists(select 1 from basirah.corpus_snapshot membership where membership.passage_id=p.id
       and (membership.corpus_version=$1 or (membership.corpus_version=$${overlayParameter}
-        and s.approval_status='approved' and p.provenance->>'source'='reviewer_approved_original'
-        and p.source_role in ('hadith_matn','book_excerpt','scholar_explanation'))))`;
+        and s.approval_status='approved' and ((p.provenance->>'source'='reviewer_approved_original'
+        and p.source_role in ('hadith_matn','book_excerpt','scholar_explanation'))
+        or (p.provenance->>'source'='reviewer_approved_answer' and p.source_role='reviewer_commentary')))))`;
   if (!Number.isInteger(limit) || limit < 1 || limit > 20) throw new Error('INVALID_CORPUS_BOUND');
   const role = options.researchPreview ? 'basirah_research_runtime' : 'basirah_runtime';
   async function read<T>(
@@ -186,7 +195,7 @@ export function createHostedCorpus(options: HostedCorpusOptions): ClaimCorpusSea
           exactRows = parentClosed(
             await client
               .query(
-                `${selectRows} where ${membership(4)} and p.snapshot_key is not null and p.source_role is not null and p.stable_reference=any($2::text[])
+                `${selectRows} where ${membership(4)} and p.snapshot_key is not null and p.source_role is not null and (p.stable_reference=any($2::text[]) or (p.source_role='reviewer_commentary' and exists(select 1 from basirah.passage_relation r join basirah.passage linked on linked.id=r.to_passage_id where r.from_passage_id=p.id and r.relation_type='comments_on' and linked.stable_reference=any($2::text[]))))
               order by case p.source_role when 'quran_text' then 0 when 'tafsir_commentary' then 1 when 'tafsir_footnote' then 2 else 3 end,p.snapshot_key limit $3`,
                 [options.corpusVersion, exact, limit, options.reviewedCorpusVersion ?? null],
               )
@@ -195,7 +204,7 @@ export function createHostedCorpus(options: HostedCorpusOptions): ClaimCorpusSea
           merge(exactRows, 'exact');
         }
         // When a valid explicit locator resolves, return only that immutable
-        // source family. Broad lexical/vector neighbors are not substitutes for
+        // source family and explicitly linked reviewer answers. Broad neighbors are not substitutes for
         // the source the writer actually cited.
         if (exactRows.length)
           return [...ranked.values()]
@@ -252,9 +261,27 @@ export function createHostedCorpus(options: HostedCorpusOptions): ClaimCorpusSea
         }
         const closed = parentClosed(selected.map((result) => result.row));
         const allowed = new Set(closed.map((row) => String(row.snapshot_key)));
-        return selected
+        const results = selected
           .filter((result) => allowed.has(String(result.row.snapshot_key)))
           .map((result) => evidence(result.row, result.modes));
+        const answers = results.filter((result) => result.sourceRole === 'reviewer_commentary');
+        if (answers.length) {
+          const supporting = await client.query(
+            `${selectRows} where ${membership(3)} and p.id in (
+              select r.to_passage_id from basirah.passage_relation r join basirah.passage answer on answer.id=r.from_passage_id
+              where answer.snapshot_key=any($2::text[]) and r.relation_type='comments_on')
+              order by p.snapshot_key limit 80`,
+            [
+              options.corpusVersion,
+              answers.map((answer) => answer.snapshotKey),
+              options.reviewedCorpusVersion ?? null,
+            ],
+          );
+          for (const row of supporting.rows)
+            if (!results.some((result) => result.snapshotKey === row.snapshot_key))
+              results.push(evidence(row, ['exact']));
+        }
+        return results;
       }, signal);
     },
     async restore(keys, signal) {
