@@ -94,7 +94,7 @@ preserves the same exact targets and source receipt.
 
 Verify `/health`, `/ready`, and capabilities, then run the bounded
 [semantic acceptance](SUBMISSION_ACCEPTANCE.md). Inspect fresh reports for the
-submission corpus and `evidence-support-v1.12` / `provisional-semantic-v1.12`.
+submission corpus and `evidence-support-v1.13` / `provisional-semantic-v1.13`.
 Old saved reports intentionally retain their old corpus/version.
 
 In the actual staging UI, submit a faithful Quran-only excerpt, generate its

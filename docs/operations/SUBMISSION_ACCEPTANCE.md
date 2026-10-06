@@ -2,7 +2,7 @@
 
 Related to [issue #157](https://github.com/smaq777/Basira-Hackathon/issues/157).
 For tonight's bounded staging checks, retain semantic prompt
-`evidence-support-v1.12` and pipeline `provisional-semantic-v1.12`. Versions 1.10/1.11
+`evidence-support-v1.13` and pipeline `provisional-semantic-v1.13`. Versions 1.10–1.12
 is historical compatibility, not the release target. The 175-passage corpus pin
 is `7372242cf7f4960c2cba0a33d8670a04ce13413f9fab5536783d6a3671e3ad6f`.
 Neither a green transport test nor a successful deployment proves that fresh
@@ -55,6 +55,6 @@ npx vitest run tests/semantic-assessment.test.ts tests/semantic-relevance.test.t
 These deterministic fixtures exercise malformed/blocked responses, bounded
 timeouts, one distinct fallback, missing evidence, topic-only candidate rejection,
 verbatim citations, original condition spans and durable report binding. They
-make no network requests. Historical v1.10/1.11 reports must stay readable, while a
+make no network requests. Historical v1.10–1.12 reports must stay readable, while a
 mixed prompt/pipeline version pair remains invalid. Controlled provider failures
 belong in these offline tests; do not inject an outage into shared staging.
