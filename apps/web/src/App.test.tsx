@@ -479,7 +479,7 @@ describe('Basirah web flow', () => {
   it('keeps the revised homepage copy concise and identifies challenge partners', () => {
     render(<App />);
 
-    expect(screen.getByText('يمكنك البدء كضيف.')).not.toBeNull();
+    expect(screen.queryByText('يمكنك البدء كضيف.')).toBeNull();
     expect(screen.queryByText(/تنتهي صلاحية الوصول للمسودة بعد 24 ساعة/)).toBeNull();
     expect(screen.getByRole('heading', { name: 'ثلاث خطوات لمراجعة أوضح' })).not.toBeNull();
     expect(document.querySelectorAll('.review-steps article')).toHaveLength(3);
@@ -499,6 +499,22 @@ describe('Basirah web flow', () => {
     expect(screen.getByRole('img', { name: 'شركة التحول التقني' })).not.toBeNull();
     expect(screen.getByRole('img', { name: 'Future Frontiers' })).not.toBeNull();
     expect(document.querySelectorAll('.partner-marquee .partner-logo-group')).toHaveLength(2);
+    const logoGroups = document.querySelectorAll('.trust-strip .partner-logo-group');
+    expect(logoGroups).toHaveLength(2);
+    expect(logoGroups[0]?.querySelectorAll('img')).toHaveLength(7);
+    expect(logoGroups[1]?.getAttribute('aria-hidden')).toBe('true');
+    expect(
+      screen.getByRole('img', { name: 'تحدي الذكاء الاصطناعي في خدمة المحتوى الإسلامي' }),
+    ).not.toBeNull();
+    expect(screen.getByRole('img', { name: 'عام الذكاء الاصطناعي 2026' })).not.toBeNull();
+    expect(screen.getByRole('img', { name: 'باذل' })).not.toBeNull();
+    expect(
+      screen
+        .getByRole('link', {
+          name: 'الموقع الرسمي لتحدي الذكاء الاصطناعي في خدمة المحتوى الإسلامي',
+        })
+        .getAttribute('href'),
+    ).toBe('https://islamicaich.org/');
     expect(screen.getByRole('link', { name: 'الموقع الرسمي للتحدي' }).getAttribute('href')).toBe(
       'https://islamicaich.org/#partners-sponsors',
     );
