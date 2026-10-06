@@ -1,18 +1,24 @@
 import { z } from 'zod';
 import type { FoundationReport } from './foundation.js';
+import { assessClaimApplicability } from './claim-applicability.js';
 
 /** Complete evidence is required before offering a reusable suggested draft. */
 export function rewriteEvidenceReady(report: FoundationReport): boolean {
   const semantic = report.semanticAssessment;
+  const quotationOnly =
+    report.interpretation.status === 'not_applicable' &&
+    assessClaimApplicability(report.intake).reason === 'quotation_only';
   if (
-    !semantic ||
-    !['completed', 'not_applicable'].includes(semantic.status) ||
-    semantic.trace.inputSha256 !== report.inputSha256 ||
-    (semantic.claims.length > 0 &&
-      (semantic.status !== 'completed' || !semantic.trace.claimCoverage)) ||
-    (semantic.claims.length === 0 && semantic.status !== 'not_applicable') ||
-    semantic.trace.claimCoverage?.unselectedIds.length ||
-    semantic.trace.claimCoverage?.excluded.some((span) => span.reason === 'span_too_long') ||
+    (!semantic && !quotationOnly) ||
+    (semantic &&
+      (!['completed', 'not_applicable'].includes(semantic.status) ||
+        semantic.trace.inputSha256 !== report.inputSha256 ||
+        (semantic.claims.length > 0 &&
+          (semantic.status !== 'completed' || !semantic.trace.claimCoverage)) ||
+        (semantic.claims.length === 0 &&
+          (semantic.status !== 'not_applicable' || !quotationOnly)) ||
+        semantic.trace.claimCoverage?.unselectedIds.length ||
+        semantic.trace.claimCoverage?.excluded.some((span) => span.reason === 'span_too_long'))) ||
     report.intake.segments.some((span) => span.conflict || span.role === 'unclassified')
   )
     return false;
@@ -43,8 +49,8 @@ export function rewriteEvidenceReady(report: FoundationReport): boolean {
   )
     return false;
   let evidenceCount = report.intake.quotationFindings.length;
-  for (const claim of semantic.claims) {
-    const assessment = semantic.assessments.find((item) => item.claimId === claim.id);
+  for (const claim of semantic?.claims ?? []) {
+    const assessment = semantic!.assessments.find((item) => item.claimId === claim.id);
     if (
       !assessment ||
       assessment.status !== 'supported' ||
