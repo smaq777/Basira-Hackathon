@@ -71,6 +71,11 @@ import {
   type EditorialReview,
 } from '../../../packages/contracts/src/editorial-review.js';
 import { EditorialReviewEditor, ReviewedReportContent } from './editorial-review.js';
+import {
+  eligibleReviewedSources,
+  ReviewerSourceFields,
+  reviewNotificationEmptyMessage,
+} from './reviewer-source-publication.js';
 import { SourceInformation } from './source-information.js';
 import type { FoundationReport } from '../../../packages/contracts/src/foundation.js';
 import { ReviewerAccessBoundary, ReviewerAuthUnavailable } from './reviewer-auth.js';
@@ -2509,6 +2514,8 @@ function ReviewerDetail({
     void getReviewerTicket(ticketCode)
       .then((value) => {
         setTicket(value);
+        setSourceId('');
+        setConfirmSource(false);
         const latest = value.responses.at(-1);
         setEditorial(latest?.editorial ?? initialEditorialReview(value.report));
         if (latest) {
@@ -2520,6 +2527,11 @@ function ReviewerDetail({
       .finally(() => setLoading(false));
   }, [ticketCode]);
   useEffect(load, [load]);
+
+  const publishedReview = ticket?.responses.filter((row) => row.published).at(-1)?.editorial;
+  const sourceEligible = eligibleReviewedSources(publishedReview).some(
+    (source) => source.id === sourceId,
+  );
 
   const save = async () => {
     if (!ticketCode || !note.trim() || saving) return;
@@ -2684,7 +2696,7 @@ function ReviewerDetail({
                 </p>
               ))
             ) : (
-              <p>لا يوجد إشعار منشور بعد.</p>
+              <p>{reviewNotificationEmptyMessage(ticket.notifyOptIn)}</p>
             )}
             {ticket.emailDeliveries?.map((delivery) => (
               <details key={delivery.messageId}>
@@ -2767,52 +2779,36 @@ function ReviewerDetail({
               <Lock size={17} /> النشر يُشعر المستخدم إن اختار البريد، لكنه لا يعتمد الرد تلقائيًا
               كمصدر RAG.
             </p>
-            <section aria-label="نشر الأدلة الموثقة إلى RAG">
+            <section className="source-publication" aria-label="نشر الأدلة الموثقة إلى RAG">
               <h3>نشر دليل موثّق إلى RAG</h3>
               <p>
                 للمراجع المخوّل باعتماد المصادر: انشر التقرير أولًا، ثم اختر أصلًا موثّقًا مرتبطًا
                 بسجل محسوم. لا تُنشر الملاحظات أو نص المستخدم كمصدر، ولا يُستبدل نص القرآن المعتمد.
               </p>
-              <label>
-                الدليل من النسخة المنشورة
-                <select
-                  value={sourceId}
-                  disabled={saving || ticket.status !== 'published'}
-                  onChange={(event) => {
-                    setSourceId(event.target.value);
-                    setConfirmSource(false);
-                  }}
-                >
-                  <option value="">اختر الدليل</option>
-                  {ticket.responses
-                    .filter((row) => row.published)
-                    .at(-1)
-                    ?.editorial?.evidence.filter((source) =>
-                      ['hadith_matn', 'book_excerpt', 'scholar_explanation'].includes(
-                        source.sourceRole,
-                      ),
-                    )
-                    .map((source) => (
-                      <option key={source.id} value={source.id}>
-                        {source.work} — {source.reference}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <label>
-                حقوق الاستخدام والترخيص
-                <textarea
-                  value={sourceRights}
-                  maxLength={2000}
-                  disabled={saving}
-                  onChange={(event) => setSourceRights(event.target.value)}
-                  placeholder="اذكر الترخيص أو أساس الإذن بنشر أصل المصدر"
-                />
-              </label>
+              <ReviewerSourceFields
+                review={publishedReview}
+                published={ticket.status === 'published'}
+                available={ticket.sourcePublicationAvailable === true}
+                saving={saving}
+                sourceId={sourceId}
+                rights={sourceRights}
+                onSourceChange={(value) => {
+                  setSourceId(value);
+                  setConfirmSource(false);
+                }}
+                onRightsChange={(value) => {
+                  setSourceRights(value);
+                  setConfirmSource(false);
+                }}
+              />
               <button
                 className="button button--outline"
                 disabled={
-                  saving || !sourceId || !sourceRights.trim() || ticket.status !== 'published'
+                  saving ||
+                  !sourceEligible ||
+                  !sourceRights.trim() ||
+                  ticket.status !== 'published' ||
+                  ticket.sourcePublicationAvailable !== true
                 }
                 onClick={() => setConfirmSource(true)}
               >
@@ -2828,7 +2824,12 @@ function ReviewerDetail({
                     className="button button--primary"
                     disabled={saving}
                     onClick={() => {
-                      if (!ticketCode) return;
+                      if (
+                        !ticketCode ||
+                        !sourceEligible ||
+                        ticket.sourcePublicationAvailable !== true
+                      )
+                        return;
                       const version = ticket.responses
                         .filter((row) => row.published)
                         .at(-1)?.version;
@@ -2855,7 +2856,10 @@ function ReviewerDetail({
                             failure instanceof BasirahApiError &&
                               failure.code === 'SOURCE_CURATOR_REQUIRED'
                               ? 'نشر المصادر إلى RAG يتطلب صلاحية اعتماد المصادر.'
-                              : 'تعذر تأكيد نشر الدليل إلى RAG. تحقق من المصدر والنسخة المنشورة والاتصال.',
+                              : failure instanceof BasirahApiError &&
+                                  failure.code === 'REVIEWER_CORPUS_UNAVAILABLE'
+                                ? 'اتصال اعتماد المصادر غير متاح. لم يُؤكد نشر الدليل إلى RAG؛ راجع المشغّل.'
+                                : 'تعذر تأكيد نشر الدليل إلى RAG. تحقق من المصدر والنسخة المنشورة والاتصال.',
                           ),
                         )
                         .finally(() => setSaving(false));

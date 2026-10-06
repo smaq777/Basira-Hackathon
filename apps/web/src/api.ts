@@ -520,6 +520,7 @@ export type ReviewerTicketSummary = {
 };
 
 export type ReviewerTicket = ReviewerTicketSummary & {
+  sourcePublicationAvailable?: boolean;
   report: FoundationReport | null;
   submission: { revisionId: string; originalText: string };
   responses: Array<{

@@ -1,5 +1,13 @@
 # Current delivery status
 
+**Reviewer controls (#191), 6 October:** the empty/cramped source-publication
+selector now shares server eligibility gates, and the protected ticket endpoint
+reports writer availability. Absent email consent is distinguished from queued,
+accepted and delivered mail. Live diagnostics found the deferred curator binding
+invalid; source publication/retrieval remains blocked rather than bypassing guards
+or changing the 175-passage snapshot. See [evidence and Ahmed handoff](evidence/2026-10-06-reviewer-source-controls.md).
+Implementation checks are not a deployed publication acceptance claim.
+
 **Fresh version 1.14 staging acceptance (#169), 6 October, 15:55 UTC:** Accepted
 development `f29b3145c0b5a0b6af888fe79c060f91b1fcdfdb` was restored on the exact
 Railway staging service after a concurrent automatic deployment hit the preserved

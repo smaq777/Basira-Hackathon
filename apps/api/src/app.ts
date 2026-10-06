@@ -12,7 +12,10 @@ import {
 } from './reviewer-auth.js';
 import { buildDemoPreflight, PreflightInputSchema } from './preflight.js';
 import { FoundationReportSchema } from '../../../packages/contracts/src/foundation.js';
-import { EditorialReviewSchema } from '../../../packages/contracts/src/editorial-review.js';
+import {
+  EditorialReviewSchema,
+  reviewedSourcePublicationIssue,
+} from '../../../packages/contracts/src/editorial-review.js';
 import { isSafeDraftText, MAX_DRAFT_LENGTH } from '../../../packages/contracts/src/draft-text.js';
 import type { ReviewStore } from './review-store.js';
 import { RewriteError, type RewriteService, type RewriteContext } from './rewrite.js';
@@ -670,11 +673,22 @@ export function createApp(options: AppOptions = {}) {
   app.get('/api/v1/reviewer/tickets/:ticketCode', async (req, res, next) => {
     try {
       if (!options.tickets) return res.status(503).json({ code: 'TICKETS_UNAVAILABLE' });
-      if (!(await requireReviewer(req, res))) return;
+      const actor = await requireReviewer(req, res);
+      if (!actor) return;
       const { ticketCode: code } = ReviewerTicketParams.parse(req.params);
       const ticket = await options.tickets.store.get(code);
       if (!ticket) return res.status(404).json({ code: 'TICKET_NOT_FOUND' });
-      return res.json({ ticket });
+      return res.json({
+        ticket: {
+          ...ticket,
+          sourcePublicationAvailable: Boolean(
+            options.reviewerCorpus &&
+            options.tickets.store.recordSourceReceipt &&
+            (options.reviewerCorpus.accessMode === 'authenticated' ||
+              options.reviewerCorpus.allowedUserIds.includes(actor)),
+          ),
+        },
+      });
     } catch (error) {
       return next(error);
     }
@@ -752,23 +766,9 @@ export function createApp(options: AppOptions = {}) {
         return res.status(409).json({ code: 'PUBLISHED_REVIEW_VERSION_REQUIRED' });
       const review = EditorialReviewSchema.parse(latest.editorial);
       const source = review.evidence.find((row) => row.id === input.evidenceId);
-      if (
-        !source ||
-        !review.records.some(
-          (row) =>
-            ['matched', 'different', 'supported', 'contradicted'].includes(row.status) &&
-            row.evidenceIds.includes(source.id),
-        )
-      )
-        return res.status(422).json({ code: 'RESOLVED_LINKED_EVIDENCE_REQUIRED' });
-      if (
-        !['hadith_matn', 'book_excerpt', 'scholar_explanation'].includes(source.sourceRole) ||
-        !source.author.trim() ||
-        !source.edition.trim() ||
-        !source.sourceUrl.startsWith('https://') ||
-        source.reference.length > 300
-      )
-        return res.status(422).json({ code: 'REVIEWED_SOURCE_PROVENANCE_REQUIRED' });
+      if (!source) return res.status(422).json({ code: 'RESOLVED_LINKED_EVIDENCE_REQUIRED' });
+      const publicationIssue = reviewedSourcePublicationIssue(review, source);
+      if (publicationIssue) return res.status(422).json({ code: publicationIssue });
       const receipt = await options.reviewerCorpus.store.approve({
         actor,
         ticketCode: code,

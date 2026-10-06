@@ -10,6 +10,13 @@ and production are excluded from this delivery.
 
 ## Review, publication and source approval
 
+**6 October diagnostic (#191):** the current staging curator fails the preserved
+same-target/distinct-login binding check. Source publication is unavailable;
+do not retarget that deferred connection or modify the pinned submission corpus
+without a separately authorized corpus release. The protected ticket response's
+`sourcePublicationAvailable` boolean and the selector's empty-state guidance
+expose this boundary. See [controls and diagnostic evidence](../evidence/2026-10-06-reviewer-source-controls.md).
+
 - Keep the submitted revision and AI report immutable. Reviewers edit a separate
   report containing quotation, analysis, classification and context records.
 - The UI publishes directly; it has no draft-save action. A confirmation makes
