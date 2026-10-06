@@ -160,6 +160,61 @@ it('offers copy only after validation and requests a fresh server copy check bef
   ).not.toBeNull();
 });
 
+it.each(['success', 'clipboard rejection'])(
+  'keeps one copy pending until the clipboard settles: %s',
+  async (outcome) => {
+    const user = userEvent.setup();
+    let resolveCopy!: (value: Response) => void;
+    let resolveClipboard!: () => void;
+    let rejectClipboard!: (error: Error) => void;
+    const clipboard = vi.spyOn(navigator.clipboard, 'writeText').mockImplementation(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          resolveClipboard = resolve;
+          rejectClipboard = reject;
+        }),
+    );
+    const ready = {
+      ...candidate,
+      status: 'validated',
+      text: report.intake.originalText,
+      operations: { paragraphBreaks: [], citations: [] },
+    };
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input) === '/api/v1/capabilities')
+        return json({ draftRewrite: true, draftRewriteMode: 'citation_and_layout_only' });
+      if (String(input).endsWith('/copy')) return new Promise((resolve) => (resolveCopy = resolve));
+      return json({ candidate: ready });
+    });
+    render(<RewritePanel report={report} />);
+    await user.click(await screen.findByRole('button', { name: 'تنسيق النص وإضافة التوثيق' }));
+    await user.click(await screen.findByRole('button', { name: 'نسخ النص المقترح' }));
+    const pending = screen.getByRole('button', { name: 'جار نسخ النص المقترح' });
+    expect((pending as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'تنسيق النص وإضافة التوثيق' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    await user.click(pending);
+    expect(fetcher.mock.calls.filter(([input]) => String(input).endsWith('/copy'))).toHaveLength(1);
+    expect(screen.queryByText('نُسخ النص المقترح.')).toBeNull();
+    resolveCopy(json({ text: ready.text }));
+    await waitFor(() => expect(clipboard).toHaveBeenCalledWith(ready.text));
+    expect(screen.queryByText('نُسخ النص المقترح.')).toBeNull();
+    if (outcome === 'success') resolveClipboard();
+    else rejectClipboard(new Error('clipboard unavailable'));
+    await screen.findByText(
+      outcome === 'success'
+        ? 'نُسخ النص المقترح.'
+        : 'تعذر نسخ الاقتراح أو انتهت صلاحيته. بقي الأصل كما هو.',
+    );
+    expect(
+      (screen.getByRole('button', { name: 'نسخ النص المقترح' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+    expect(report.intake.originalText).toBe(ready.text);
+  },
+);
+
 it('cancels by request key on unmount before late create resolves and never displays or copies its result', async () => {
   const user = userEvent.setup();
   let resolveCreate!: (value: Response) => void;
