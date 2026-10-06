@@ -344,10 +344,9 @@ export function createHostedDraftAdapter(
         if (!role) continue;
         let sourceKey: string | null = null;
         if (role === 'matn') {
-          const candidates =
-            corpus && quotationSearches++ < 5
-              ? await corpus.search(annotation.text, [], signal)
-              : [];
+          const searched = !!corpus && quotationSearches < 5;
+          if (searched) quotationSearches++;
+          const candidates = searched ? await corpus!.search(annotation.text, [], signal) : [];
           const matches = candidates
             .filter((source) => source.sourceRole === 'hadith_matn')
             .map((source) => ({
@@ -377,7 +376,11 @@ export function createHostedDraftAdapter(
                   reason:
                     unique.length > 1
                       ? 'ambiguous_hadith_source_identity'
-                      : 'no_contiguous_hadith_match',
+                      : !corpus
+                        ? 'quotation_corpus_unavailable'
+                        : !searched
+                          ? 'quotation_search_budget_skipped'
+                          : 'no_contiguous_hadith_match',
                   matchedStart: null,
                   matchedEnd: null,
                   comparison: {
