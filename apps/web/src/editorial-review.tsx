@@ -89,10 +89,12 @@ export function EditorialReviewEditor({
   value,
   onChange,
   disabled = false,
+  reviewedAnswerDemo = false,
 }: {
   value: EditorialReview;
   onChange: (value: EditorialReview) => void;
   disabled?: boolean;
+  reviewedAnswerDemo?: boolean;
 }) {
   const updateRecord = (index: number, patch: Partial<ReviewedRecord>) =>
     onChange({
@@ -221,7 +223,9 @@ export function EditorialReviewEditor({
         </button>
         <h3>المصادر والنصوص المرجعية</h3>
         <p>
-          تعديل المصدر هنا يغير التقرير فقط. إدراجه في البحث يحتاج اعتمادًا منفصلًا مع سجل حقوقه.
+          {reviewedAnswerDemo
+            ? 'احفظ التذكرة أولًا، ثم انشر الإجابة ومصادرها من زر النشر إلى RAG.'
+            : 'تعديل المصدر هنا يغير التقرير فقط. إدراجه في البحث يحتاج اعتمادًا منفصلًا مع سجل حقوقه.'}
         </p>
         {value.evidence.map((source, index) => (
           <details className="editorial-record" key={source.id}>

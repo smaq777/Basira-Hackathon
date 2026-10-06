@@ -2581,6 +2581,7 @@ function ReviewerDetail({
             </article>
             <EditorialReviewEditor
               value={editorial}
+              reviewedAnswerDemo={ticket.reviewedAnswerDemo}
               onChange={setEditorial}
               disabled={saving || ticket.status === 'closed'}
             />
