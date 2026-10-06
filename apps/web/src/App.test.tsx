@@ -479,7 +479,7 @@ describe('Basirah web flow', () => {
   it('keeps the revised homepage copy concise and identifies challenge partners', () => {
     render(<App />);
 
-    expect(screen.getByText('يمكنك البدء كضيف.')).not.toBeNull();
+    expect(screen.queryByText('يمكنك البدء كضيف.')).toBeNull();
     expect(screen.queryByText(/تنتهي صلاحية الوصول للمسودة بعد 24 ساعة/)).toBeNull();
     expect(screen.getByRole('heading', { name: 'ثلاث خطوات لمراجعة أوضح' })).not.toBeNull();
     expect(document.querySelectorAll('.review-steps article')).toHaveLength(3);

@@ -1104,6 +1104,14 @@ button:disabled {
     linear-gradient(125deg, #071941, #102653 58%, #08183e);
 }
 
+.trust-strip .partner-marquee {
+  margin-bottom: 26px;
+}
+
+.trust-strip .partner-logo-group img {
+  filter: brightness(0) invert(1);
+}
+
 .challenge-marks {
   min-height: 118px;
   display: flex;

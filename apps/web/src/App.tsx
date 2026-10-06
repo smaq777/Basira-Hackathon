@@ -603,17 +603,6 @@ function HomeScreen({
                 {preflight.warnings.includes('annotation_limit_reached') && (
                   <p role="status">التصنيف الأولي المعروض جزئي؛ راجع بقية النص في التقرير.</p>
                 )}
-                <div className="verification-legend" aria-label="دليل حالة الفحص">
-                  <span className="verification-key verification-key--info">
-                    <CheckCircle size={15} /> تطابق أولي
-                  </span>
-                  <span className="verification-key verification-key--neutral">
-                    <Info size={15} /> غير محسوم
-                  </span>
-                  <span className="verification-key verification-key--warning">
-                    <WarningCircle size={15} /> يحتاج مراجعة
-                  </span>
-                </div>
               </div>
             )}
             {preflightStatus !== 'ready' && (
@@ -659,9 +648,6 @@ function HomeScreen({
             >
               جرّب مثالًا <ArrowLeft size={18} />
             </button>
-            <span>
-              <Lock size={17} /> يمكنك البدء كضيف.
-            </span>
           </div>
           <details className="preflight-examples">
             <summary>أمثلة لاختبار التصنيف والرصد المحلي</summary>
@@ -876,14 +862,14 @@ function PublicFooter() {
             الموقع الرسمي للتحدي
           </a>
         </div>
+      </section>
+      <section className="trust-strip">
         <div className="partner-marquee" aria-label="شعارات شركاء التحدي">
           <div className="partner-marquee-track">
             <PartnerLogoGroup />
             <PartnerLogoGroup duplicate />
           </div>
         </div>
-      </section>
-      <section className="trust-strip">
         <a
           className="challenge-marks page-shell"
           href="https://islamicaich.org/"
