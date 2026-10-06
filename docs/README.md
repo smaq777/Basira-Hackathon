@@ -15,9 +15,12 @@ text-provider recovery path and Saleh-owned staging activation.
 ## Reading paths
 
 - **Developer:** [setup](operations/SETUP.md) → [credentials](operations/CREDENTIALS.md) → [requirements](product/REQUIREMENTS.md) → [complete system blueprint](architecture/SYSTEM_BLUEPRINT.md) → [architecture summary](architecture/ARCHITECTURE.md) → [tests](testing/STRATEGY.md).
-- **Content reviewer:** [glossary](product/GLOSSARY.md) → [source policy](governance/RIGHTS.md) → [Tanzil intake](content/TANZIL_INTAKE.md) → [RAG](architecture/RAG.md) → [evaluation](testing/STRATEGY.md).
+- **Content reviewer:** [glossary](product/GLOSSARY.md) → [manual-review criteria](product/MANUAL_REVIEW.md) → [source policy](governance/RIGHTS.md) → [Tanzil intake](content/TANZIL_INTAKE.md) → [RAG](architecture/RAG.md) → [evaluation](testing/STRATEGY.md).
 - **Committee:** [judge quickstart](hackathon/JUDGE_QUICKSTART.md) → [alignment](hackathon/ALIGNMENT.md) → [business model and Arabic review cases](hackathon/BUSINESS_MODEL_AND_TEST_CASES.md) → [committee guide](hackathon/COMMITTEE_GUIDE.md) → [foundation record](evidence/2026-09-30.md) → [governance record](evidence/2026-10-01-governance.md) → [security and mobile verification](evidence/2026-10-03-security-mobile.md).
 - **Team member:** [contributing](../CONTRIBUTING.md) → [workflow](governance/WORKFLOW.md) → [backlog](planning/BACKLOG.md).
+
+The [Render hosting alternative](planning/RENDER_HOSTING_PLAN.md) is a planning
+proposal only; it does not change the current deployment or Neon bindings.
 
 ## Documentation contract
 

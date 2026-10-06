@@ -32,6 +32,66 @@ afterEach(() => {
 });
 
 describe('foundation report presentation', () => {
+  it('explains zero sources as missing displayed evidence without declaring the narration false', () => {
+    const report = foundationReportFixture();
+    report.intake.evidence = [];
+    report.intake.quotationFindings = [];
+    render(<FoundationReportContent report={report} />);
+    expect(
+      screen.getByText(/غياب المصادر هنا لا يعني عدم وجود دليل أو عدم صحة النقل/),
+    ).not.toBeNull();
+    expect(screen.queryByText(/هذه نتيجة غير مكتملة/)).toBeNull();
+  });
+
+  it('distinguishes an incomplete assessment with zero sources from a completed empty result', () => {
+    const report = semanticBindingFixture();
+    report.intake.evidence = [];
+    report.intake.quotationFindings = [];
+    report.semanticAssessment!.status = 'unavailable';
+    report.semanticAssessment!.errorCode = 'gateway_blocked';
+    report.semanticAssessment!.claims = [];
+    report.semanticAssessment!.assessments = [];
+    render(<FoundationReportContent report={report} />);
+    expect(screen.getByText(/هذه نتيجة غير مكتملة، وليست حكمًا على صحة النص/)).not.toBeNull();
+    expect(screen.queryByText(/غياب المصادر هنا لا يعني/)).toBeNull();
+  });
+
+  it('explains a retrieval interruption before treating zero sources as a completed search', () => {
+    const report = semanticBindingFixture();
+    report.intake.evidence = [];
+    report.intake.quotationFindings = [];
+    report.semanticAssessment!.trace.retrieval = {
+      corpusVersion: 'synthetic',
+      mode: 'local_research',
+      queries: [
+        {
+          claimId: report.semanticAssessment!.claims[0]!.id,
+          querySha256: 'a'.repeat(64),
+          modes: [],
+          candidateKeys: [],
+          cache: { outcome: 'timeout', elapsedMs: 1, parentCandidateCount: 0, failureCodes: [] },
+        },
+      ],
+    };
+    render(<FoundationReportContent report={report} />);
+    expect(
+      screen.getByText(
+        `${retrievalLimitation(report)} لا توجد مصادر معروضة في هذا التقرير؛ راجع المرجع أو أعد التحليل لاحقًا.`,
+      ),
+    ).not.toBeNull();
+    expect(screen.queryByText(/غياب المصادر هنا لا يعني/)).toBeNull();
+  });
+
+  it('retains Quran evidence and explains missing Tafsir without diagnosing a service outage', () => {
+    const report = foundationReportFixture();
+    report.intake.evidence[0]!.sourceRole = 'quran_text';
+    const original = report.intake.evidence[0]!.originalText;
+    render(<FoundationReportContent report={report} />);
+    expect(screen.getByText(/عدد التفسير صفر لا يحدد سبب غيابه أو حالة الخدمة/)).not.toBeNull();
+    expect(screen.getAllByText(original).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'مصادر المقارنة (1)' })).not.toBeNull();
+  });
+
   it('offers a ticket only after capability confirmation and distinguishes pending approval', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       async () =>
@@ -59,6 +119,10 @@ describe('foundation report presentation', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /إرسال النص للمراجعة$/ })).not.toBeNull(),
     );
+    expect(screen.getByText(/يرجى استخدام المراجعة البشرية/).textContent).toContain(
+      'وسنعود إليك بالنتيجة بعد اكتمال المراجعة',
+    );
+    expect(screen.getByText(/يرجى استخدام المراجعة البشرية/).textContent).toContain('أضف بريدك');
     fireEvent.click(screen.getByRole('button', { name: /إرسال النص للمراجعة$/ }));
     expect(onTicket).toHaveBeenCalledOnce();
     const finalSection = document.getElementById('report-rewrite');
@@ -1263,6 +1327,31 @@ describe('material report reasons and ticket availability', () => {
     report.intake.evidence = report.intake.evidence.slice(1);
     expect(codes(report)).not.toContain('source_approval_pending');
   });
+  it.each(['not_established', 'insufficient_context'] as const)(
+    'offers review for %s even when the report and assessment are completed',
+    (status) => {
+      const report = supported();
+      report.status = 'completed';
+      report.intake.evidence[0]!.approvalStatus = 'approved';
+      report.intake.evidence[0]!.researchOnly = false;
+      report.semanticAssessment!.assessments[0]!.status = status;
+      const before = JSON.stringify(report);
+      expect(codes(report)).toEqual([
+        status === 'not_established' ? 'claim_evidence_insufficient' : 'claim_context_insufficient',
+      ]);
+      expect(shouldOfferHumanReview(report)).toBe(true);
+      expect(JSON.stringify(report)).toBe(before);
+    },
+  );
+  it('offers review for an omitted selected claim assessment without inventing an evidence verdict', () => {
+    const report = supported();
+    report.status = 'completed';
+    report.intake.evidence[0]!.approvalStatus = 'approved';
+    report.intake.evidence[0]!.researchOnly = false;
+    report.semanticAssessment!.assessments = [];
+    expect(codes(report)).toEqual(['author_coverage_unreviewed']);
+    expect(shouldOfferHumanReview(report)).toBe(true);
+  });
   it('distinguishes a verified wording difference and proposed mapping from an unassessed verdict', () => {
     const report = supported();
     report.interpretation.status = 'needs_confirmation';
@@ -1347,6 +1436,8 @@ describe('material report reasons and ticket availability', () => {
       await act(async () => {});
       expect(screen.queryByRole('button', { name: /إرسال النص للمراجعة/ })).toBeNull();
       expect(screen.queryByText(/مراجع مختص/)).toBeNull();
+      expect(screen.queryByText(/وسنعود إليك/)).toBeNull();
+      expect(screen.getByText(/لم يتأكد توفر استقبال طلبات/)).not.toBeNull();
       expect(onTicket).not.toHaveBeenCalled();
       expect(fetch.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(
         true,

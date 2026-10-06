@@ -46,6 +46,7 @@ export function RewritePanel({
   const [wordingMode, setWordingMode] = useState(false);
   const [candidate, setCandidate] = useState<RewriteCandidate | null>(null);
   const [busy, setBusy] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [message, setMessage] = useState('');
   const current = useRef<RewriteCandidate | null>(null);
   const controller = useRef<AbortController | null>(null);
@@ -62,6 +63,7 @@ export function RewritePanel({
     requestKey.current = null;
     setCandidate(null);
     setBusy(false);
+    setCopying(false);
     setMessage('');
     setEnabled(false);
     setCapabilityLoaded(false);
@@ -230,13 +232,13 @@ export function RewritePanel({
     }
   };
   const copy = async () => {
-    if (candidate?.status !== 'validated') return;
-    copyController.current?.abort();
+    if (candidate?.status !== 'validated' || copying) return;
     const abort = new AbortController();
     copyController.current = abort;
     const selected = candidate;
     const expectedBinding = reportBinding;
-    setMessage('');
+    setCopying(true);
+    setMessage('جار التحقق من الاقتراح ونسخه.');
     try {
       const body = await request(
         `${base}/${selected.id}/copy`,
@@ -261,6 +263,13 @@ export function RewritePanel({
     } catch {
       if (!abort.signal.aborted && activeBinding.current === expectedBinding)
         setMessage('تعذر نسخ الاقتراح أو انتهت صلاحيته. بقي الأصل كما هو.');
+    } finally {
+      if (
+        !abort.signal.aborted &&
+        activeBinding.current === expectedBinding &&
+        copyController.current === abort
+      )
+        setCopying(false);
     }
   };
   if (evidenceRequired && (!rewriteEvidenceReady(report) || !enabled))
@@ -302,7 +311,11 @@ export function RewritePanel({
           ? 'اقتراح بحثي يحسّن ألفاظ الكاتب في العبارات المدعومة فقط، مع فحص مستقل لحفظ المعنى والشروط والتوثيق. يحفظ الاقتباسات كما وردت، ويبقي النص غير المدعوم أو غير المراجع دون تغيير. لا يمثل اعتمادًا علميًا.'
           : 'اقتراح بحثي منفصل يضيف فواصل فقرات ومراجع مسجلة. يحفظ ألفاظ النص وشروطه؛ لا يصحح الادعاءات أو يقوّي الاستدلال. لا يمثل اعتمادًا علميًا.'}
       </p>
-      <button className="button button--outline" disabled={busy} onClick={() => void generate()}>
+      <button
+        className="button button--outline"
+        disabled={busy || copying}
+        onClick={() => void generate()}
+      >
         {busy
           ? 'جار إعداد الاقتراح وفحصه'
           : wordingMode
@@ -379,8 +392,8 @@ export function RewritePanel({
               </ul>
             </div>
           )}
-          <button className="button button--primary" onClick={() => void copy()}>
-            نسخ النص المقترح
+          <button className="button button--primary" disabled={copying} onClick={() => void copy()}>
+            {copying ? 'جار نسخ النص المقترح' : 'نسخ النص المقترح'}
           </button>
           <p>
             الاقتراح مؤقت لعشر دقائق داخل جلستك؛ تحديث الصفحة لا يضمن استعادته. النسخ لا يستبدل

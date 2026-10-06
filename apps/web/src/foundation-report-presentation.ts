@@ -32,14 +32,15 @@ export function materialReviewReasons(report: FoundationReport): MaterialReviewR
   const retrieval = retrievalLimitation(report);
   if (retrieval) add('retrieval_limited', retrieval);
   const semantic = report.semanticAssessment;
-  if (
-    semantic?.assessments.some((row) =>
-      ['not_established', 'insufficient_context'].includes(row.status),
-    )
-  )
+  if (semantic?.assessments.some((row) => row.status === 'not_established'))
     add(
       'claim_evidence_insufficient',
-      'الدليل المعروض لا يكفي لتأييد بعض العبارات. راجع العبارة والدليل المرتبط بها.',
+      'الدليل المعروض لا يكفي لتأكيد بعض العبارات؛ هذا لا يعني أنها خاطئة. راجع العبارة والدليل المرتبط بها.',
+    );
+  if (semantic?.assessments.some((row) => row.status === 'insufficient_context'))
+    add(
+      'claim_context_insufficient',
+      'لا تتوفر أدلة أو معلومات سياقية كافية لتقييم بعض العبارات. لم تُحسم النتيجة؛ راجع حدود التقييم لكل عبارة.',
     );
   if (semantic?.assessments.some((row) => row.status === 'contradicted'))
     add(
@@ -48,7 +49,11 @@ export function materialReviewReasons(report: FoundationReport): MaterialReviewR
     );
   if (
     semantic?.trace.claimCoverage?.unselectedIds.length ||
-    semantic?.errorCode === 'no_claims_extracted'
+    semantic?.errorCode === 'no_claims_extracted' ||
+    (semantic?.status === 'completed' &&
+      semantic.claims.some(
+        (claim) => !semantic.assessments.some((finding) => finding.claimId === claim.id),
+      ))
   )
     add(
       'author_coverage_unreviewed',
