@@ -2,12 +2,21 @@
 
 **Prepared 6 October 2026 for issue [#198](https://github.com/smaq777/Basira-Hackathon/issues/198).** This is an operational checklist, not a submission receipt, eligibility certificate or claim of winning.
 
+**GitHub checkpoint:** public repository, MIT license, default branch `development`,
+setup/source/architecture documentation and required CI are present. Application
+SHA `72a9ed835b7040ccc47bb61b19e979afe5ba6fbd` passed required checks. PR #203 was
+closed without merging at Saleh's request; its proposed demo RAG behavior is not
+included. The [brief timeline](DEVELOPMENT_TIMELINE.md) distinguishes preparation
+from intensive 4–6 October implementation. GitHub readiness does not confirm final
+deck/video, source rights or portal submission.
+
 ## Links to give the committee
 
 - Public repository: [smaq777/Basira-Hackathon](https://github.com/smaq777/Basira-Hackathon), default branch `development`.
 - Running application: [Railway staging](https://api-staging-42bc.up.railway.app/). Guest analysis needs no team login or provider key.
 - [Judge quickstart](JUDGE_QUICKSTART.md), [implemented architecture](../architecture/ARCHITECTURE.md), [provider/source registry](../api/PROVIDERS.md), [step-by-step credential setup](../operations/CREDENTIALS.md).
 - [Software CI at the application checkpoint](https://github.com/smaq777/Basira-Hackathon/actions/runs/37506934672), [dated six-case acceptance](../evidence/2026-10-06-staging-1.14-acceptance.md), [latest rewrite/References/copy receipt](https://github.com/smaq777/Basira-Hackathon/issues/169#issuecomment-6022396451).
+- [Latest application CI](https://github.com/smaq777/Basira-Hackathon/actions/runs/37524242467), [deployed reviewer/ticket lifecycle evidence](https://github.com/smaq777/Basira-Hackathon/issues/202#issuecomment-6024644194).
 
 Do not supply an owner's report URL as a public demo: report ownership is browser/session-bound. Judges must create a fresh synthetic review in their own profile.
 
@@ -26,7 +35,7 @@ Terms distinguish registration/receipt from acceptance, constrain team/track cha
 | Operational usable demo, not only a concept (guide 31–34)   | Guest RAG/result and useful rewrite/copy verified; public URL exists                                                       | Operator: final fresh-browser smoke and SHA/provider readiness; do not count outages as acceptance                           |
 | Public permitted GitHub and operating docs (guide 32)       | Public repo, lockfile, tests, setup/architecture/key onboarding                                                            | Saleh: confirm deliverable link/commit in portal; Operator: retain final CI/deployment receipt                               |
 | Source/tool/license record (guide 32; terms 8–9)            | Provider registry and rights/intake records exist; research approvals and full edition/permission ledger remain incomplete | Saleh/content reviewer: sign off exact included works/rights; remove unlicensed material from deliverable, not weaken guards |
-| Prior-project baseline and new work (terms 8; guide FAQ 43) | Pre-work log exists; current repo begins 4 October 10:09 Riyadh                                                            | Saleh: supply original pre-4 October snapshot/archive and dated provenance; initial imported commit is not sufficient alone  |
+| Prior-project baseline and new work (terms 8; guide FAQ 43) | Earlier revision and current import are identified in the brief development timeline                                       | Saleh: retain the original baseline for committee inspection; import dates do not establish original creation dates          |
 | Presentation PDF/PPT (guide 31)                             | Proposal assets exist locally, not verified as final implemented-system presentation                                       | Saleh: finalize deck with current demo/evidence/limits and remove personal data; do not label proposal as final              |
 | Video no longer than two minutes (guide 33)                 | Final video/link not verified in this task                                                                                 | Saleh: record permitted public/synthetic scenario, check duration, link/access and actual release                            |
 | Registered team/track and contribution rights               | Repo names do not prove portal membership/acceptance                                                                       | Saleh: confirm registered Track 4, team confirmations and rights declarations; no new team/project substitution              |
@@ -56,14 +65,14 @@ These are not estimated scores. The guide requires critical-case success and ade
 
 ## Release identity and retained boundaries
 
-- Last verified functional source: `51654b2e045a03b33b0809cadf6a316864512a04` (PR195).
-- Railway deployment at that checkpoint: `24bcf66c-901f-4ad4-92be-f44224ccaa79`, SUCCESS, with actual/declared SHA match. Read live identity again before any later claim.
+- Latest verified application source: `72a9ed835b7040ccc47bb61b19e979afe5ba6fbd` (PR206); latest documentation changes are tracked separately under #198.
+- Railway deployment at that checkpoint: `2198d5be-78e8-4d66-a83e-5571e2a7052d`, SUCCESS, with exact source identity and health/readiness evidence on issue202. Read live identity again before any later claim.
 - Corpus pin: `7372242cf7f4960c2cba0a33d8670a04ce13413f9fab5536783d6a3671e3ad6f`; 175 passages/175 embeddings, 1536 dimensions. Reviewed overlay is separate.
 - Semantic prompt/pipeline 1.14; OpenRouter primary and direct Gemini availability-only backup. Actual model/provider identity belongs in each receipt, not a generic provider claim.
 - Fresh PR195 synthetic review: `f8b68840-a0b8-4257-b384-f7c2fea7f665`, three sources including two Tafsir works; validated candidate used two References. Unused evidence excluded; exact server/display/copy equality and unchanged original were verified.
 - Capabilities remain `verification:false`: provisional, not scholarly approval. Dorar access, ambiguous references and limited corpus remain disclosed.
 - The historical absent report `3c15330c-9d6d-42ea-ae5b-b390d0138480` was genuinely absent in the correct store; its exact historical deletion cause is still unproved. Do not manufacture a recovered report.
-- Reviewer editing/source-overlay controls and email receipts have component/bounded evidence. Full owned expert publication → fresh subsequent retrieval → consented mailbox delivery is still a separate live acceptance task.
+- Reviewer publication and ticket lifecycle have a synthetic test with five message-specific delivered receipts. Source-overlay publication → fresh subsequent retrieval remains a separate live acceptance task; closed PR203 is not a deployed feature.
 - No new corpus collection/embedding, shared migration/grant changes, production promotion or portal submission was performed by this documentation task.
 
 ## Two-minute video outline (not a recorded video)
@@ -82,7 +91,7 @@ Edit waiting time out clearly without implying instantaneous processing. Keep al
 
 The [component/rights ledger](../governance/SUBMISSION_COMPONENTS.md) records direct runtime licenses and unresolved content/asset permission checks. It is not a blanket rights approval.
 
-1. **P0 — Saleh:** finish presentation and ≤2-minute video, confirm registered team/track/rights and original dated baseline, upload through portal, verify all public links and keep receipt.
+1. **P0 — Saleh:** finish presentation and ≤2-minute video, confirm registered team/track/rights and retain the identified starting baseline, upload through portal, verify all public links and keep receipt.
 2. **P0 — Operator:** verify exact running source/SHA guard, health/ready/capabilities and one fresh owned browser flow after final accepted merge. Freeze functional changes unless a concrete blocker appears; preserve first failures.
 3. **P0 — Saleh + content reviewer:** settle the included-source/asset rights ledger and assess critical scholarly cases. If incomplete, disclose scope and restrict claims; do not assert approved or 100% accurate.
 4. **P1 — Operator:** if reviewer functionality will be demonstrated, prove one synthetic corrected report, explicit rights-bearing contribution, relevant future retrieval and consented delivery end to end. Otherwise label that full chain not accepted and keep the demo on the verified guest flow.
