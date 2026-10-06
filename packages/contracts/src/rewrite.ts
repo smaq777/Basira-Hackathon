@@ -1,4 +1,63 @@
 import { z } from 'zod';
+import type { FoundationReport } from './foundation.js';
+
+/** Complete evidence is required before offering a reusable suggested draft. */
+export function rewriteEvidenceReady(report: FoundationReport): boolean {
+  const semantic = report.semanticAssessment;
+  if (
+    !semantic ||
+    !['completed', 'not_applicable'].includes(semantic.status) ||
+    semantic.trace.inputSha256 !== report.inputSha256 ||
+    (semantic.claims.length > 0 &&
+      (semantic.status !== 'completed' || !semantic.trace.claimCoverage)) ||
+    (semantic.claims.length === 0 && semantic.status !== 'not_applicable') ||
+    semantic.trace.claimCoverage?.unselectedIds.length ||
+    semantic.trace.claimCoverage?.excluded.some((span) => span.reason === 'span_too_long') ||
+    report.intake.segments.some((span) => span.conflict || span.role === 'unclassified')
+  )
+    return false;
+  if (
+    report.intake.segments.some(
+      (segment) =>
+        ['ayah', 'matn'].includes(segment.role) &&
+        !report.intake.quotationFindings.some((finding) => finding.segmentId === segment.id),
+    )
+  )
+    return false;
+  const source = (key: string) =>
+    report.intake.evidence.find(
+      (item) => item.snapshotKey === key && !['rejected', 'revoked'].includes(item.approvalStatus),
+    );
+  if (
+    report.intake.quotationFindings.some(
+      (finding) =>
+        !finding.evidenceKey ||
+        !source(finding.evidenceKey) ||
+        !(
+          ['exact', 'normalized'].includes(finding.status) ||
+          (finding.status === 'partial' &&
+            ['exact', 'orthographic'].includes(finding.comparison?.fidelity ?? ''))
+        ) ||
+        (finding.comparison && !['exact', 'orthographic'].includes(finding.comparison.fidelity)),
+    )
+  )
+    return false;
+  let evidenceCount = report.intake.quotationFindings.length;
+  for (const claim of semantic.claims) {
+    const assessment = semantic.assessments.find((item) => item.claimId === claim.id);
+    if (
+      !assessment ||
+      assessment.status !== 'supported' ||
+      !assessment.citations.length ||
+      assessment.citations.some(
+        (citation) => !source(citation.evidenceKey)?.originalText.includes(citation.excerpt),
+      )
+    )
+      return false;
+    evidenceCount += assessment.citations.length;
+  }
+  return evidenceCount > 0;
+}
 
 export const AuthorReplacementSchema = z
   .object({

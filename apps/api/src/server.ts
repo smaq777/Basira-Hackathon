@@ -352,14 +352,16 @@ const foundation = await initializeFoundation().catch(async (error: unknown) => 
 const rewriteEnabled = process.env.FOUNDATION_REWRITE_ENABLED === 'true';
 if (
   rewriteEnabled &&
-  (!foundation?.researchPreview ||
-    !['local_research', 'hosted_research'].includes(foundation.runtimeMode))
+  (!foundation ||
+    !['local_research', 'hosted_research', 'hosted_demo'].includes(foundation.runtimeMode) ||
+    (!foundation.researchPreview && foundation.runtimeMode !== 'hosted_demo'))
 )
   throw new Error('REWRITE_REQUIRES_RESEARCH_PREVIEW');
 const rewrite = rewriteEnabled
   ? createRewriteService(createAuthorRewriteGenerator(process.env.OPENROUTER_API_KEY ?? ''), {
       verifier: createAuthorRewriteVerifier(process.env.OPENROUTER_API_KEY ?? ''),
       timeoutMs: 90_000,
+      requireCompleteEvidence: foundation?.runtimeMode === 'hosted_demo',
     })
   : undefined;
 const server = createApp({

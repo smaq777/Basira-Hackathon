@@ -1,7 +1,13 @@
 # Evidence-bound AI-ReWrite proposal
 
-Status: supported author wording and citation/layout research slices implemented
-behind a default-off local flag. Related: #38, #13, #18,
+## Hosted staging result section — 6 October
+
+The owner-authorized staging iteration exposes the existing generator/verifier as the final result-page section. `FOUNDATION_REWRITE_ENABLED=true` may now run within the fully validated `hosted_demo` boundary; production remains blocked. Hosted generation and copy require complete evidence: all detected quotations faithful and attributable, semantic assessment completed or quotation-only, all selected author claims supported by original citations, no unselected/oversized substantive spans, and current immutable report binding. Uncertain reports show no generated suggestion and offer the existing capability-confirmed review-ticket path. No-op or layout-only output without evidence-linked changes is withheld. Exact source quotations remain protected; existing independent meaning/modality/scope verification and fresh copy checks remain in force.
+
+This does not promise scholarly review delivery or validated accuracy. The candidate is still a ten-minute transient session-bound object; saved reports and original revisions remain unchanged. Turning the staging flag off restores the unavailable-generation state without removing the final section or ticket route. No database or corpus mutation is included.
+
+Status: supported author wording and citation/layout slices implemented
+behind an explicit flag, with complete-evidence gating on hosted staging. Related: #38, #13, #18,
 #68. Preserve the 3,000-character review scope and original revision.
 
 ## Implemented supported author wording — 5 October

@@ -5,6 +5,7 @@ import type {
 } from '../../../packages/contracts/src/foundation.js';
 import {
   RewriteOperationsSchema,
+  rewriteEvidenceReady,
   type RewriteCandidate,
   type RewriteOperations,
 } from '../../../packages/contracts/src/rewrite.js';
@@ -238,6 +239,7 @@ export function createRewriteService(
     ttlMs?: number;
     timeoutMs?: number;
     verifier?: RewriteVerifier;
+    requireCompleteEvidence?: boolean;
   } = {},
 ) {
   const now = options.now ?? Date.now;
@@ -285,6 +287,8 @@ export function createRewriteService(
       reload: () => Promise<RewriteContext>,
     ): RewriteCandidate {
       prune();
+      if (options.requireCompleteEvidence && !rewriteEvidenceReady(context.report))
+        throw new RewriteError('REWRITE_EVIDENCE_REQUIRED');
       validateRewrite(context.report, { paragraphBreaks: [], citations: [] });
       const prior = [...records.values()].find((r) => r.owner === owner && r.key === key);
       if (prior) {
@@ -344,6 +348,12 @@ export function createRewriteService(
           const valid = options.verifier
             ? validateAuthorRewrite(fresh.report, output)
             : validateRewrite(fresh.report, output);
+          if (
+            options.requireCompleteEvidence &&
+            (!rewriteEvidenceReady(fresh.report) ||
+              (!valid.operations.citations.length && !valid.operations.replacements?.length))
+          )
+            throw new RewriteError('REWRITE_EVIDENCE_REQUIRED');
           if (options.verifier && valid.operations.replacements?.length) {
             const verifierInput = authorRewriteInput(fresh.report);
             const raw = await options.verifier(verifierInput, valid.operations, signal);
@@ -400,6 +410,8 @@ export function createRewriteService(
     },
     copy(owner: string, id: string, context: RewriteContext) {
       const row = owned(owner, id, context);
+      if (options.requireCompleteEvidence && !rewriteEvidenceReady(context.report))
+        throw new RewriteError('REWRITE_EVIDENCE_REQUIRED');
       if (row.candidate.status !== 'validated') throw new RewriteError('REWRITE_NOT_VALIDATED');
       const checked = options.verifier
         ? validateAuthorRewrite(context.report, row.candidate.operations)

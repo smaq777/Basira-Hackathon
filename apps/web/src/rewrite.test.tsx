@@ -29,6 +29,39 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it('shows the evidence abstention and review action without a generation or copy button', async () => {
+  const user = userEvent.setup(),
+    onReview = vi.fn();
+  const fetcher = vi
+    .spyOn(globalThis, 'fetch')
+    .mockResolvedValue(json({ draftRewrite: true, draftRewriteMode: 'supported_author_wording' }));
+  render(<RewritePanel report={report} evidenceRequired onReview={onReview} />);
+  expect(screen.getByRole('heading', { name: 'النص المقترح المبني على الأدلة' })).not.toBeNull();
+  expect(screen.getByText(/لم تتوفر أدلة كافية/)).not.toBeNull();
+  expect(screen.queryByRole('button', { name: 'تحسين الصياغة وإضافة التوثيق' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'نسخ النص المقترح' })).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'إرسال النص للمراجعة البشرية' }));
+  expect(onReview).toHaveBeenCalledOnce();
+  expect(fetcher.mock.calls.every((call) => !call[1]?.method || call[1].method === 'GET')).toBe(
+    true,
+  );
+});
+
+it('offers review instead of copy when generation fails validation', async () => {
+  const user = userEvent.setup();
+  const onReview = vi.fn();
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
+    String(input) === '/api/v1/capabilities'
+      ? json({ draftRewrite: true, draftRewriteMode: 'supported_author_wording' })
+      : json({ candidate: { ...candidate, status: 'failed', errorCode: 'invalid_candidate' } }),
+  );
+  render(<RewritePanel report={report} onReview={onReview} />);
+  await user.click(await screen.findByRole('button', { name: 'تحسين الصياغة وإضافة التوثيق' }));
+  await user.click(await screen.findByRole('button', { name: 'إرسال النص للمراجعة البشرية' }));
+  expect(onReview).toHaveBeenCalledOnce();
+  expect(screen.queryByRole('button', { name: 'نسخ النص المقترح' })).toBeNull();
+});
+
 it('shows substantive before/after wording and limits the claimed coverage to changed supported spans', async () => {
   const user = userEvent.setup();
   const originalText = 'كلام الكاتب فيه معنى مدعوم ولكنه يحتاج صياغه';
