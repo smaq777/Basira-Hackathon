@@ -2,13 +2,21 @@
 
 Related to [#27](https://github.com/smaq777/Basira-Hackathon/issues/27), [#165](https://github.com/smaq777/Basira-Hackathon/issues/165), [#169](https://github.com/smaq777/Basira-Hackathon/issues/169) and [#176](https://github.com/smaq777/Basira-Hackathon/issues/176). This page supports the [Judge Quickstart](../hackathon/JUDGE_QUICKSTART.md), without publishing guest cookies, provider credentials, private drafts or raw model payloads.
 
-**Last evidence reconciliation: 6 October 2026, 14:21:55 UTC / 17:21:55 Riyadh.** This timestamp marks receipt reconciliation, not a new health probe. The post-PR179 deployment failed; current working-release acceptance is pending. Saleh's restored source `30e25db7f08dbd6dc7655f706ff81e7d9f16ade5` remains the latest recorded accepted live release, not proof of current availability. GitHub repository read-back confirms public visibility (`private:false`).
+**Last evidence reconciliation: 6 October 2026, 14:56 UTC / 17:56 Riyadh.** Recovery restored readiness and a useful website author rewrite, but the fresh six-case submission gate passed only 2/6. See the [recovery and first-outcome receipt](2026-10-06-staging-recovery-and-ticket-return.md). Historical successes below must not be substituted for the failed fresh gate. The final accepted/deployed ticket-return release identity is recorded on [issue169](https://github.com/smaq777/Basira-Hackathon/issues/169), separately from these tested source receipts.
 
-## Latest deployment status: readiness gate failed
+## Recovered deployment, incomplete fresh acceptance
+
+Deployment `0e1c44ad-1fcf-454d-b61f-2cfcd9f63fc9`, source `0434cf45a5134fc592d3978ec5976fa6e533198e`, reached SUCCESS. Health, readiness and capabilities returned HTTP 200. The observed startup failure on the prior deployment was `HOSTED_DEMO_ENVIRONMENT_MISMATCH`; the configured declaration still named sticky-menu source `8c8cce0`. The declaration was aligned to accepted source without disabling its guard. Both existing private Gemini keys were present; the backup flag was enabled without replacing keys. A bounded synthetic Gemini request returned HTTP 200 / `gemini-2.5-flash`.
+
+Fresh source retrieval returned Quran 7:31 plus Moyassar and Saadi. Actual primary relevance timeouts exercised Google Gemini backup without injected failure. Supported negation and supported charity conditions passed; contradicted negation and wedding abstention failed exact citation validation, contradicted condition failed primary response validation, and the off-topic case timed out. All first outcomes were retained; there was no retry-to-green or validation weakening. Full submission acceptance is **not achieved**.
+
+A fresh rough charity report `895e6814-a728-4fca-bab1-f439b49935ba` produced a first validated author edit and exact copy, retaining the quote and hiding/poor-recipient conditions without importing `من إظهارها`. Cancellation hid text/copy controls and report reload preserved the submitted original. This is selected complete-flow evidence, not general reliability.
+
+## Retained earlier deployment failure
 
 GitHub deployment `6886068041`, source `cb8e8e068418386f48b6fe426f4e72ed180d0949`, recorded success at 14:03:59 UTC then failure at 14:04:08 UTC. `/health`, `/ready` and `/api/v1/capabilities` each timed out after 12 seconds. The [owner restoration handoff](https://github.com/smaq777/Basira-Hackathon/issues/169#issuecomment-6018113908) preserves these first outcomes. Startup logs were unavailable to this audit; the current failure cause is unproved. The older SHA-declaration mismatch was confirmed on an earlier outage and must not be assumed to explain this one.
 
-Require a dated actual deployment/SHA receipt and HTTP 200 readiness before running live judge examples. Gemini activation and fresh complete-flow acceptance on the merged release remain pending.
+The later recovery above supersedes this availability failure, not the retained first outcomes. Require the final deployment receipt and HTTP 200 readiness before running live judge examples; the full semantic gate remains incomplete.
 
 ## Accepted restored staging
 
@@ -45,11 +53,11 @@ This proves one controlled useful author rewrite/copy and cancellation control. 
 
 At 14:09 UTC, a separate local first charity rewrite used public evidence frozen from a 175-corpus report. Both OpenRouter Luna generation and verification calls returned HTTP 200. The proposal added `من إظهارها`, a comparison target absent from the original author claim. The verifier returned `evidenceSupported:true`, but `meaningPreserved:false` and `scopePreserved:false`; the result was withheld at `verification_validation` / `meaning_changed`, with no copy.
 
-Exact captured-packet and minimized deterministic replays reproduce this rejection. This explains this newly captured failure, not Saleh's historical failures with diagnostics off. The generation-only `author-original-scope-v1` policy is implemented in [PR182](https://github.com/smaq777/Basira-Hackathon/pull/182), with merge and deployment pending. The independent verifier and all preservation/copy gates remain unchanged. Rejected meaning/scope output does not authorize a Gemini retry. No fresh Railway review or database retrieval was performed by this local control.
+Exact captured-packet and minimized deterministic replays reproduce this rejection. This explains this newly captured failure, not Saleh's historical failures with diagnostics off. The generation-only `author-original-scope-v1` policy from [PR182](https://github.com/smaq777/Basira-Hackathon/pull/182) is now merged and deployed on recovered source `0434cf45`. The independent verifier and all preservation/copy gates remain unchanged. Rejected meaning/scope output does not authorize a Gemini retry. No fresh Railway review or database retrieval was performed by this historical local control.
 
 Retained operator receipt: `author-first-2026-10-06T14-09-34-475Z/trace.json`, SHA256 `4ea711439dbf7687e5e936afe56958c03b0fbae7c0709a3c32dba5b52188b24b`; companion first and minimized replays remain local. Only the bounded outcome and receipt identity are published here.
 
-## Pending generation policy: safe skips and an actual author improvement
+## Historical local generation controls: safe skips and an author improvement
 
 Two distinct changed-protocol controls on already-clear charity and 7:31 drafts received real OpenRouter Luna HTTP 200 and passed validation/exact copy as attribution-only results. These are safe skips of unnecessary author changes, not author improvements.
 
@@ -57,7 +65,7 @@ A rough public author span, `لما نخفي الصدقة ونعطيها للف�
 
 This semantic control also exercised a real transport recovery: OpenRouter Sol relevance timed out after 6.684 seconds; direct Gemini relevance and assessment then returned HTTP 200. No failure was injected, and the trace retains the actual failed primary and successful Google model/provider identities. All these controls used frozen public sources, not fresh RAG or Railway. They do not establish deployment or general rewrite reliability.
 
-Retained receipt: `colloquial-policy-2026-10-06T14-19-35-203Z/receipt.json`, SHA256 `70cf710f60797a175255b119ba08aa92608f88d92c2de661ce18dd3093d0ddd4`. The [PR182 generation policy](https://github.com/smaq777/Basira-Hackathon/pull/182) remains pending merge and deployment; unchanged validation continues to withhold altered meaning/scope.
+Retained receipt: `colloquial-policy-2026-10-06T14-19-35-203Z/receipt.json`, SHA256 `70cf710f60797a175255b119ba08aa92608f88d92c2de661ce18dd3093d0ddd4`. The [PR182 generation policy](https://github.com/smaq777/Basira-Hackathon/pull/182) is now merged and deployed; unchanged validation continues to withhold altered meaning/scope. The recovery receipt above distinguishes fresh RAG/website proof from these local controls.
 
 ## Later code and direct Gemini evidence
 

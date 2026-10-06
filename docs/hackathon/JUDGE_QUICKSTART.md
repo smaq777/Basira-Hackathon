@@ -1,6 +1,6 @@
 # Judge quickstart
 
-Open [Basirah staging](https://api-staging-42bc.up.railway.app/) as a guest. The post-PR179 deployment failed, and the latest readiness checks timed out. The recorded 30e25db acceptance below does not establish current availability. No team account, provider API key or local MCP setup is required.
+Open [Basirah staging](https://api-staging-42bc.up.railway.app/) as a guest. The 6 October recovery restored HTTP 200 readiness on accepted source `0434cf45`; Gemini availability backup is activated. **Fresh full submission acceptance remains failed: 2/6 runner cases passed.** Invalid citations, one invalid primary-provider response and one API timeout remain visible in the dated evidence. Neither readiness nor the historical 30e25db acceptance establishes complete current acceptance. No team account, provider API key or local MCP setup is required.
 
 Basirah checks two distinct things: **quotation fidelity** and **whether the evidence supports the author's conclusion**. Source access and generated findings do not constitute scholarly approval. The public demonstration uses a 175-passage research corpus with pending source approvals.
 
@@ -26,7 +26,7 @@ to:
 
 Wording may vary on a new run. The first recorded attempt was withheld; a separate controlled attempt passed generation, preservation and independent verification. Copy only a validated result after the copy action succeeds. Its displayed text and clipboard must match, including its recorded attribution. The original report remains unchanged. Cancellation must withhold candidate text and copying.
 
-A separate pending-code control improved the rough author wording `لما نخفي الصدقة ونعطيها للفقراء فهذا خير للمتصدق` to `إخفاء الصدقة وإعطاؤها للفقراء خيرٌ للمتصدّق.` while preserving scope. This was a local frozen-source control; its generation policy is not yet deployed. See the dated evidence rather than expecting this new result from the current website.
+A fresh website control on recovered source `0434cf45` used the rough author wording `لما نخفي الصدقة ونعطيها للفقراء فهذا خير للمتصدق`. The first proposal improved it to `عندما نخفي الصدقة ونعطيها للفقراء، يكون ذلك خيرًا للمتصدق`, with an independently verified author edit, unchanged quotation, preserved conditions and exact server-validated UI/clipboard equality. A separate immediate cancellation hid candidate text and copying; the original remained unchanged after reload. The PR182 generation policy is deployed. This selected success does not override the failed full acceptance gate or guarantee a new proposal's wording.
 
 ## 2. A correct quotation can carry a wrong conclusion
 
