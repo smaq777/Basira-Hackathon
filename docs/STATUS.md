@@ -1,5 +1,19 @@
 # Current delivery status
 
+**Reviewer workflow and result comparison (#156), 6 October:** PRs #159/#160
+are merged into `development` and deployed on Railway staging at code merge
+`f3eb3814910fe888cb59e00ee64a4c01a13efeb5`. Report and corpus migrations are
+verified through 0018, and health/readiness are healthy. The workspace now uses
+real tickets and versioned human reports rather than illustrative reviewer rows.
+Staging admits authenticated reviewers without a sole-curator allowlist; anonymous
+writes remain denied. Selected live Arabic comparisons and matching type colors
+are verified. Full reviewed-report publication/email and subsequent live RAG
+reuse still require acceptance; no general scholarly accuracy is claimed.
+See the [checkpoint](evidence/2026-10-06-reviewer-staging-checkpoint.md),
+[operator runbook](operations/REVIEWER_STAGING_WORKFLOW.md) and
+[Ahmed's AI refinement issue #157](https://github.com/smaq777/Basira-Hackathon/issues/157).
+Historical dated entries below are retained, not current deployment claims.
+
 **Collected corpus ingestion (#8), 6 October:** The existing Neon research branch
 now stores a 175-passage snapshot with 175 compatible embeddings. Historical
 86-passage originals, vectors and approval states remain unchanged. The owning
