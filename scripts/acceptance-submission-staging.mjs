@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import { pathToFileURL } from 'node:url';
 
 // Explicitly bounded synthetic provider checks; never publish, email or approve sources.
 const origin = 'https://api-staging-42bc.up.railway.app';
@@ -39,27 +40,38 @@ const cases = [
   },
 ];
 
-const args = process.argv.slice(2);
-if (!args.includes('--live')) {
-  console.log(
-    'Requires scoped live-provider authorization: pass --live to run synthetic staging reviews.',
-  );
-  console.log(`Available cases: ${cases.map((row) => row.name).join(', ')}`);
-  process.exitCode = 2;
-} else {
-  const selectedName = args.find((arg) => arg.startsWith('--case='))?.slice(7);
-  const selected = selectedName ? cases.filter((row) => row.name === selectedName) : cases;
-  if (!selected.length || args.some((arg) => arg !== '--live' && !arg.startsWith('--case=')))
+export async function runSubmissionAcceptance(args, dependencies = {}) {
+  const fetcher = dependencies.fetch ?? globalThis.fetch;
+  const now = dependencies.now ?? Date.now;
+  const sleep = dependencies.sleep ?? ((ms) => new Promise((done) => setTimeout(done, ms)));
+  const save = dependencies.writeFile ?? writeFile;
+  const makeDirectory = dependencies.mkdir ?? mkdir;
+  const log = dependencies.log ?? console.log;
+  if (!args.includes('--live')) {
+    log(
+      'Requires scoped live-provider authorization: pass --live to run synthetic staging reviews.',
+    );
+    log(`Available cases: ${cases.map((row) => row.name).join(', ')}`);
+    return { exitCode: 2, rows: [] };
+  }
+  const caseArguments = args.filter((arg) => arg.startsWith('--case='));
+  const selectedName = caseArguments[0]?.slice(7);
+  const selected = caseArguments.length ? cases.filter((row) => row.name === selectedName) : cases;
+  if (
+    caseArguments.length > 1 ||
+    !selected.length ||
+    args.some((arg) => arg !== '--live' && !arg.startsWith('--case='))
+  )
     throw new Error('UNKNOWN_ACCEPTANCE_ARGUMENT_OR_CASE');
   const output = resolve(
     'test-results',
-    `submission-acceptance-${new Date().toISOString().replaceAll(':', '-')}`,
+    `submission-acceptance-${new Date(now()).toISOString().replaceAll(':', '-')}`,
   );
-  await mkdir(output, { recursive: true });
+  await makeDirectory(output, { recursive: true });
   const rows = [];
   let cookie = '';
   async function request(path, body, anonymous = false) {
-    const response = await fetch(`${origin}${path}`, {
+    const response = await fetcher(`${origin}${path}`, {
       method: body === undefined ? 'GET' : 'POST',
       headers: {
         'content-type': 'application/json',
@@ -85,33 +97,43 @@ if (!args.includes('--live')) {
       const document = (await request('/api/v1/documents', { text: test.text })).value;
       const run = (await request('/api/v1/reviews', { revisionId: document.revisionId })).value;
       row.reviewId = run.reviewId;
-      const deadline = Date.now() + 185_000;
+      const runDeadline = Date.parse(run.deadlineAt);
+      if (!document.revisionId || !run.reviewId || !Number.isFinite(runDeadline))
+        throw new Error('INVALID_REVIEW_RESPONSE');
+      // Match the browser's bounded wait: server deadline plus five seconds, at most305seconds.
+      const deadline = Math.min(runDeadline + 5000, now() + 305_000);
       let report;
-      while (Date.now() < deadline) {
+      while (now() < deadline) {
         const state = (await request(`/api/v1/reviews/${run.reviewId}`)).value;
-        if (['failed', 'timed_out', 'cancelled'].includes(state.status))
+        if (['failed', 'timed_out', 'cancelled', 'interrupted'].includes(state.status))
           throw new Error(`REVIEW_${state.status}`);
         report = (await request(`/api/v1/reviews/${run.reviewId}/report`)).value.report;
         if (report) break;
-        await new Promise((done) => setTimeout(done, 2500));
+        await sleep(Math.min(2500, Math.max(0, deadline - now())));
       }
       if (!report) throw new Error('REVIEW_DEADLINE');
       // Save the first outcome before assertions; never repeat a failed model call.
-      await writeFile(resolve(output, `${test.name}-report.json`), JSON.stringify(report, null, 2));
+      await save(resolve(output, `${test.name}-report.json`), JSON.stringify(report, null, 2));
       const semantic = report.semanticAssessment;
       Object.assign(row, {
         corpusVersion: report.intake.corpusVersion,
-        promptVersion: semantic?.trace.promptVersion,
-        pipelineVersion: semantic?.trace.pipelineVersion,
+        promptVersion: semantic?.trace?.promptVersion,
+        pipelineVersion: semantic?.trace?.pipelineVersion,
         semanticStatus: semantic?.status,
         findings: semantic?.assessments,
       });
+      if (
+        report.reviewId !== run.reviewId ||
+        report.revisionId !== document.revisionId ||
+        report.intake.originalText !== test.text
+      )
+        throw new Error('REPORT_BINDING_MISMATCH');
       if (report.intake.corpusVersion !== corpusVersion) throw new Error('CORPUS_PIN_MISMATCH');
-      if (semantic?.trace.retrieval && semantic.trace.retrieval.corpusVersion !== corpusVersion)
+      if (semantic?.trace?.retrieval && semantic.trace.retrieval.corpusVersion !== corpusVersion)
         throw new Error('RETRIEVAL_CORPUS_PIN_MISMATCH');
       if (
-        semantic?.trace.promptVersion !== 'evidence-support-v1.11' ||
-        semantic?.trace.pipelineVersion !== 'provisional-semantic-v1.11'
+        semantic?.trace?.promptVersion !== 'evidence-support-v1.11' ||
+        semantic?.trace?.pipelineVersion !== 'provisional-semantic-v1.11'
       )
         throw new Error('SEMANTIC_VERSION_MISMATCH');
       if (test.expected === 'no_assessment') {
@@ -131,20 +153,23 @@ if (!args.includes('--live')) {
       row.passed = true;
     } catch (error) {
       row.failure = error.message;
-      process.exitCode = 1;
     }
     rows.push(row);
-    await writeFile(
+    await save(
       resolve(output, 'receipt.json'),
-      JSON.stringify({ origin, checkedAt: new Date().toISOString(), rows }, null, 2),
+      JSON.stringify({ origin, checkedAt: new Date(now()).toISOString(), rows }, null, 2),
     );
-    console.log(JSON.stringify(row));
+    log(JSON.stringify(row));
   }
-  console.log(
+  log(
     JSON.stringify({
       evidenceDirectory: output,
       completedCases: rows.length,
       passedCases: rows.filter((row) => row.passed).length,
     }),
   );
+  return { exitCode: rows.every((row) => row.passed) ? 0 : 1, rows, output };
 }
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href)
+  process.exitCode = (await runSubmissionAcceptance(process.argv.slice(2))).exitCode;
